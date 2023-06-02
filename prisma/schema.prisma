@@ -1,0 +1,40 @@
+
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+
+  // from project root .env file
+  url      = env("DEV_DATABASE_URL")
+}
+
+model User {
+  id    Int     @id @default(autoincrement())
+  email String  @unique
+  name  String?
+}
+
+model Region {
+  id Int @id @default(autoincrement())
+  h3Index String @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  resetDate DateTime @default(now())
+  resources Resource[] //not represented in database
+}
+
+model Resource {
+  id Int @id @default(autoincrement())
+  name String
+  region Region @relation(fields: [regionId], references: [id]) //not represented in database
+  regionId Int
+  h3Index String
+  quantityInitial Int
+  quantityRemaining Int
+}
+
