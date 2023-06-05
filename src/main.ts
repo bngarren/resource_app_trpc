@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createContext } from "./trpc";
 import { handleScan } from "./services/scanService";
 import { TRPCError } from "@trpc/server";
+import config from "./config";
 
 const loggerMiddleware = middleware(async (opts) => {
   const result = await opts.next();
@@ -50,4 +51,4 @@ createHTTPServer({
   middleware: cors(),
   router: appRouter,
   createContext,
-}).listen(2022);
+}).listen(config.server_port);

@@ -13,8 +13,10 @@
     "prisma:push": "npx prisma db push",
     "prisma:reset": "npx prisma migrate reset && npm run prisma:push",
     "build": "rm -rf dist && tsc",
-    "start": "clear && npm run build && node dist/index.js",
-    "start:dev": "ts-node-dev --respawn --clear --transpile-only --debounce 1000 ./src/index.ts",
+    "heroku-postbuild": "echo heroku-postbuild",
+    "deploy": "git push heroku master",
+    "start": "clear && npm run build && node dist/main.js",
+    "start:dev": "ts-node-dev --respawn --clear --transpile-only --debounce 1000 ./src/main.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Ben Garren",

@@ -52,7 +52,7 @@ export const handleScan = async (
     throw new Error("Did not match h3 indices with regions in the database");
   }
 
-  // - - - - - Update each region - - - - -
+  // * - - - - - Update each region - - - - -
   const updatedRegions = await getAllSettled<RegionWithResources>(
     regions.map((r) => updateRegion(r.id))
   );
