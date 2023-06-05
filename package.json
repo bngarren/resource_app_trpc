@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "description": "Backend for Resource App",
   "main": "main.js",
+  "engines": {
+    "node": "19.x"
+  },
   "scripts": {
     "prisma:generate": "npx prisma generate",
     "prisma:migrate:dev": "npx prisma migrate dev",
