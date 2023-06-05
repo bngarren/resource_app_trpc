@@ -1,6 +1,6 @@
 import * as h3 from "h3-js";
 import { prisma } from "../prisma";
-import { Region } from "@prisma/client";
+import { Region, Resource } from "@prisma/client";
 import { getAllSettled } from "../util/getAllSettled";
 import {
   updateRegion,
@@ -8,26 +8,10 @@ import {
   handleCreateRegion,
   handleCreateRegions,
 } from "./regionService";
+import { Coordinate, InteractableResource, RegionWithResources, ScanResult } from "../types";
+import config from "../config";
+import { v4 as uuid } from 'uuid';
 
-type Coordinate = {
-  latitude: number;
-  longitude: number;
-};
-
-type Interactable = {
-  category: "resource" | "equipment";
-  position: Coordinate;
-  distanceFromUser: number;
-  userCanInteract: boolean;
-};
-
-type ScanResult = {
-  metadata: {
-    scannedLocation: Coordinate;
-    timestamp?: string;
-  };
-  interactables: Interactable[];
-};
 
 export const handleScan = async (
   fromLocation: Coordinate,
@@ -69,14 +53,65 @@ export const handleScan = async (
   }
 
   // - - - - - Update each region - - - - -
-  //regions = await getAllSettled<Region>(regions.map((r) => updateRegion(r)));
+  const updatedRegions = await getAllSettled<RegionWithResources>(
+    regions.map((r) => updateRegion(r.id))
+  );
+
+  // expect that every region was sucessfully updated
+  if (updatedRegions.length !== h3Group.length) {
+    throw new Error("Error attempting to update regions");
+  }
+
+  // Get resources from the updates regions and convert to interactables
+  const resourceInteractables = updatedRegions
+    .map((reg): InteractableResource[] => {
+      
+      // loop through region's resources
+      return reg.resources.map((r) => {
+        
+        const latLngCenter = h3.cellToLatLng(r.h3Index);
+        const position: Coordinate = {
+          latitude: latLngCenter[0],
+          longitude: latLngCenter[1],
+        };
+
+        const distanceFromUser = h3.greatCircleDistance(latLngCenter, [fromLocation.latitude, fromLocation.longitude], h3.UNITS.m)
+
+        const interactableResource: InteractableResource = {
+          id: uuid(), // we are giving the client a random uuid for each interactable
+          type: "resource",
+          location: position,
+          distanceFromUser: distanceFromUser, // m?
+          userCanInteract: Boolean(
+            distanceFromUser <= config.user_interact_distance
+          ),
+          data: r
+        };
+
+        return interactableResource
+      });
+    })
+    .flat();
 
   const result: ScanResult = {
     metadata: {
       scannedLocation: fromLocation,
     },
-    interactables: [],
+    scanPolygon: getH3Vertices(h3Index),
+    neighboringPolygons: h3.gridDisk(h3Index, 1).map((neighbor) => getH3Vertices(neighbor)),
+    interactables: [...resourceInteractables],
   };
 
   return result;
 };
+
+function getH3Vertices(h3Index: string) {
+  return h3.cellToVertexes(h3Index).map((i) => {
+    const latLng = h3.vertexToLatLng(i)
+    const coord: Coordinate = {
+      latitude: latLng[0],
+      longitude: latLng[1]
+    }
+    return coord
+  })
+}

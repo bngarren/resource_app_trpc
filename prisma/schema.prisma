@@ -24,7 +24,7 @@ model Region {
   h3Index String @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
-  resetDate DateTime @default(now())
+  resetDate DateTime?
   resources Resource[] //not represented in database
 }
 
@@ -34,7 +34,5 @@ model Resource {
   region Region @relation(fields: [regionId], references: [id]) //not represented in database
   regionId Int
   h3Index String
-  quantityInitial Int
-  quantityRemaining Int
 }
 

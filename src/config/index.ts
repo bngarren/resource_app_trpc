@@ -25,8 +25,9 @@ export default {
   db_test_name: process.env.DB_TEST_NAME,
   // App
   resources_per_region: 3,
-  resource_h3_resolution: 11,
-  region_h3_resolution: 9,
+  resource_h3_resolution: 12,
+  region_h3_resolution: 8,
   region_reset_interval: 3, //days
   scan_distance: 1,
+  user_interact_distance: 100, // meters
 };

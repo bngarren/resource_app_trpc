@@ -27,10 +27,10 @@ const appRouter = router({
         }),
       })
     )
-    .mutation(({ input }) => {
+    .mutation(async ({ input }) => {
     
       try {
-        handleScan(input.userLocation);
+        return await handleScan(input.userLocation);
       } catch (err) {
         console.error(err)
         throw new TRPCError({
