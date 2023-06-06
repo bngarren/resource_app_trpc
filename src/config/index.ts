@@ -19,7 +19,7 @@ export default {
   // App
   resources_per_region: 3,
   resource_h3_resolution: 12,
-  region_h3_resolution: 8,
+  region_h3_resolution: 9,
   region_reset_interval: 3, //days
   scan_distance: 1,
   user_interact_distance: 100, // meters

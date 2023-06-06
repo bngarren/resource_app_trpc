@@ -21,7 +21,7 @@ export const handleScan = async (
   const longitude = fromLocation.longitude;
 
   // Get the h3 index based on the scan position
-  const h3Index = h3.latLngToCell(latitude, longitude, 9);
+  const h3Index = h3.latLngToCell(latitude, longitude, config.region_h3_resolution);
 
   // Get the 6 neighbors plus the central h3 (7 total)
   const h3Group = h3.gridDisk(h3Index, scanDistance);
