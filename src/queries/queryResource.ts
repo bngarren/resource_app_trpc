@@ -84,8 +84,8 @@ export const updateResourcesForRegionTransaction = async (
         // Populate new resources (random type and scarcity)
         const resourceModels = generateResourceModelsForRegion(
           region,
-          [0, config.resources_per_region],
-          config.resource_h3_resolution
+          [config.min_resources_per_region, config.max_resources_per_region],
+          config.interactable_h3_resolution
         );
 
         const newResources = await getAllSettled(

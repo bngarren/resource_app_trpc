@@ -1,6 +1,14 @@
+/**
+ * 
+ * @param arr The array of elements to select from
+ * @param quantity A tuple of [min, max] number of elements in the final array
+ * @param weighted Optional. A decimal percentage, i.e. 0.1, specifying the likehood of getting the minimum or maximum quantity
+ * @returns 
+ */
 const selectRandom = <T>(
   arr: T[],
-  quantity: [number, number] = [1, 1]
+  quantity: [number, number] = [1, 1],
+  weighted?: number
 ): T[] => {
   // Ensure input is valid
   if (arr.length === 0) {
@@ -22,8 +30,19 @@ const selectRandom = <T>(
   }
 
   // Determine the actual quantity to select
-  const actualQuantity =
-    Math.floor(Math.random() * (quantity[1] - quantity[0] + 1)) + quantity[0];
+  let actualQuantity: number;
+  if (weighted !== undefined) {
+    const rand = Math.random();
+    if(rand < weighted) {
+      actualQuantity = quantity[1];
+    } else if(rand > 1 - weighted) {
+      actualQuantity = quantity[0];
+    } else {
+      actualQuantity = Math.floor(rand * (quantity[1] - quantity[0])) + quantity[0];
+    }
+  } else {
+    actualQuantity = Math.floor(Math.random() * (quantity[1] - quantity[0] + 1)) + quantity[0];
+  }
 
   // Create a copy of the array to avoid modifying the original
   const arrCopy = [...arr];

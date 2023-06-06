@@ -31,7 +31,7 @@ const appRouter = router({
     .mutation(async ({ input }) => {
     
       try {
-        return await handleScan(input.userLocation);
+        return await handleScan(input.userLocation, config.scan_distance);
       } catch (err) {
         console.error(err)
         throw new TRPCError({

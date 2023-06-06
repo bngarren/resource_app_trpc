@@ -23,7 +23,6 @@ export const handleScan = async (
   // Get the h3 index based on the scan position
   const h3Index = h3.latLngToCell(latitude, longitude, config.region_h3_resolution);
 
-  // Get the 6 neighbors plus the central h3 (7 total)
   const h3Group = h3.gridDisk(h3Index, scanDistance);
 
   const existingRegions: Region[] = await getRegionsFromH3Array(h3Group);
@@ -62,7 +61,7 @@ export const handleScan = async (
     throw new Error("Error attempting to update regions");
   }
 
-  // Get resources from the updates regions and convert to interactables
+  // Get resources from the updated regions and convert to interactables
   const resourceInteractables = updatedRegions
     .map((reg): InteractableResource[] => {
       
@@ -97,8 +96,8 @@ export const handleScan = async (
     metadata: {
       scannedLocation: fromLocation,
     },
-    scanPolygon: getH3Vertices(h3Index),
-    neighboringPolygons: h3.gridDisk(h3Index, 1).map((neighbor) => getH3Vertices(neighbor)),
+    scanPolygon: getH3Vertices(h3.latLngToCell(latitude, longitude, config.interactable_h3_resolution)),
+    neighboringPolygons: h3.gridDisk(h3Index, scanDistance).map((neighbor) => getH3Vertices(neighbor)),
     interactables: [...resourceInteractables],
   };
 
