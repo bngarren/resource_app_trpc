@@ -61,6 +61,11 @@ export const handleScan = async (
     throw new Error("Error attempting to update regions");
   }
 
+  // The scanRegion is a h3 of size `config.interactable_h3_resolution` which is the
+  // basis for calculating which interactables the user can interact with and will
+  // be the location of any placed equipment
+  const scanRegion = h3.latLngToCell(latitude, longitude, config.interactable_h3_resolution)
+
   // Get resources from the updated regions and convert to interactables
   const resourceInteractables = updatedRegions
     .map((reg): InteractableResource[] => {
@@ -74,15 +79,15 @@ export const handleScan = async (
           longitude: latLngCenter[1],
         };
 
-        const distanceFromUser = h3.greatCircleDistance(latLngCenter, [fromLocation.latitude, fromLocation.longitude], h3.UNITS.m)
+        const distanceFromScanRegionCenter = h3.greatCircleDistance(latLngCenter, h3.cellToLatLng(scanRegion), h3.UNITS.m)
 
         const interactableResource: InteractableResource = {
           id: uuid(), // we are giving the client a random uuid for each interactable
           type: "resource",
           location: position,
-          distanceFromUser: distanceFromUser, // m?
+          distanceFromScanRegionCenter: distanceFromScanRegionCenter, // m?
           userCanInteract: Boolean(
-            distanceFromUser <= config.user_interact_distance
+            distanceFromScanRegionCenter <= config.user_interact_distance
           ),
           data: r
         };
@@ -96,7 +101,7 @@ export const handleScan = async (
     metadata: {
       scannedLocation: fromLocation,
     },
-    scanPolygon: getH3Vertices(h3.latLngToCell(latitude, longitude, config.interactable_h3_resolution)),
+    scanPolygon: getH3Vertices(scanRegion),
     neighboringPolygons: h3.gridDisk(h3Index, scanDistance).map((neighbor) => getH3Vertices(neighbor)),
     interactables: [...resourceInteractables],
   };

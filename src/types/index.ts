@@ -16,7 +16,7 @@ export type Interactable = {
   id?: String; // id is for the client
   type: InteractableType;
   location: Coordinate;
-  distanceFromUser: number;
+  distanceFromScanRegionCenter: number;
   userCanInteract: boolean;
 };
 
