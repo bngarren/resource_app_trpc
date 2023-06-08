@@ -8,7 +8,7 @@ import {
   handleCreateRegion,
   handleCreateRegions,
 } from "./regionService";
-import { Coordinate, InteractableResource, RegionWithResources, ScanResult } from "../types";
+import { Coordinate, InteractableResource, LatLngTuple, RegionWithResources, ScanResult } from "../types";
 import config from "../config";
 import { v4 as uuid } from 'uuid';
 
@@ -74,17 +74,13 @@ export const handleScan = async (
       return reg.resources.map((r) => {
         
         const latLngCenter = h3.cellToLatLng(r.h3Index);
-        const position: Coordinate = {
-          latitude: latLngCenter[0],
-          longitude: latLngCenter[1],
-        };
 
         const distanceFromScanRegionCenter = h3.greatCircleDistance(latLngCenter, h3.cellToLatLng(scanRegion), h3.UNITS.m)
 
         const interactableResource: InteractableResource = {
           id: uuid(), // we are giving the client a random uuid for each interactable
           type: "resource",
-          location: position,
+          location: [latLngCenter[0], latLngCenter[1]],
           distanceFromScanRegionCenter: distanceFromScanRegionCenter, // m?
           userCanInteract: Boolean(
             distanceFromScanRegionCenter <= config.user_interact_distance
@@ -99,7 +95,7 @@ export const handleScan = async (
 
   const result: ScanResult = {
     metadata: {
-      scannedLocation: fromLocation,
+      scannedLocation: [latitude, longitude],
     },
     scanPolygon: getH3Vertices(scanRegion),
     neighboringPolygons: h3.gridDisk(h3Index, scanDistance).map((neighbor) => getH3Vertices(neighbor)),
@@ -109,13 +105,9 @@ export const handleScan = async (
   return result;
 };
 
-function getH3Vertices(h3Index: string) {
+function getH3Vertices(h3Index: string): LatLngTuple[] {
   return h3.cellToVertexes(h3Index).map((i) => {
     const latLng = h3.vertexToLatLng(i)
-    const coord: Coordinate = {
-      latitude: latLng[0],
-      longitude: latLng[1]
-    }
-    return coord
+    return [latLng[0], latLng[1]]
   })
 }

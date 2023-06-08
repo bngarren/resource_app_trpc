@@ -10,12 +10,14 @@ export type Coordinate = {
   longitude: number;
 };
 
+export type LatLngTuple = [number, number]
+
 export type InteractableType = "resource" | "equipment";
 
 export type Interactable = {
   id?: String; // id is for the client
   type: InteractableType;
-  location: Coordinate;
+  location: LatLngTuple;
   distanceFromScanRegionCenter: number;
   userCanInteract: boolean;
 };
@@ -26,10 +28,10 @@ export type InteractableResource = {
 
 export type ScanResult = {
   metadata: {
-    scannedLocation: Coordinate;
+    scannedLocation: LatLngTuple;
     timestamp?: string;
   };
-  scanPolygon: Coordinate[];
-  neighboringPolygons: Coordinate[][];
+  scanPolygon: LatLngTuple[];
+  neighboringPolygons: LatLngTuple[][];
   interactables: Interactable[];
 };
