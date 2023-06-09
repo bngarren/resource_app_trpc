@@ -20,13 +20,9 @@ const loggedProcedure = publicProcedure.use(loggerMiddleware);
 const appRouter = router({
   greeting: loggedProcedure
     .query(async () => {
-      // Do some server health checks
+      // TODO: Do some server health checks
       let isHealthy = true
       console.log(`Received greeting from client. API isHealthy: ${isHealthy}`)
-
-      // debug sleep
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
       return {
         isHealthy: isHealthy
       }
