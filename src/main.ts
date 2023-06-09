@@ -10,7 +10,7 @@ import config from "./config";
 const loggerMiddleware = middleware(async (opts) => {
   const result = await opts.next();
 
-  console.log(opts.rawInput);
+  opts.rawInput && console.log(opts.rawInput);
 
   return result;
 });
@@ -18,6 +18,19 @@ const loggerMiddleware = middleware(async (opts) => {
 const loggedProcedure = publicProcedure.use(loggerMiddleware);
 
 const appRouter = router({
+  greeting: loggedProcedure
+    .query(async () => {
+      // Do some server health checks
+      let isHealthy = true
+      console.log(`Received greeting from client. API isHealthy: ${isHealthy}`)
+
+      // debug sleep
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      return {
+        isHealthy: isHealthy
+      }
+    }),
   scan: loggedProcedure
     .input(
       // The latitude must be a number between -90 and 90 and the longitude between -180 and 180
