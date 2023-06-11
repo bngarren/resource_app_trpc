@@ -37,4 +37,9 @@ export type ScanResult = {
   }
   neighboringPolygons: LatLngTuple[][];
   interactables: Interactable[];
+  /**
+   * A sorted array of Interactable Id's by distanceFromScanRegionCenter
+   * Includes only those interactables with userCanInteract = true
+   */
+  sortedCanInteractableIds: String[];
 };

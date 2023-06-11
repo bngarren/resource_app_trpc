@@ -97,6 +97,22 @@ export const handleScan = async (
     })
     .flat();
 
+    const interactables = [...resourceInteractables]
+
+    const sortedCanInteractableIds = interactables
+    .filter((i) => i.userCanInteract === true)
+    .sort((a, b) => {
+      if (a.distanceFromScanRegionCenter <= b.distanceFromScanRegionCenter) return -1
+      else return 1
+    })
+    .map((i) => {
+      if (i.id) {
+        return i.id
+      } else {
+        throw Error("Interactable should have id before sending to client")
+      }
+    })
+
   const result: ScanResult = {
     metadata: {
       scannedLocation: [latitude, longitude],
@@ -106,7 +122,8 @@ export const handleScan = async (
       peripheralPolygons: scanH3Group.map((pr) => getH3Vertices(pr))
     },
     neighboringPolygons: h3.gridDisk(h3Index, scanDistance).map((neighbor) => getH3Vertices(neighbor)),
-    interactables: [...resourceInteractables],
+    interactables: interactables,
+    sortedCanInteractableIds: sortedCanInteractableIds
   };
 
   return result;
