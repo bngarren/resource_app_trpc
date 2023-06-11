@@ -31,7 +31,10 @@ export type ScanResult = {
     scannedLocation: LatLngTuple;
     timestamp?: string;
   };
-  scanPolygon: LatLngTuple[];
+  scanPolygons: {
+    centerPolygon: LatLngTuple[],
+    peripheralPolygons: LatLngTuple[][]
+  }
   neighboringPolygons: LatLngTuple[][];
   interactables: Interactable[];
 };

@@ -66,6 +66,10 @@ export const handleScan = async (
   // be the location of any placed equipment
   const scanRegion = h3.latLngToCell(latitude, longitude, config.interactable_h3_resolution)
 
+  // The group of polygons around the periphery of the scan region (not including the center
+  // which is the scanRegion itself)
+  const scanH3Group = h3.gridDisk(scanRegion, 1).filter((h) => h !== scanRegion)
+
   // Get resources from the updated regions and convert to interactables
   const resourceInteractables = updatedRegions
     .map((reg): InteractableResource[] => {
@@ -97,7 +101,10 @@ export const handleScan = async (
     metadata: {
       scannedLocation: [latitude, longitude],
     },
-    scanPolygon: getH3Vertices(scanRegion),
+    scanPolygons: {
+      centerPolygon: getH3Vertices(scanRegion),
+      peripheralPolygons: scanH3Group.map((pr) => getH3Vertices(pr))
+    },
     neighboringPolygons: h3.gridDisk(h3Index, scanDistance).map((neighbor) => getH3Vertices(neighbor)),
     interactables: [...resourceInteractables],
   };
