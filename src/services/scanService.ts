@@ -61,10 +61,10 @@ export const handleScan = async (
     throw new Error("Error attempting to update regions");
   }
 
-  // The scanRegion is a h3 of size `config.interactable_h3_resolution` which is the
+  // The scanRegion is a h3 of size `config.harvest_h3_resolution` which is the
   // basis for calculating which interactables the user can interact with and will
   // be the location of any placed equipment
-  const scanRegion = h3.latLngToCell(latitude, longitude, config.interactable_h3_resolution)
+  const scanRegion = h3.latLngToCell(latitude, longitude, config.harvest_h3_resolution)
 
   // The group of polygons around the periphery of the scan region (not including the center
   // which is the scanRegion itself)

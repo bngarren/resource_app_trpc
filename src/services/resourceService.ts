@@ -46,7 +46,7 @@ export const handleCreateResource = async (
     quantity: [number, number],
     resourceH3Resolution: number
   ) => {
-    // Get the children h3's of this (parent) region at the specified resolution
+    // Get the children h3 indexes of this (parent) region at the specified h3 resolution
     // These are potential spots for a resource
     const potentials = cellToChildren(region.h3Index, resourceH3Resolution);
   

@@ -19,10 +19,11 @@ export default {
   // App
   min_resources_per_region: 1,
   max_resources_per_region: 3,
-  interactable_h3_resolution: 10,
   region_h3_resolution: 9,
   region_reset_interval: 3, //days
   scan_distance: 2,
+  resource_h3_resolution: 11,
+  harvest_h3_resolution: 10,
 
-  user_interact_distance: 300, // meters
+  user_interact_distance: 250, // meters
 };

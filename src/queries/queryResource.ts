@@ -85,7 +85,7 @@ export const updateResourcesForRegionTransaction = async (
         const resourceModels = generateResourceModelsForRegion(
           region,
           [config.min_resources_per_region, config.max_resources_per_region],
-          config.interactable_h3_resolution
+          config.resource_h3_resolution
         );
 
         const newResources = await getAllSettled(

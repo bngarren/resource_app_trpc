@@ -1,4 +1,5 @@
 /**
+ * Randomly selects elements from the given array. A specific element can only be selected once.
  * 
  * @param arr The array of elements to select from
  * @param quantity A tuple of [min, max] number of elements in the final array
@@ -47,7 +48,8 @@ const selectRandom = <T>(
   // Create a copy of the array to avoid modifying the original
   const arrCopy = [...arr];
 
-  // Randomly select elements
+  // Randomly select elements (n = actualQuantity)
+  // note: an array element can only be selected once due to splice removing it from the pool once selected
   const result: T[] = [];
   for (let i = 0; i < actualQuantity; i++) {
     const randomIndex = Math.floor(Math.random() * arrCopy.length);
