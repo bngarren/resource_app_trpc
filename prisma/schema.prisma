@@ -1,4 +1,3 @@
-
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
@@ -10,29 +9,76 @@ datasource db {
   provider = "postgresql"
 
   // from project root .env file
-  url      = env("DATABASE_URL")
+  url = env("DATABASE_URL")
 }
 
 model User {
-  id    Int     @id @default(autoincrement())
-  email String  @unique
-  name  String?
+  id                 String              @id @default(uuid())
+  email              String              @unique
+  username           String?
+  UserInventoryItems UserInventoryItem[]
+  Harvesters         Harvester[]
 }
 
-model Region {
-  id Int @id @default(autoincrement())
-  h3Index String @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
-  resetDate DateTime?
-  resources Resource[] //not represented in database
+model SpawnRegion {
+  id               String            @id @default(uuid())
+  h3Index          String            @unique @map("h3_index")
+  h3Resolution     Int               @map("h3_resolution")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  resetDate        DateTime?         @map("reset_date")
+  SpawnedResources SpawnedResource[]
+}
+
+enum ResourceType {
+  REGULAR
+  ARCANE_ELEMENT
+  ARCANE_ENERGY
+}
+
+enum ResourceRarity {
+  COMMON
+  UNCOMMON
+  RARE
 }
 
 model Resource {
-  id Int @id @default(autoincrement())
-  name String
-  region Region @relation(fields: [regionId], references: [id]) //not represented in database
-  regionId Int
-  h3Index String
+  id               String            @id @default(uuid())
+  url              String
+  name             String
+  resourceType     ResourceType      
+  rarity           ResourceRarity
+  SpawnedResources SpawnedResource[]
 }
 
+model SpawnedResource {
+  resource       Resource    @relation(fields: [resourceId], references: [id])
+  resourceId     String      @map("resource_id")
+  spawnRegion    SpawnRegion @relation(fields: [spawnRegionId], references: [id])
+  spawnRegionId  String      @map("spawn_region_id")
+  h3Index        String      @unique @map("h3_index")
+  h3Resolution   Int         @map("h3_resolution")
+
+  @@id([resourceId, spawnRegionId])
+}
+
+model UserInventoryItem {
+  id       String @id @default(cuid())
+  user     User   @relation(fields: [userId], references: [id])
+  userId   String @map("user_id")
+  itemId   String @map("item_id")
+  itemType String @map("item_type")
+  quantity Int
+}
+
+model Harvester {
+  id            String    @id @default(uuid())
+  user          User      @relation(fields: [userId], references: [id])
+  userId        String    @map("user_id")
+  deployedDate  DateTime? @map("deployed_date")
+  meta          Json // includes energy efficiency, extraction rate, inventory max size, etc.
+  h3Index       String?   @map("h3_index") // deployment location
+  initialEnergy Int?      @map("initial_energy") // starting energy level
+  energyStartTime     DateTime? @map("energy_start_time") // start time of initial energy usage
+  energyEndTime     DateTime? @map("energy_end_time") // expected end time for energy
+}

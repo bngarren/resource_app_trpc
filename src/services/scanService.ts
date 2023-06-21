@@ -1,129 +1,192 @@
 import * as h3 from "h3-js";
-import { prisma } from "../prisma";
-import { Region, Resource } from "@prisma/client";
+import { SpawnRegion } from "@prisma/client";
 import { getAllSettled } from "../util/getAllSettled";
 import {
-  updateRegion,
-  getRegionsFromH3Array,
-  handleCreateRegion,
-  handleCreateRegions,
-} from "./regionService";
-import { Coordinate, InteractableResource, LatLngTuple, RegionWithResources, ScanResult } from "../types";
+  updateSpawnRegion,
+  handleCreateSpawnRegions,
+} from "./spawnRegionService";
+import {
+  Coordinate,
+  InteractableResource,
+  LatLngTuple,
+  SpawnRegionWithResources,
+  ScanResult,
+} from "../types";
 import config from "../config";
-import { v4 as uuid } from 'uuid';
-
+import { v4 as uuid } from "uuid";
+import { getSpawnRegionsFromH3Indices } from "../queries/querySpawnRegion";
 
 export const handleScan = async (
   fromLocation: Coordinate,
-  scanDistance = 1
+  scanDistance = 1,
 ): Promise<ScanResult> => {
+  /**
+   * Scan location latitude
+   */
   const latitude = fromLocation.latitude;
+  /**
+   * Scan location longitude
+   */
   const longitude = fromLocation.longitude;
 
-  // Get the h3 index based on the scan position
-  const h3Index = h3.latLngToCell(latitude, longitude, config.region_h3_resolution);
+  /**
+   * The h3 index of a spawn region, centered on the scan location
+   */
+  const h3Index = h3.latLngToCell(
+    latitude,
+    longitude,
+    config.spawn_region_h3_resolution,
+  );
 
+  /**
+   * Array of h3 indices that represent all the SpawnRegions included in the scan
+   */
   const h3Group = h3.gridDisk(h3Index, scanDistance);
 
-  const existingRegions: Region[] = await getRegionsFromH3Array(h3Group);
+  // Query the database for existing SpawnRegions
+  const existingSpawnRegions: SpawnRegion[] =
+    await getSpawnRegionsFromH3Indices(h3Group);
 
   // Missing regions - not present in the database
   // i.e., An array of h3Indexes that need to be added to db
   const missingRegionsIndexes = h3Group.filter(
-    (h) => !existingRegions.some((r) => r.h3Index === h)
+    (h) => !existingSpawnRegions.some((r) => r.h3Index === h),
   );
 
   console.log(
-    `Missing regions (${missingRegionsIndexes.length}): ${missingRegionsIndexes}`
+    `Missing SpawnRegions (${missingRegionsIndexes.length}): ${missingRegionsIndexes}`,
   );
 
-  // - - - - - - Create these regions in the database - - - - -
+  // - - - - - - Create these SpawnRegions in the database - - - - -
   const regionModels = missingRegionsIndexes.map((m) => {
-    return { h3Index: m };
+    return {
+      h3Index: m,
+      h3Resolution: config.spawn_region_h3_resolution,
+    };
   });
-  const newRegions = await handleCreateRegions(regionModels);
+  const newSpawnRegions = await handleCreateSpawnRegions(regionModels);
 
-  let regions = [...existingRegions, ...newRegions];
+  const spawnRegions = [...existingSpawnRegions, ...newSpawnRegions];
 
   // the number of h3 indexes in the scan group should equal
   // the number of regions we now have (existing + newly created)
-  if (regions.length !== h3Group.length) {
-    throw new Error("Did not match h3 indices with regions in the database");
+  if (spawnRegions.length !== h3Group.length) {
+    throw new Error(
+      "Did not match h3 indices with SpawnRegions in the database",
+    );
   }
 
   // * - - - - - Update each region - - - - -
-  const updatedRegions = await getAllSettled<RegionWithResources>(
-    regions.map((r) => updateRegion(r.id))
+  /**
+   * A `SpawnRegionWithResource[]` array that contains the updated SpawnRegions
+   */
+  const updatedSpawnRegions = await getAllSettled<SpawnRegionWithResources>(
+    spawnRegions.map((r) => updateSpawnRegion(r.id)),
   );
 
-  // expect that every region was sucessfully updated
-  if (updatedRegions.length !== h3Group.length) {
-    throw new Error("Error attempting to update regions");
+  // Expect that every spawn region was sucessfully updated
+  if (updatedSpawnRegions.length !== h3Group.length) {
+    throw new Error("Error attempting to update spawn regions");
   }
 
-  // The scanRegion is a h3 of size `config.harvest_h3_resolution` which is the
-  // basis for calculating which interactables the user can interact with and will
-  // be the location of any placed equipment
-  const scanRegion = h3.latLngToCell(latitude, longitude, config.harvest_h3_resolution)
+  /**
+   * The harvestRegion is an h3 cell of size `config.harvest_h3_resolution` which is the
+   * basis for calculating which interactables the user can interact with and will
+   * be the location of any placed equipment (i.e. harvesters).
+   */
+  const harvestRegion = h3.latLngToCell(
+    latitude,
+    longitude,
+    config.harvest_h3_resolution,
+  );
 
-  // The group of polygons around the periphery of the scan region (not including the center
-  // which is the scanRegion itself)
-  const scanH3Group = h3.gridDisk(scanRegion, 1).filter((h) => h !== scanRegion)
+  /**
+   * The group of h3 cells (indices) around the periphery of the harvest region (not including the center
+   * which is the harvestRegion itself). These h3 cells are the same size (same resolution) as the harvestRegion.
+   */
+  const scanH3Group = h3
+    .gridDisk(harvestRegion, 1)
+    .filter((h) => h !== harvestRegion);
 
-  // Get resources from the updated regions and convert to interactables
-  const resourceInteractables = updatedRegions
+  /*
+    Conversion of each resource within SpawnRegion to an InteractableResource.
+
+    An InteractableResource type allows us to provide some metadata to the client, 
+    along with the actual resource data. Metadata includes: location, distance to resource,
+    userCanInteract boolean, etc.
+
+  */
+
+  /**
+   * The actual 'resource' returned to the client in `InteractableResource` is the prisma type `Resource`.
+   */
+  const interactableResources = updatedSpawnRegions
+    // For each SpawnRegion...
     .map((reg): InteractableResource[] => {
-      
-      // loop through region's resources
+      // Loop through the SpawnRegions's spawned resources
       return reg.resources.map((r) => {
-        
-        const latLngCenter = h3.cellToLatLng(r.h3Index);
+        const resourceLatLngCenter = h3.cellToLatLng(r.h3Index);
 
-        const distanceFromScanRegionCenter = h3.greatCircleDistance(latLngCenter, h3.cellToLatLng(scanRegion), h3.UNITS.m)
+        /**
+         * The distance of the resource from the center of the harvestRegion (i.e the scan region), in **meters**
+         */
+        const distanceFromHarvestRegionCenter = h3.greatCircleDistance(
+          resourceLatLngCenter,
+          h3.cellToLatLng(harvestRegion),
+          h3.UNITS.m,
+        );
 
         const interactableResource: InteractableResource = {
           id: uuid(), // we are giving the client a random uuid for each interactable
           type: "resource",
-          location: [latLngCenter[0], latLngCenter[1]],
-          distanceFromScanRegionCenter: distanceFromScanRegionCenter, // m?
+          location: [resourceLatLngCenter[0], resourceLatLngCenter[1]],
+          distanceFromHarvestRegionCenter: distanceFromHarvestRegionCenter, // m?
           userCanInteract: Boolean(
-            distanceFromScanRegionCenter <= config.user_interact_distance
+            distanceFromHarvestRegionCenter <= config.user_interact_distance,
           ),
-          data: r
+          data: r.resource,
         };
 
-        return interactableResource
+        return interactableResource;
       });
     })
     .flat();
 
-    const interactables = [...resourceInteractables]
+  const interactables = [...interactableResources];
 
-    const sortedCanInteractableIds = interactables
+  /* We provide a separate field in the ScanResult for a sorted array of interactables,
+  based on distance from the scan region center.  
+  */
+  const sortedCanInteractableIds = interactables
     .filter((i) => i.userCanInteract === true)
     .sort((a, b) => {
-      if (a.distanceFromScanRegionCenter <= b.distanceFromScanRegionCenter) return -1
-      else return 1
+      if (
+        a.distanceFromHarvestRegionCenter <= b.distanceFromHarvestRegionCenter
+      )
+        return -1;
+      else return 1;
     })
     .map((i) => {
       if (i.id) {
-        return i.id
+        return i.id;
       } else {
-        throw Error("Interactable should have id before sending to client")
+        throw Error("Interactable should have id before sending to client");
       }
-    })
+    });
 
   const result: ScanResult = {
     metadata: {
       scannedLocation: [latitude, longitude],
     },
     scanPolygons: {
-      centerPolygon: getH3Vertices(scanRegion),
-      peripheralPolygons: scanH3Group.map((pr) => getH3Vertices(pr))
+      centerPolygon: getH3Vertices(harvestRegion),
+      peripheralPolygons: scanH3Group.map((pr) => getH3Vertices(pr)),
     },
-    neighboringPolygons: h3.gridDisk(h3Index, scanDistance).map((neighbor) => getH3Vertices(neighbor)),
+    neighboringPolygons: h3
+      .gridDisk(h3Index, scanDistance)
+      .map((neighbor) => getH3Vertices(neighbor)),
     interactables: interactables,
-    sortedCanInteractableIds: sortedCanInteractableIds
+    sortedCanInteractableIds: sortedCanInteractableIds,
   };
 
   return result;
@@ -131,7 +194,7 @@ export const handleScan = async (
 
 function getH3Vertices(h3Index: string): LatLngTuple[] {
   return h3.cellToVertexes(h3Index).map((i) => {
-    const latLng = h3.vertexToLatLng(i)
-    return [latLng[0], latLng[1]]
-  })
+    const latLng = h3.vertexToLatLng(i);
+    return [latLng[0], latLng[1]];
+  });
 }

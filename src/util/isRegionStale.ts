@@ -1,12 +1,18 @@
-import { Region } from "@prisma/client";
+import { SpawnRegion } from "@prisma/client";
 
-const isRegionStale = (region: Region) => {
-    if (!region.resetDate) {
-      return true;
-    }
-    const now = new Date();
-    const reset_date = new Date(region.resetDate);
-    return now >= reset_date;
-  };
+/**
+ * Checks if the given SpawnRegion's reset_date is nil or overdue (returns true),
+ * otherwise returns false.
+ * @param region SpawnRegion to check
+ * @returns Bool
+ */
+const isRegionStale = (region: SpawnRegion) => {
+  if (!region.resetDate) {
+    return true;
+  }
+  const now = new Date();
+  const reset_date = new Date(region.resetDate);
+  return now >= reset_date;
+};
 
-  export default isRegionStale
+export default isRegionStale;

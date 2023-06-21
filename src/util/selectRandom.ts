@@ -1,15 +1,15 @@
 /**
  * Randomly selects elements from the given array. A specific element can only be selected once.
- * 
+ *
  * @param arr The array of elements to select from
  * @param quantity A tuple of [min, max] number of elements in the final array
  * @param weighted Optional. A decimal percentage, i.e. 0.1, specifying the likehood of getting the minimum or maximum quantity
- * @returns 
+ * @returns
  */
 const selectRandom = <T>(
   arr: T[],
   quantity: [number, number] = [1, 1],
-  weighted?: number
+  weighted?: number,
 ): T[] => {
   // Ensure input is valid
   if (arr.length === 0) {
@@ -22,7 +22,7 @@ const selectRandom = <T>(
 
   if (quantity[1] < quantity[0]) {
     throw new Error(
-      "Upper quantity bound must be greater or equal to lower bound"
+      "Upper quantity bound must be greater or equal to lower bound",
     );
   }
 
@@ -34,15 +34,17 @@ const selectRandom = <T>(
   let actualQuantity: number;
   if (weighted !== undefined) {
     const rand = Math.random();
-    if(rand < weighted) {
+    if (rand < weighted) {
       actualQuantity = quantity[1];
-    } else if(rand > 1 - weighted) {
+    } else if (rand > 1 - weighted) {
       actualQuantity = quantity[0];
     } else {
-      actualQuantity = Math.floor(rand * (quantity[1] - quantity[0])) + quantity[0];
+      actualQuantity =
+        Math.floor(rand * (quantity[1] - quantity[0])) + quantity[0];
     }
   } else {
-    actualQuantity = Math.floor(Math.random() * (quantity[1] - quantity[0] + 1)) + quantity[0];
+    actualQuantity =
+      Math.floor(Math.random() * (quantity[1] - quantity[0] + 1)) + quantity[0];
   }
 
   // Create a copy of the array to avoid modifying the original

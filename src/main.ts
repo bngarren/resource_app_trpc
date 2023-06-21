@@ -18,15 +18,14 @@ const loggerMiddleware = middleware(async (opts) => {
 const loggedProcedure = publicProcedure.use(loggerMiddleware);
 
 const appRouter = router({
-  greeting: loggedProcedure
-    .query(async () => {
-      // TODO: Do some server health checks
-      let isHealthy = true
-      console.log(`Received greeting from client. API isHealthy: ${isHealthy}`)
-      return {
-        isHealthy: isHealthy
-      }
-    }),
+  greeting: loggedProcedure.query(async () => {
+    // TODO: Do some server health checks
+    const isHealthy = true;
+    console.log(`Received greeting from client. API isHealthy: ${isHealthy}`);
+    return {
+      isHealthy: isHealthy,
+    };
+  }),
   scan: loggedProcedure
     .input(
       // The latitude must be a number between -90 and 90 and the longitude between -180 and 180
@@ -35,20 +34,19 @@ const appRouter = router({
           latitude: z.number().min(-90).max(90),
           longitude: z.number().min(-180).max(180),
         }),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
-    
       try {
         const res = await handleScan(input.userLocation, config.scan_distance);
-        console.log(res)
-        return res
+        console.log(res);
+        return res;
       } catch (err) {
-        console.error(err)
+        console.error(err);
         throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Problem with handleScan..." + err
-        })
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Problem with handleScan..." + err,
+        });
       }
     }),
 });
