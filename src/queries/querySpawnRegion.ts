@@ -4,8 +4,6 @@ import {
   SpawnRegionWithResources,
   SpawnedResourceWithResource,
 } from "../types";
-import { getAllSettled } from "../util/getAllSettled";
-import { getResourceForSpawnedResourceInSpawnRegion } from "./queryResource";
 
 export const createSpawnRegion = async (
   model: Prisma.SpawnRegionCreateInput,
@@ -85,7 +83,7 @@ export const getSpawnRegion = async (
  * and SpawnedResourceWithResource[] separately.
  * 
  * ```
- * { resources, ...spawnRegion } = getSpawnRegionWithResources()
+ * { resources, ...rest } = getSpawnRegionWithResources()
  * const spawnRegion: SpawnRegion = rest
  * ```
  * ---

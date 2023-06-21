@@ -1,4 +1,4 @@
-import { SpawnRegionWithResources, SpawnedResourceWithResource } from "./../types/index";
+import { SpawnRegionWithResources, SpawnRegionWithResourcesPartial, SpawnedResourceWithResource } from "./../types/index";
 import {
   Prisma,
   PrismaClient,
@@ -9,7 +9,7 @@ import {
 import { PrismaClientOrTransaction, prisma } from "../prisma";
 import isSpawnRegionStale from "../util/isRegionStale";
 import config from "../config";
-import { generateSpawnedResourceModelsForSpawnRegion } from "../services/resourceService";
+import { extendSpawnedResource, generateSpawnedResourceModelsForSpawnRegion, pruneSpawnedResourceWithResource } from "../services/resourceService";
 import { getAllSettled } from "../util/getAllSettled";
 import { getSpawnRegionWithResources, updateSpawnRegion } from "./querySpawnRegion";
 
@@ -25,21 +25,21 @@ import { getSpawnRegionWithResources, updateSpawnRegion } from "./querySpawnRegi
 
 */
 
-// TODO need to test this; using a composite key, not sure it will work...
-export const getResourceForSpawnedResourceInSpawnRegion = async (
+/**
+ * ### Gets a Resource, by id. 
+ * This is strictly the Resource schema (not SpawnedResource or variants)
+ * @param resourceId 
+ * @param spawnRegionId 
+ * @param prismaClient 
+ * @returns 
+ */
+export const getResource = async (
   resourceId: string,
-  spawnRegionId: string,
   prismaClient: PrismaClientOrTransaction = prisma
 ) => {
-  const res = await prismaClient.spawnedResource.findUnique({
-    where: {
-      resourceId_spawnRegionId: { resourceId, spawnRegionId },
-    },
-    select: {
-      resource: true,
-    },
-  });
-  return res?.resource;
+  return await prismaClient.resource.findUniqueOrThrow({
+    where: {id: resourceId}
+  })
 };
 
 /**
@@ -47,7 +47,7 @@ export const getResourceForSpawnedResourceInSpawnRegion = async (
  * Each resource is the type `SpawnedResourceWithResource`
  * 
  * Use the helper function from resourceService `pruneSpawnedResourceWithResource`
- * to get only the SpawnedResource
+ * to get only the SpawnedResources, or instead call `getSpawnedResourcesForSpawnRegion()`
  *
  */
 export const getResourcesForSpawnRegion = async (
@@ -66,7 +66,10 @@ export const getResourcesForSpawnRegion = async (
 };
 
 /**
- * Gets the SpawnedResources associated with a given SpawnRegion
+ * ### Gets the SpawnedResources associated with a given SpawnRegion
+ * 
+ * This only returns `SpawnedResource[]`, not the custom `SpawnedResourceWithResource[]` type.
+ * For that, instead use `getResourcesForSpawnRegion()`
  *
  */
 export const getSpawnedResourcesForSpawnRegion = async (
@@ -133,20 +136,19 @@ export const deleteSpawnedResourcesForSpawnRegion = async (
 export const updateSpawnedResourcesForSpawnRegionTransaction = async (
   spawnRegionId: string
 ) => {
-  if (spawnRegionId == null) {
+  if (spawnRegionId === null) {
     throw new Error(
-      "Could not update spawned resources for SpawnRegion. Incorrect id provided."
+      `Could not update spawned resources for SpawnRegion. Incorrect id (${spawnRegionId}) provided.`
     );
   }
 
-  let trxResult: SpawnRegionWithResources;
+  let trxResult: SpawnRegionWithResourcesPartial;
 
-
-  // TODO
   // Get the spawn region and its current (prior) resources
-  const {resources: priorResources, ...rest} = await getSpawnRegionWithResources(
+  const {resources: _priorResources, ...rest} = await getSpawnRegionWithResources(
     spawnRegionId
   );
+  const priorResources = _priorResources.map((pr) => pruneSpawnedResourceWithResource(pr))
   const spawnRegion: SpawnRegion = rest
 
   try {
@@ -216,14 +218,17 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
         }
 
         // Finally, return the updated SpawnRegion
-        const updatedSpawnRegion: SpawnRegionWithResources = {
+        const updatedSpawnRegion: SpawnRegionWithResourcesPartial = {
           ...res_3,
-          SpawnedResources: newSpawnedResources,
+          resources: newSpawnedResources,
         };
         return updatedSpawnRegion;
       }
-      // return unmodified spawn region
-      return spawnRegion;
+      /*
+      The SpawnRegion was not stale/overdue, so we didn't change anything.
+      Return a copy of the original
+      */
+      return {...spawnRegion, resources: priorResources} as SpawnRegionWithResourcesPartial;
     });
   } catch (error) {
     console.error(

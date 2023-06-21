@@ -1,11 +1,11 @@
 import { Prisma, SpawnRegion, Resource, SpawnedResource, ResourceType, ResourceRarity } from "@prisma/client";
 import selectRandom from "../util/selectRandom";
-import { createResource, createResources, getResourcesForSpawnRegion } from "../queries/queryResource";
+import { createResource, createResources, getResource, getResourcesForSpawnRegion } from "../queries/queryResource";
 import { cellToChildren, getResolution } from "h3-js";
 import { SpawnedResourceWithResource } from "../types";
 
 /**
- * ## Helper function for converting a SpawnedResourceWithResource back to a SpawnedResource type
+ * ### Helper function for converting a SpawnedResourceWithResource back to a SpawnedResource type
  * Sometimes we just want to carry the SpawnedResource type without the associated `resource: Resource`
  * property.
  * 
@@ -17,6 +17,25 @@ export const pruneSpawnedResourceWithResource = (
 ): SpawnedResource => {
   const {resource, ...rest} = fullResource
   return rest as SpawnedResource
+}
+
+/**
+ * ### Helper function for converting a SpawnedResource into a SpawnedResourceWithResource type
+ * _This is the opposite of the_ `pruneSpawnedResourceWithResource` function
+ * 
+ * This function adds a `resource: Resource` property to SpawnedResource
+ * 
+ * @param spawnedResource 
+ * @returns SpawnedResoureWithResource
+ */
+export const extendSpawnedResource = async (
+  spawnedResource: SpawnedResource
+): Promise<SpawnedResourceWithResource> => {
+  const res = await getResource(spawnedResource.resourceId)
+  return {
+    ...spawnedResource,
+    resource: res
+  }
 }
 
 export const getResourcesInSpawnRegion = async (
