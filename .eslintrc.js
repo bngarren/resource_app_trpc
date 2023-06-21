@@ -12,7 +12,7 @@ module.exports = {
   rules: {
     // Ignores unused vars when in the context of destructuring or names preceded with _
     "@typescript-eslint/no-unused-vars": "off",
-    "unused-imports/no-unused-imports": "error",
+    "unused-imports/no-unused-imports": "warn",
     "unused-imports/no-unused-vars": [
       "warn",
       {
