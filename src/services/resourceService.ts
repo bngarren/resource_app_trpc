@@ -1,28 +1,72 @@
-import { Prisma, Region, Resource } from "@prisma/client";
+import { Prisma, SpawnRegion, Resource, SpawnedResource, ResourceType, ResourceRarity } from "@prisma/client";
 import selectRandom from "../util/selectRandom";
-import { createResource, createResources } from "../queries/queryResource";
-import { cellToChildren } from "h3-js";
+import { createResource, createResources, getResourcesForSpawnRegion } from "../queries/queryResource";
+import { cellToChildren, getResolution } from "h3-js";
+import { SpawnedResourceWithResource } from "../types";
+
+/**
+ * ## Helper function for converting a SpawnedResourceWithResource back to a SpawnedResource type
+ * Sometimes we just want to carry the SpawnedResource type without the associated `resource: Resource`
+ * property.
+ * 
+ * @param fullResource The SpawnedResourceWithResource object to prune
+ * @returns SpawnedResource
+ */
+export const pruneSpawnedResourceWithResource = (
+  fullResource: SpawnedResourceWithResource
+): SpawnedResource => {
+  const {resource, ...rest} = fullResource
+  return rest as SpawnedResource
+}
+
+export const getResourcesInSpawnRegion = async (
+  spawnRegionId: string
+) => {
+  // queryResource
+  return await getResourcesForSpawnRegion(spawnRegionId)
+}
 
 // TODO move somewhere else
 const RESOURCE_NAMES = ["Gold", "Silver", "Iron", "Copper"];
 
-export const createRandomResourceModel = (
-    regionId: number,
-    h3Index: string,
-): Prisma.ResourceCreateInput => {
+export const createRandomResourceModel = () => {
 
-    const [name] = selectRandom(RESOURCE_NAMES);
+    const [name] = selectRandom(RESOURCE_NAMES, [1, 1]);
 
-    // using "connect" is the idiomatic way to associate the new record with an existing record by its unique identifier
-    return {
+    let result: Prisma.ResourceCreateInput
+
+    result = {
+      url: name.toLocaleLowerCase(),
       name: name,
-      region: {
-        connect: {
-            id: regionId
-        }
-      },
-      h3Index: h3Index,
+      resourceType: ResourceType.REGULAR,
+      rarity: ResourceRarity.COMMON
     }; 
+
+    return result
+}
+
+export const createSpawnedResourceModel = (
+  spawnRegionId: string,
+  resourceH3Index: string,
+  partialResourceModel: Prisma.ResourceCreateInput
+) =>  {
+
+  let result: Prisma.SpawnedResourceCreateInput
+  // using "connect" is the idiomatic way to associate the new record with an existing record by its unique identifier
+  result = {
+    spawnRegion: {
+      connect: {
+        id: spawnRegionId
+      }
+    },
+    resource: {
+      create: partialResourceModel
+    },
+    h3Index: resourceH3Index,
+    h3Resolution: getResolution(resourceH3Index),
+  };
+
+  return result
 }
 
 
@@ -41,22 +85,43 @@ export const handleCreateResource = async (
   }
 
 
-  export const generateResourceModelsForRegion = (
-    region: Region,
+  /**
+   * 
+   * The goal of this function is to create new SpawnedResource models for a given
+   * SpawnRegion. These models are then used to update the SpawnedResources table
+   * in the database.
+   * 
+   * This function relies on using some RNG to vary the location of resource spawns
+   * and type. // TODO: Can implement rarity, etc.
+   * 
+   * @param spawnRegion 
+   * @param quantity 
+   * @param resourceH3Resolution 
+   * @returns 
+   */
+  export const generateSpawnedResourceModelsForSpawnRegion = (
+    spawnRegion: SpawnRegion,
     quantity: [number, number],
     resourceH3Resolution: number
   ) => {
-    // Get the children h3 indexes of this (parent) region at the specified h3 resolution
+    // Get the children h3 indexes of this (parent) spawn region at the specified h3 resolution
     // These are potential spots for a resource
-    const potentials = cellToChildren(region.h3Index, resourceH3Resolution);
+    const potentials = cellToChildren(spawnRegion.h3Index, resourceH3Resolution);
   
     // Select some of these spots randomly
-    const selected = selectRandom(potentials, quantity);
+    const selectedH3Indices = selectRandom(potentials, quantity);
   
-    // Now create the resource models from these h3 indices
-    const models = selected.map((s) => {
-      return createRandomResourceModel(region.id, s);
+    /* Now create the spawned resource models from these h3 indices
+
+    First we create random resource models
+    Then we make spawned resource models from these (giving a spawn region and
+      h3Index for the resource)
+
+    */
+    const spawnedResourceModels = selectedH3Indices.map((s) => {
+      const resourceModel = createRandomResourceModel();
+      return createSpawnedResourceModel(spawnRegion.id, s, resourceModel)
     });
   
-    return models;
+    return spawnedResourceModels;
   };

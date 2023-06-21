@@ -1,132 +1,234 @@
-import { RegionWithResources } from "./../types/index";
-import { Prisma, PrismaClient, Region, Resource } from "@prisma/client";
+import { SpawnRegionWithResources, SpawnedResourceWithResource } from "./../types/index";
+import {
+  Prisma,
+  PrismaClient,
+  SpawnRegion,
+  Resource,
+  SpawnedResource,
+} from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
-import isRegionStale from "../util/isRegionStale";
+import isSpawnRegionStale from "../util/isRegionStale";
 import config from "../config";
-import { generateResourceModelsForRegion } from "../services/resourceService";
+import { generateSpawnedResourceModelsForSpawnRegion } from "../services/resourceService";
 import { getAllSettled } from "../util/getAllSettled";
-import { updateRegion } from "./queryRegion";
+import { getSpawnRegionWithResources, updateSpawnRegion } from "./querySpawnRegion";
 
+/**
+- getResourceForSpawnedResourceInSpawnRegion
+- getResourcesForSpawnRegion
+- getSpawnedResourcesForSpawnRegion
+- createResource
+- createResources
+- createSpawnedResource
+- deleteSpawnedResourcesForSpawnRegion
+- updateSpawnedResourcesForSpawnRegionTransaction
+
+*/
+
+// TODO need to test this; using a composite key, not sure it will work...
+export const getResourceForSpawnedResourceInSpawnRegion = async (
+  resourceId: string,
+  spawnRegionId: string,
+  prismaClient: PrismaClientOrTransaction = prisma
+) => {
+  const res = await prismaClient.spawnedResource.findUnique({
+    where: {
+      resourceId_spawnRegionId: { resourceId, spawnRegionId },
+    },
+    select: {
+      resource: true,
+    },
+  });
+  return res?.resource;
+};
+
+/**
+ * ## Gets the resources associated with a given SpawnRegion
+ * Each resource is the type `SpawnedResourceWithResource`
+ * 
+ * Use the helper function from resourceService `pruneSpawnedResourceWithResource`
+ * to get only the SpawnedResource
+ *
+ */
+export const getResourcesForSpawnRegion = async (
+  spawnRegionId: string,
+  prismaClient: PrismaClientOrTransaction = prisma
+) => {
+  const res: SpawnedResourceWithResource[] = await prismaClient.spawnedResource.findMany({
+    where: {
+      spawnRegionId: spawnRegionId,
+    },
+    include: {
+      resource: true,
+    },
+  });
+  return res
+};
+
+/**
+ * Gets the SpawnedResources associated with a given SpawnRegion
+ *
+ */
+export const getSpawnedResourcesForSpawnRegion = async (
+  spawnRegionId: string,
+  prismaClient: PrismaClientOrTransaction = prisma
+) => {
+  return await prismaClient.spawnedResource.findMany({
+    where: {
+      spawnRegionId: spawnRegionId,
+    },
+  });
+};
+
+/**
+ * Creates a new Resource
+ */
 export const createResource = async (
   model: Prisma.ResourceCreateInput,
-  prismaClient: PrismaClientOrTransaction = prisma,
+  prismaClient: PrismaClientOrTransaction = prisma
 ): Promise<Resource> => {
   return await prismaClient.resource.create({
     data: model,
   });
 };
 
+/**
+ * Creates multiple new Resources
+ */
 export const createResources = async (
   models: Prisma.ResourceCreateManyInput[],
-  prismaClient: PrismaClientOrTransaction = prisma,
-): Promise<Resource[]> => {
-  await prismaClient.resource.createMany({ data: models, skipDuplicates: true });
-
-  const regionIds = models.map((m) => m.regionId);
-
-  return await prismaClient.resource.findMany({
-    where: {
-      regionId: {
-        in: regionIds,
-      },
-    },
-  });
-};
-
-export const getResourcesForRegion = async (
-    regionId: number,
-    prismaClient: PrismaClientOrTransaction = prisma
-    ) => {
-  return await prismaClient.resource.findMany({
-    where: {
-      regionId: regionId,
-    },
-  });
-};
-
-export const deleteResourcesForRegion = async (regionId: number, prismaClient: PrismaClientOrTransaction = prisma) => {
-  return await prismaClient.resource.deleteMany({
-    where: {
-      regionId: regionId,
-    },
-  });
-};
-
-export const updateResourcesForRegionTransaction = async (
-  region: RegionWithResources
+  prismaClient: PrismaClientOrTransaction = prisma
 ) => {
-  if (!region) {
-    throw new Error("Could not update resources for region");
+  await prismaClient.resource.createMany({
+    data: models,
+    skipDuplicates: true,
+  });
+};
+
+
+/**
+ * Creates a new SpawnedResource
+ * (This is a resource associated with an actual SpawnRegion and at a specific h3 index)
+ */
+export const createSpawnedResource = async (
+  model: Prisma.SpawnedResourceCreateInput,
+  prismaClient: PrismaClientOrTransaction = prisma
+): Promise<SpawnedResource> => {
+  return await prismaClient.spawnedResource.create({
+    data: model,
+  });
+};
+
+export const deleteSpawnedResourcesForSpawnRegion = async (
+  spawnRegionId: string,
+  prismaClient: PrismaClientOrTransaction = prisma
+) => {
+  return await prismaClient.spawnedResource.deleteMany({
+    where: {
+      spawnRegionId: spawnRegionId,
+    },
+  });
+};
+
+export const updateSpawnedResourcesForSpawnRegionTransaction = async (
+  spawnRegionId: string
+) => {
+  if (spawnRegionId == null) {
+    throw new Error(
+      "Could not update spawned resources for SpawnRegion. Incorrect id provided."
+    );
   }
 
-  let trxResult: RegionWithResources;
+  let trxResult: SpawnRegionWithResources;
 
-  const resources =
-    region.resources || (await getResourcesForRegion(region.id));
+
+  // TODO
+  // Get the spawn region and its current (prior) resources
+  const {resources: priorResources, ...rest} = await getSpawnRegionWithResources(
+    spawnRegionId
+  );
+  const spawnRegion: SpawnRegion = rest
 
   try {
     trxResult = await prisma.$transaction(async (trx) => {
       // * - - - - - - - START TRANSACTION - - - - - - - -
 
-      // If region's "reset_date" is stale/overdue, then repopulate
-      // all resources
-      if (resources.length === 0 || isRegionStale(region)) {
-        console.log(`REGION ${region.id} IS STALE`);
+      /* If a SpawnRegion's `reset_date` is stale/overdue, then repopulate a fresh
+      set of spawned resources.
+      */
 
-        // Delete old resources, if present
-        const res_1 = await deleteResourcesForRegion(region.id, trx)
+      if (priorResources.length === 0 || isSpawnRegionStale(spawnRegion)) {
+        console.log(`SPAWN REGION ${spawnRegion.id} IS STALE`);
 
-        //safety check
-        if (resources.length > 0 && res_1.count === 0) {
-          throw new Error("Delete resources failed");
-        }
-
-        // Populate new resources (random type and scarcity)
-        const resourceModels = generateResourceModelsForRegion(
-          region,
-          [config.min_resources_per_region, config.max_resources_per_region],
-          config.resource_h3_resolution
-        );
-
-        const newResources = await getAllSettled(
-          resourceModels.map((model) => createResource(model, trx))
+        /* Delete old/previous SpawnedResources for this SpawnRegion, if present. We
+        do not delete any rows from the Resources table (these are just model resources)
+        */
+        const res_1 = await deleteSpawnedResourcesForSpawnRegion(
+          spawnRegion.id,
+          trx
         );
 
         //safety check
-        if (newResources.length !== resourceModels.length) {
-          throw new Error("Populating resources failed");
+        if (priorResources.length > 0 && res_1.count === 0) {
+          throw new Error("Delete spawned resources failed");
         }
 
-        // Update region's resetDate to be current time + reset interval
-        // Update region's updatedAt to be current time
+        // Populate new spawned resources
+        const spawnedResourceModels =
+          generateSpawnedResourceModelsForSpawnRegion(
+            spawnRegion,
+            [
+              config.min_resources_per_spawn_region,
+              config.max_resources_per_spawn_region,
+            ],
+            config.resource_h3_resolution
+          );
+
+        const newSpawnedResources = await getAllSettled(
+          spawnedResourceModels.map((model) =>
+            createSpawnedResource(model, trx)
+          )
+        );
+
+        //safety check
+        if (newSpawnedResources.length !== spawnedResourceModels.length) {
+          throw new Error("Populating spawned resources failed");
+        }
+
+        // Update spawn region's resetDate to be current time + reset interval
         const now = new Date();
         const nextResetDate = new Date();
         nextResetDate.setDate(
-          nextResetDate.getDate() + config.region_reset_interval
+          nextResetDate.getDate() + config.spawn_region_reset_interval
         );
 
-        const newRegionData = {
-            resetDate: nextResetDate.toISOString(),
-            updatedAt: now.toISOString(),
-          }
-        const res_3 =  await updateRegion(region.id, newRegionData, trx)
+        const newSpawnRegionData = {
+          resetDate: nextResetDate.toISOString(),
+        };
+        const res_3 = await updateSpawnRegion(
+          spawnRegion.id,
+          newSpawnRegionData,
+          trx
+        );
 
         if (!res_3) {
-          throw new Error("Modifying region's resetDate and/or updatedAt failed");
+          throw new Error("Modifying spawn region's resetDate failed");
         }
 
-        // Finally, return the updated region
-        const updatedRegion: RegionWithResources = {
+        // Finally, return the updated SpawnRegion
+        const updatedSpawnRegion: SpawnRegionWithResources = {
           ...res_3,
-          resources: newResources,
+          SpawnedResources: newSpawnedResources,
         };
-        return updatedRegion;
+        return updatedSpawnRegion;
       }
-      // return unmodified region
-      return region;
+      // return unmodified spawn region
+      return spawnRegion;
     });
   } catch (error) {
-    console.error("Error within updateResourcesForRegionTransaction" + error);
+    console.error(
+      "Error within updateSpawnedResourcesForSpawnRegionTransaction" + error
+    );
 
     // Any transaction query should be automatically rolled-back
     throw error;
