@@ -15,6 +15,7 @@ import {
 import config from "../config";
 import { v4 as uuid } from "uuid";
 import { getSpawnRegionsFromH3Indices } from "../queries/querySpawnRegion";
+import { logger } from "../logger/logger";
 
 export const handleScan = async (
   fromLocation: Coordinate,
@@ -53,9 +54,11 @@ export const handleScan = async (
     (h) => !existingSpawnRegions.some((r) => r.h3Index === h),
   );
 
-  console.log(
-    `Missing SpawnRegions (${missingRegionsIndexes.length}): ${missingRegionsIndexes}`,
-  );
+  if (missingRegionsIndexes.length !== 0) {
+    logger.debug(
+      `Need to create new SpawnRegions (${missingRegionsIndexes.length}): ${missingRegionsIndexes}`,
+    );
+  }
 
   // - - - - - - Create these SpawnRegions in the database - - - - -
   const regionModels = missingRegionsIndexes.map((m) => {
