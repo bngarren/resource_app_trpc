@@ -20,7 +20,7 @@ export default {
   min_resources_per_spawn_region: 1,
   max_resources_per_spawn_region: 3,
   spawn_region_h3_resolution: 9,
-  spawn_region_reset_interval: 3, //days
+  spawn_region_reset_interval: 3, // days
   scan_distance: 2,
   resource_h3_resolution: 11, // the size of the resource h3 cells
   harvest_h3_resolution: 10, // the size of the scan/harvest h3 cells

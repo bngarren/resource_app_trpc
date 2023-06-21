@@ -19,12 +19,13 @@
  * @returns Promise that resolves to an array of results (only those that resolved/fulfilled)
  */
 export const getAllSettled = async <T>(
-  arr: Promise<T | null | undefined>[]
+  arr: Promise<T | null | undefined>[],
 ) => {
-  const settled = await Promise.allSettled(arr);
+  const settled: PromiseSettledResult<T | null | undefined>[] =
+    await Promise.allSettled(arr);
   return settled
     .filter(
-      (x): x is PromiseFulfilledResult<Awaited<T>> => x.status === "fulfilled"
+      (x): x is PromiseFulfilledResult<Awaited<T>> => x.status === "fulfilled",
     )
     .map((x) => x.value)
     .filter((x): x is Awaited<T> => x != null);

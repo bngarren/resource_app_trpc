@@ -1,4 +1,4 @@
-import { Prisma, SpawnRegion, SpawnedResource, Resource } from "@prisma/client";
+import { Prisma, SpawnedResource, Resource } from "@prisma/client";
 
 // A dev type that helps me to see to full type structure of my types
 type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
@@ -20,7 +20,7 @@ export type SpawnedResourceWithResource = Omit<
  * `SpawnedResourceWithResource`)
  */
 export interface SpawnRegionWithResources
-  extends Omit<Prisma.SpawnRegionGetPayload<{}>, "SpawnedResources"> {
+  extends Omit<Prisma.SpawnRegionGetPayload<true>, "SpawnedResources"> {
   resources: SpawnedResourceWithResource[];
 }
 
@@ -30,7 +30,7 @@ export interface SpawnRegionWithResources
  * see `SpawnRegionWithResources`
  */
 export interface SpawnRegionWithResourcesPartial
-  extends Omit<Prisma.SpawnRegionGetPayload<{}>, "SpawnedResources"> {
+  extends Omit<Prisma.SpawnRegionGetPayload<true>, "SpawnedResources"> {
   resources: SpawnedResource[];
 }
 
@@ -56,7 +56,7 @@ export type Interactable = {
    * This uuid is used on the client side to keep track of interactables, and used in conjunction
    * with the `sortedCanInteractableIds` property on ScanResult
    */
-  id?: String;
+  id?: string;
   type: InteractableType;
   location: LatLngTuple;
   /**
@@ -88,5 +88,5 @@ export type ScanResult = {
    * A sorted array of Interactable Id's by distanceFromHarvestRegionCenter
    * Includes only those interactables with userCanInteract = true
    */
-  sortedCanInteractableIds: String[];
+  sortedCanInteractableIds: string[];
 };

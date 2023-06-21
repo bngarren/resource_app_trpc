@@ -7,12 +7,12 @@ import { SpawnRegion } from "@prisma/client";
  * @returns Bool
  */
 const isRegionStale = (region: SpawnRegion) => {
-    if (!region.resetDate) {
-      return true;
-    }
-    const now = new Date();
-    const reset_date = new Date(region.resetDate);
-    return now >= reset_date;
-  };
+  if (!region.resetDate) {
+    return true;
+  }
+  const now = new Date();
+  const reset_date = new Date(region.resetDate);
+  return now >= reset_date;
+};
 
-  export default isRegionStale
+export default isRegionStale;

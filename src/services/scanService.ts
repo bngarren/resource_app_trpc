@@ -18,7 +18,7 @@ import { getSpawnRegionsFromH3Indices } from "../queries/querySpawnRegion";
 
 export const handleScan = async (
   fromLocation: Coordinate,
-  scanDistance = 1
+  scanDistance = 1,
 ): Promise<ScanResult> => {
   /**
    * Scan location latitude
@@ -35,7 +35,7 @@ export const handleScan = async (
   const h3Index = h3.latLngToCell(
     latitude,
     longitude,
-    config.spawn_region_h3_resolution
+    config.spawn_region_h3_resolution,
   );
 
   /**
@@ -50,11 +50,11 @@ export const handleScan = async (
   // Missing regions - not present in the database
   // i.e., An array of h3Indexes that need to be added to db
   const missingRegionsIndexes = h3Group.filter(
-    (h) => !existingSpawnRegions.some((r) => r.h3Index === h)
+    (h) => !existingSpawnRegions.some((r) => r.h3Index === h),
   );
 
   console.log(
-    `Missing SpawnRegions (${missingRegionsIndexes.length}): ${missingRegionsIndexes}`
+    `Missing SpawnRegions (${missingRegionsIndexes.length}): ${missingRegionsIndexes}`,
   );
 
   // - - - - - - Create these SpawnRegions in the database - - - - -
@@ -66,13 +66,13 @@ export const handleScan = async (
   });
   const newSpawnRegions = await handleCreateSpawnRegions(regionModels);
 
-  let spawnRegions = [...existingSpawnRegions, ...newSpawnRegions];
+  const spawnRegions = [...existingSpawnRegions, ...newSpawnRegions];
 
   // the number of h3 indexes in the scan group should equal
   // the number of regions we now have (existing + newly created)
   if (spawnRegions.length !== h3Group.length) {
     throw new Error(
-      "Did not match h3 indices with SpawnRegions in the database"
+      "Did not match h3 indices with SpawnRegions in the database",
     );
   }
 
@@ -81,7 +81,7 @@ export const handleScan = async (
    * A `SpawnRegionWithResource[]` array that contains the updated SpawnRegions
    */
   const updatedSpawnRegions = await getAllSettled<SpawnRegionWithResources>(
-    spawnRegions.map((r) => updateSpawnRegion(r.id))
+    spawnRegions.map((r) => updateSpawnRegion(r.id)),
   );
 
   // Expect that every spawn region was sucessfully updated
@@ -97,7 +97,7 @@ export const handleScan = async (
   const harvestRegion = h3.latLngToCell(
     latitude,
     longitude,
-    config.harvest_h3_resolution
+    config.harvest_h3_resolution,
   );
 
   /**
@@ -133,7 +133,7 @@ export const handleScan = async (
         const distanceFromHarvestRegionCenter = h3.greatCircleDistance(
           resourceLatLngCenter,
           h3.cellToLatLng(harvestRegion),
-          h3.UNITS.m
+          h3.UNITS.m,
         );
 
         const interactableResource: InteractableResource = {
@@ -142,7 +142,7 @@ export const handleScan = async (
           location: [resourceLatLngCenter[0], resourceLatLngCenter[1]],
           distanceFromHarvestRegionCenter: distanceFromHarvestRegionCenter, // m?
           userCanInteract: Boolean(
-            distanceFromHarvestRegionCenter <= config.user_interact_distance
+            distanceFromHarvestRegionCenter <= config.user_interact_distance,
           ),
           data: r.resource,
         };

@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient, SpawnRegion } from "@prisma/client";
+import { Prisma, SpawnRegion } from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
 import {
   SpawnRegionWithResources,
@@ -7,7 +7,7 @@ import {
 
 export const createSpawnRegion = async (
   model: Prisma.SpawnRegionCreateInput,
-  prismaClient: PrismaClientOrTransaction = prisma
+  prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<SpawnRegion> => {
   return await prismaClient.spawnRegion.create({
     data: model,
@@ -16,7 +16,7 @@ export const createSpawnRegion = async (
 
 export const createSpawnRegions = async (
   models: Prisma.SpawnRegionCreateManyInput[],
-  prismaClient: PrismaClientOrTransaction = prisma
+  prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<SpawnRegion[]> => {
   await prismaClient.spawnRegion.createMany({
     data: models,
@@ -39,7 +39,7 @@ export const createSpawnRegions = async (
  */
 export const getSpawnRegionsFromH3Indices = async (
   h3Indices: string[],
-  prismaClient: PrismaClientOrTransaction = prisma
+  prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<SpawnRegion[]> => {
   const regions = await prismaClient.spawnRegion.findMany({
     where: {
@@ -53,71 +53,72 @@ export const getSpawnRegionsFromH3Indices = async (
 };
 
 /**
- * ## Returns a SpawnRegion based on the id.
- * 
+ * ### Returns a SpawnRegion based on the id.
+ *
  * This function does **NOT** return the associated SpawnedResources. For that,
  * use `getSpawnRegionWithResources`
- * 
- * @param id 
- * @param prismaClient 
+ *
+ * @param id
+ * @param prismaClient
  * @returns SpawnRegion
  */
 export const getSpawnRegion = async (
   id: string,
-  prismaClient: PrismaClientOrTransaction = prisma
+  prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
   return await prismaClient.spawnRegion.findUniqueOrThrow({
-    where: { id }
-  })
-}
+    where: { id },
+  });
+};
 
 /**
- * ## Returns a SpawnRegion based on the id and includes its associated resources.
- * 
+ * ### Returns a SpawnRegion based on the id and includes its associated resources.
+ *
  * The `resources` property of the returned SpawnRegionWithResources is an array
  * of `SpawnedResourceWithResource`, which includes the SpawnedResource and
  * Resource models.
- * 
+ *
  * ---
  * The caller should destructure the result object in order to get a SpawnRegion
  * and SpawnedResourceWithResource[] separately.
- * 
+ *
  * ```
  * { resources, ...rest } = getSpawnRegionWithResources()
  * const spawnRegion: SpawnRegion = rest
  * ```
  * ---
- * 
- * @param id 
- * @param prismaClient 
+ *
+ * @param id
+ * @param prismaClient
  * @returns SpawnRegionWithResources
  */
 export const getSpawnRegionWithResources = async (
   id: string,
-  prismaClient: PrismaClientOrTransaction = prisma
+  prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<SpawnRegionWithResources> => {
   const spawnRegion = await prismaClient.spawnRegion.findUnique({
     where: { id },
     include: {
       SpawnedResources: {
         include: {
-          resource: true
-        }
-      }
-    }
+          resource: true,
+        },
+      },
+    },
   });
 
   if (!spawnRegion) {
     throw new Error(`No spawn region found with id: ${id}`);
   }
 
-  const resources: SpawnedResourceWithResource[] = spawnRegion.SpawnedResources.map(spawnedResource => {
-    const { resource, ...rest } = spawnedResource;
-    return {
-      ...rest,
-      resource: resource
-    };
-  });
+  const resources: SpawnedResourceWithResource[] =
+    spawnRegion.SpawnedResources.map((spawnedResource) => {
+      const { resource, ...rest } = spawnedResource;
+      return {
+        ...rest,
+        resource: resource,
+      };
+    });
 
   const { SpawnedResources, ...restSpawnRegion } = spawnRegion;
 
@@ -126,14 +127,12 @@ export const getSpawnRegionWithResources = async (
     ...restSpawnRegion,
     resources,
   } as SpawnRegionWithResources;
-}
-
-
+};
 
 export const updateSpawnRegion = async (
   id: string,
   partialModel: Prisma.SpawnRegionUpdateInput,
-  prismaClient: PrismaClientOrTransaction = prisma
+  prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
   return await prismaClient.spawnRegion.update({
     where: {
