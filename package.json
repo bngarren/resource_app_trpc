@@ -18,7 +18,8 @@
     "lint:fix": "eslint --fix 'src/**/*.ts'",
     "build": "rm -rf dist && tsc",
     "heroku-postbuild": "echo heroku-postbuild",
-    "deploy": "git push heroku master",
+    "deploy:dev": "git push heroku development",
+    "deploy:master": "git push heroku master",
     "start": "clear && npm run build && node dist/main.js",
     "start:dev": "ts-node-dev --respawn --clear --transpile-only --debounce 1000 ./src/main.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
