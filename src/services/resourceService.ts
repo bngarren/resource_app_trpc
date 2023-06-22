@@ -55,12 +55,20 @@ export const getResourcesInSpawnRegion = async (spawnRegionId: string) => {
   return await getResourcesForSpawnRegion(spawnRegionId);
 };
 
-// TODO move somewhere else
-const RESOURCE_NAMES = ["Gold", "Silver", "Iron", "Copper"];
-
+/**
+ * ### Creates a Resource model with some random properties
+ *
+ * **This function does not alter the database.**
+ *
+ * @returns Resource
+ */
 export const createRandomResourceModel = () => {
+  // TODO move somewhere else
+  const RESOURCE_NAMES = ["Gold", "Silver", "Iron", "Copper"];
+
   const [name] = selectRandom(RESOURCE_NAMES, [1, 1]);
 
+  // TODO Currently all resources are the same resource type and rarity
   const result: Prisma.ResourceCreateInput = {
     url: name.toLocaleLowerCase(),
     name: name,
@@ -71,6 +79,20 @@ export const createRandomResourceModel = () => {
   return result;
 };
 
+/**
+ * ### Creates a SpawnedResource from a Resource model
+ *
+ * This function associates a Resource with a SpawnRegion--which is essentially what
+ * a SpawnedResource model represents.
+ *
+ * **This function does not alter the database.**
+ *
+ * _Requires a spawn region id and an h3 index (for the resource)_
+ * @param spawnRegionId
+ * @param resourceH3Index
+ * @param partialResourceModel
+ * @returns SpawnedResourceModel
+ */
 export const createSpawnedResourceModel = (
   spawnRegionId: string,
   resourceH3Index: string,
@@ -105,14 +127,18 @@ export const handleCreateResources = async (
   return await createResources(resourceModels);
 };
 
+// TODO: Go to createRandomResourceModel() to work on the RNG aspect of resources
+
 /**
  *
  * The goal of this function is to create new SpawnedResource models for a given
  * SpawnRegion. These models are then used to update the SpawnedResources table
- * in the database.
+ * in the database (in some other function).
+ *
+ * **This function does not alter the database.**
  *
  * This function relies on using some RNG to vary the location of resource spawns
- * and type. // TODO: Can implement rarity, etc.
+ * and type.
  *
  * @param spawnRegion
  * @param quantity

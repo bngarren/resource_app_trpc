@@ -1,3 +1,4 @@
+import { logger } from "./../logger/logger";
 import {
   SpawnRegionWithResourcesPartial,
   SpawnedResourceWithResource,
@@ -88,7 +89,7 @@ export const getSpawnedResourcesForSpawnRegion = async (
 };
 
 /**
- * Creates a new Resource
+ * ### Creates a new Resource
  */
 export const createResource = async (
   model: Prisma.ResourceCreateInput,
@@ -100,7 +101,7 @@ export const createResource = async (
 };
 
 /**
- * Creates multiple new Resources
+ * ### Creates multiple new Resources
  */
 export const createResources = async (
   models: Prisma.ResourceCreateManyInput[],
@@ -113,7 +114,7 @@ export const createResources = async (
 };
 
 /**
- * Creates a new SpawnedResource
+ * ### Creates a new SpawnedResource
  * (This is a resource associated with an actual SpawnRegion and at a specific h3 index)
  */
 export const createSpawnedResource = async (
@@ -136,6 +137,15 @@ export const deleteSpawnedResourcesForSpawnRegion = async (
   });
 };
 
+/**
+ * This function updates the spawned resources for a given spawn region.
+ * It checks whether the SpawnRegion is stale and if so, deletes old/previous
+ * SpawnedResources and populates new ones. It also updates spawn region's
+ * resetDate to be current time + reset interval and returns the updated SpawnRegion.
+ * @param spawnRegionId
+ * @returns SpawnRegionWithResourcesPartial (this means the full Resource
+ * model is not returned for each resource, only SpawnedResource)
+ */
 export const updateSpawnedResourcesForSpawnRegionTransaction = async (
   spawnRegionId: string,
 ) => {
@@ -164,7 +174,7 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
       */
 
       if (priorResources.length === 0 || isSpawnRegionStale(spawnRegion)) {
-        console.log(`SPAWN REGION ${spawnRegion.id} IS STALE`);
+        logger.debug(`SpawnRegion ${spawnRegion.id} is stale`);
 
         /* Delete old/previous SpawnedResources for this SpawnRegion, if present. We
         do not delete any rows from the Resources table (these are just model resources)
@@ -220,7 +230,9 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
           throw new Error("Modifying spawn region's resetDate failed");
         }
 
-        // Finally, return the updated SpawnRegion
+        /* The SpawnRegion WAS stale/overdue, so we updated the resources.
+          Return the updated SpawnRegion        
+        */
         const updatedSpawnRegion: SpawnRegionWithResourcesPartial = {
           ...res_3,
           resources: newSpawnedResources,
@@ -237,8 +249,9 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
       } as SpawnRegionWithResourcesPartial;
     });
   } catch (error) {
-    console.error(
-      "Error within updateSpawnedResourcesForSpawnRegionTransaction" + error,
+    logger.error(
+      error,
+      "Error within updateSpawnedResourcesForSpawnRegionTransaction",
     );
 
     // Any transaction query should be automatically rolled-back
