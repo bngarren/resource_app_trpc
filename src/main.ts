@@ -7,12 +7,13 @@ import { handleScan } from "./services/scanService";
 import { TRPCError } from "@trpc/server";
 import config from "./config";
 import { logger } from "./logger/logger";
+import { logScanResult } from "./logger/loggerHelper";
 
 const appRouter = router({
   greeting: publicProcedure.query(async () => {
     // TODO: Do some server health checks
     const isHealthy = true;
-    console.log(`Received greeting from client. API isHealthy: ${isHealthy}`);
+    logger.info(`Received greeting from client. API isHealthy: ${isHealthy}`);
     return {
       isHealthy: isHealthy,
     };
@@ -30,6 +31,7 @@ const appRouter = router({
     .mutation(async ({ input }) => {
       try {
         const res = await handleScan(input.userLocation, config.scan_distance);
+        logScanResult(res);
         return res;
       } catch (err) {
         logger.error(err);

@@ -3,14 +3,15 @@ import { CreateHTTPContextOptions } from "@trpc/server/adapters/standalone";
 import { logger } from "./logger/logger";
 
 /**
- * Context
+ * ### Context
+ * Properties added to the context will be available for all middleware and procedures
+ *
+ * For example, can grab info from the request header and add it to context, e.g. hostname
  */
-export function createContext(_opts: CreateHTTPContextOptions) {
-  const testCtx = {
-    test: true,
-  };
+export function createContext(opts: CreateHTTPContextOptions) {
+  const client = opts.req.headers.host;
   return {
-    testCtx,
+    client,
   };
 }
 type Context = inferAsyncReturnType<typeof createContext>;
@@ -24,7 +25,10 @@ const t = initTRPC.context<Context>().create();
 export const middleware = t.middleware;
 
 const loggerMiddleware = middleware(async (opts) => {
-  logger.info({ path: opts.path, body: opts.rawInput }, "Received request");
+  logger.info(
+    { client: opts.ctx.client, body: opts.rawInput },
+    `Request received for /${opts.path}`,
+  );
 
   return opts.next();
 });
