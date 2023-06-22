@@ -14,6 +14,7 @@ const node_env = process.env.NODE_ENV as NodeEnvironment;
 export default {
   server_port: parseInt(process.env.PORT as string, 10),
   node_env: node_env,
+  log_level: process.env.LOG_LEVEL ?? "info",
   //
   //
   // App

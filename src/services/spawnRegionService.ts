@@ -6,6 +6,7 @@ import {
 import { Prisma } from "@prisma/client";
 import { updateSpawnedResourcesForSpawnRegionTransaction } from "../queries/queryResource";
 import { SpawnRegionWithResources } from "../types";
+import { logger } from "../logger/logger";
 
 export { getSpawnRegionsFromH3Indices as getRegionsFromH3Array } from "../queries/querySpawnRegion";
 
@@ -55,6 +56,9 @@ export const updateSpawnRegion = async (
 
     return updatedSpawnRegion;
   } catch (err) {
+    logger.error(err, "Error within spawnRegionService: updateSpawnRegion()", {
+      spawnRegionId,
+    });
     // Transaction did not go through
     return null;
   }
