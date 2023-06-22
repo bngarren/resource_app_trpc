@@ -87,7 +87,10 @@ export const handleScan = async (
     spawnRegions.map((r) => updateSpawnRegion(r.id)),
   );
 
-  // Expect that every spawn region was sucessfully updated
+  /* Expect that every spawn region was sucessfully updated.
+  If not, the errored regions would have returned null and not be present
+  in the updatedSpawnRegions array, making the length incorrect
+  */
   if (updatedSpawnRegions.length !== h3Group.length) {
     throw new Error("Error attempting to update spawn regions");
   }

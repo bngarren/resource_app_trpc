@@ -78,8 +78,8 @@ export const getSpawnRegion = async (
  * of `SpawnedResourceWithResource`, which includes the SpawnedResource and
  * Resource models.
  *
- * ---
- * The caller should destructure the result object in order to get a SpawnRegion
+ * #### Destructuring
+ * The caller could destructure the result object in order to get a SpawnRegion
  * and SpawnedResourceWithResource[] separately.
  *
  * ```
@@ -129,6 +129,11 @@ export const getSpawnRegionWithResources = async (
   } as SpawnRegionWithResources;
 };
 
+/**
+ * Use this function to update a SpawnRegion in the database.
+ *
+ * E.g. We use it for updating the reset_date
+ */
 export const updateSpawnRegion = async (
   id: string,
   partialModel: Prisma.SpawnRegionUpdateInput,
