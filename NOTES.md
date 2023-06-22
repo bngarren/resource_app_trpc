@@ -1,4 +1,23 @@
 
+## Package.json
+
+- **"prisma"** - Prisma's integrated seeding functionality expects a command in the "seed" key within this "prisma" key. **Seeding** populates the database with initial data for testing and development purposes.
+  - `"seed": "ts-node-dev --transpile-only prisma/seed.ts"`
+  - Uses ts-node-dev to compile the seed.ts to javascript and then run it
+  - `--transpile-only` means don't do typechecking, just transpiile it
+
+### Scripts
+- **`prisma:generate`**: Generates Prisma Client JavaScript code based on our Prisma schema (`prisma/schema.prisma`).
+  - This client is then used in our application code to interact with our database.
+- **`prisma:migrate:dev`**: Applies database migrations in a development environment.
+  - This command updates the database schema to match the Prisma schema, generates a new migration in the `prisma/migrations` folder, and generates or updates the Prisma Client as needed.
+- **`prisma:migrate:deploy`**: Applies database migrations in a production environment.
+  - This is similar to `prisma:migrate:dev`, but it does not create new migrations or modify existing ones.
+- **`prisma:push`**: Pushes the Prisma schema state to the database without creating a migration.
+  - This command is typically used in development or testing environments, not in production.
+- **`prisma:reset`**: Resets the database, applies any migrations and then pushes the schema state (so...development only), and then seeds the database.
+
+
 
 ## Viewing the Heroku postgres db
 - Use pgweb as described here: https://stackoverflow.com/questions/51509499/how-do-i-view-a-postgresql-database-on-heroku-with-a-gui

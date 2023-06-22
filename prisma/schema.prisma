@@ -46,7 +46,7 @@ model Resource {
   id               String            @id @default(uuid())
   url              String
   name             String
-  resourceType     ResourceType      
+  resourceType     ResourceType     @map("resource_type") 
   rarity           ResourceRarity
   SpawnedResources SpawnedResource[]
 }
@@ -62,12 +62,18 @@ model SpawnedResource {
   @@id([resourceId, spawnRegionId])
 }
 
+enum ItemType {
+  RESOURCE 
+  COMPONENT
+  HARVESTER
+}
+
 model UserInventoryItem {
   id       String @id @default(cuid())
   user     User   @relation(fields: [userId], references: [id])
   userId   String @map("user_id")
   itemId   String @map("item_id")
-  itemType String @map("item_type")
+  itemType ItemType @map("item_type")
   quantity Int
 }
 
