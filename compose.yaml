@@ -1,0 +1,41 @@
+version: '3.9'
+services:
+
+
+  app:
+    build:
+      context: .
+    entrypoint: ["/bin/bash", "./entrypoint.docker.sh"]
+    ports:
+    # This setting actually makes the application accessible from outside the Docker container
+    # <host>:<container> 
+    # thus <container> needs to match the port that our node process is listening on (from .env file)
+      - "2024:2024"
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.test
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/app:ro #mount our host files inside the app, but only read-only access
+  db:
+    container_name: postgres
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: testdb
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    ports:
+      - 5432:5432
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+volumes:
+  dbdata:

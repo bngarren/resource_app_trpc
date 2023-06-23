@@ -20,9 +20,10 @@
     "heroku-postbuild": "echo heroku-postbuild",
     "deploy:dev": "git push heroku development",
     "deploy:master": "git push heroku master",
-    "start": "clear && npm run build && node dist/main.js",
-    "start:dev": "ts-node-dev --respawn --clear --transpile-only --debounce 1000 ./src/main.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "NODE_ENV=PRODUCTION npm run build && node dist/main.js",
+    "start:dev": "NODE_ENV=DEVELOPMENT ts-node-dev --respawn --clear --transpile-only --debounce 1000 ./src/main.ts",
+    "test": "NODE_ENV=TEST jest tests/",
+    "test:docker": "NODE_ENV=TEST jest tests/"
   },
   "author": "Ben Garren",
   "license": "ISC",
@@ -38,7 +39,9 @@
   },
   "devDependencies": {
     "@types/cors": "^2.8.13",
+    "@types/jest": "^29.5.2",
     "@types/node": "^20.2.5",
+    "@types/supertest": "^2.0.12",
     "@types/uuid": "^9.0.1",
     "@typescript-eslint/eslint-plugin": "^5.60.0",
     "@typescript-eslint/parser": "^5.60.0",
@@ -48,9 +51,12 @@
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-prettier": "^4.2.1",
     "eslint-plugin-unused-imports": "^2.0.0",
+    "jest": "^29.5.0",
     "pino-pretty": "^10.0.0",
     "prettier": "^2.8.8",
     "prisma": "^4.14.1",
+    "supertest": "^6.3.3",
+    "ts-jest": "^29.1.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.0.4"
   }
