@@ -1,15 +1,24 @@
 import request from "supertest";
-import config from "../src/config";
+import { Server } from "http";
+import app from "../src/main";
 
-const api = `http://app:${config.server_port}`;
+describe("Testing the Express/TRPC server", () => {
+  let server: Server;
 
-console.log(config);
+  beforeAll(() => {
+    server = app.listen();
+  });
 
-describe("GET /greeting", () => {
-  it("responds with isHealthy equals true", async () => {
-    const res = await request(api).get("/greeting");
+  afterAll((done) => {
+    server.close(done);
+  });
 
-    // Check that the request was successful
-    expect(res.statusCode).toEqual(400);
+  describe("GET /greeting", () => {
+    it("responds with isHealthy equals true", async () => {
+      const res = await request(server).get("/greeting");
+
+      // Check that the request was successful
+      expect(res.statusCode).toEqual(200);
+    });
   });
 });

@@ -1,10 +1,12 @@
 import * as dotenv from "dotenv";
 import path from "path";
 
-type NodeEnvironment = "development" | "test" | "production";
+type NodeEnvironment = "development" | "test" | "staging" | "production";
 
 // this process.env is from the environment that the node process was launched
-const node_env = (process.env.NODE_ENV as NodeEnvironment) || "development";
+const node_env =
+  (process.env.NODE_ENV?.toLocaleLowerCase() as NodeEnvironment) ||
+  "development";
 
 // Next we use dotenv to load an .env file and override any prior env variables
 

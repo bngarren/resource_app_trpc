@@ -43,7 +43,43 @@
 
 ## Dockerized E2E testing
 
+### Getting testing up and running
+- `docker-compose up app_testing -d` - this should spin up the app_testing container, including the db_testing postgres container that it depends on. It should remain running.
+- `docker-compose exec app_testing npm run test:docker` - this executes the script inside the app_testing container
+
+### The "Dockerization" of My App
+
+### Multistage Docker Build
+- I'm leveraging Docker's multistage build to create separate images for different environments (staging and testing), sharing a common base image.
+- The base image has the application dependencies and common setup, ensuring consistency across stages.
+- In the 'build' stage, you transpile TypeScript to JavaScript and generate Prisma client based on the staging environment.
+- The 'staging' stage uses the transpiled code from the 'build' stage and only installs production dependencies. This build mimics a "production-like" build.
+- The 'testing' stage uses the base image and installs dev dependencies for testing.
+
+### Docker Compose
+- Using Docker Compose to manage multiple containers together.
+- Each service (app_staging, app_testing, db_staging, db_testing) is defined in the docker-compose file and can be spun up with a single command.
+- Separate Postgres containers are used for the staging and testing environment to avoid data contamination.
+- The depends_on directive ensures that the app services wait for their corresponding Postgres service to be ready before they start.
+
+### Dockerize
+- Dockerize is used to wait for the Postgres services to be up before proceeding. This is important to avoid race conditions where the app starts before the database is ready.
+
+### Environment-Specific Entry Point Scripts
+- Different entry point scripts are used for the staging and testing environment.
+- The scripts include database migration steps and the seeding step for the testing environment.
+- The scripts use dotenv-cli to ensure that the right environment variables are set for each context (staging and testing).
+
+### Environment Variables
+- Separate .env files are used for staging and testing environments. These are passed to the Docker services via the env_file directive in the Docker Compose file.
+
+### Volumes
+- In the testing environment, volumes are used to sync the tests and src directories from the host to the Docker container.
+ - This allows for real-time reflection of changes made in these directories on the host in the Docker container, without the need for rebuilding the image.
+
 ### Exposed ports
-- The EXPOSE instruction in your Dockerfile and the ports key in your docker-compose.yml file are used to expose ports from your Docker container to your host machine.
-- In your case, EXPOSE 2023 in your Dockerfile is indicating that your application inside the Docker container is listening on port 2023. However, this port is only exposed to other Docker containers, not to your host machine.
-- The ports key in docker-compose.yml is what actually maps this port to a port on your host machine. The line - "2023:2023" under ports is mapping port 2023 from your Docker container to port 2023 on your host machine. This means that your application will be accessible on localhost:2023 on your host machine.
+- The EXPOSE instruction in your Dockerfile and the ports key in your docker-compose.yml file are used to expose ports from the Docker container to the host machine.
+- In our case, EXPOSE 2024 in the Dockerfile is indicating that the application inside the Docker container will be listening on port 2024. (This EXPOSE command doesn't actually do anything) The port is only exposed to other Docker containers, not to the host machine.
+- The ports key in compose.yaml is what actually maps this port to a port on the host machine. The line - "2024:2024" under ports is mapping port 2024 from the Docker container to port 2024 on the host machine. This means that the application will be accessible on localhost:2024 on the host machine.
+
+

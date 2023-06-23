@@ -1,27 +1,54 @@
-version: '3.9'
+version: '3.8'
 services:
-
-
-  app:
+  app_staging:
     build:
       context: .
-    entrypoint: ["/bin/bash", "./entrypoint.docker.sh"]
+      target: staging
+    entrypoint: ["/bin/bash", "./entrypoint.staging.docker.sh"]
     ports:
     # This setting actually makes the application accessible from outside the Docker container
     # <host>:<container> 
     # thus <container> needs to match the port that our node process is listening on (from .env file)
       - "2024:2024"
     depends_on:
-      db:
+      db_staging:
+        condition: service_healthy
+    env_file:
+      - .env.staging
+  app_testing:
+    build:
+      context: .
+      target: testing
+    entrypoint: ["/bin/bash", "./entrypoint.testing.docker.sh"]
+    ports:
+      - "2025:2025"
+    depends_on:
+      db_testing:
         condition: service_healthy
     env_file:
       - .env.test
-    stdin_open: true
-    tty: true
     volumes:
-      - .:/app:ro #mount our host files inside the app, but only read-only access
-  db:
-    container_name: postgres
+      - ./tests:/app/tests:ro #Allow container to read from host's ./tests/
+      - ./src:/app/src:ro #Allow container to read from host's ./src/
+  db_staging:
+    container_name: db_staging
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: stagingdb
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    ports:
+      - 5434:5432
+    volumes:
+      - dbdata_staging:/var/lib/postgresql/data
+  db_testing:
+    container_name: db_testing
     image: postgres:14
     environment:
       POSTGRES_USER: postgres
@@ -34,8 +61,9 @@ services:
       retries: 5
     restart: always
     ports:
-      - 5432:5432
+      - 5435:5432
     volumes:
-      - dbdata:/var/lib/postgresql/data
+      - dbdata_testing:/var/lib/postgresql/data
 volumes:
-  dbdata:
+  dbdata_staging:
+  dbdata_testing:

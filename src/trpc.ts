@@ -1,5 +1,5 @@
 import { inferAsyncReturnType, initTRPC } from "@trpc/server";
-import { CreateHTTPContextOptions } from "@trpc/server/adapters/standalone";
+import * as trpcExpress from "@trpc/server/adapters/express";
 import { logger } from "./logger/logger";
 
 /**
@@ -8,7 +8,7 @@ import { logger } from "./logger/logger";
  *
  * For example, can grab info from the request header and add it to context, e.g. hostname
  */
-export function createContext(opts: CreateHTTPContextOptions) {
+export function createContext(opts: trpcExpress.CreateExpressContextOptions) {
   const client = opts.req.headers.host;
   return {
     client,

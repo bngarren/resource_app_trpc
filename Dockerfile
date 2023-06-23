@@ -1,48 +1,73 @@
 # Use an official Node runtime as the base image
-FROM node:19
 
-### DOCKERIZE
+### BASE IMAGE ###
+FROM node:19 as base
+# DOCKERIZE
 ENV DOCKERIZE_VERSION v0.7.0
 RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
     && tar -C /usr/local/bin -xzvf dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
     && rm dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz
-###
-
 # Set the working directory in the container to /app
 WORKDIR /app
-
-# Install global dependencies
-RUN npm install -g jest ts-jest supertest dotenv-cli
-
 # Copy package.json and package-lock.json into the directory
 COPY package*.json ./
-
+# Install global dependencies
+RUN npm install -g dotenv-cli
 # Install the application dependencies
 RUN npm ci
-
-# Copy prisma schema
-COPY prisma ./prisma/
-
-# Copy .env.test
-COPY .env.test ./
-
-# Run prisma generate 
-RUN dotenv -e .env.test npx prisma generate
-
-#RUN dockerize -wait tcp://db:5432 -timeout 10s
-
-#RUN dotenv -e .env.test npx prisma migrate deploy
-#RUN dotenv -e .env.test npx prisma db seed
+# Entrypoint scripts are copied to the Docker image during build and have the execute permission
+COPY entrypoint.staging.docker.sh entrypoint.testing.docker.sh ./
+RUN chmod +x entrypoint.staging.docker.sh 
+RUN chmod +x entrypoint.testing.docker.sh
 
 # Bundle the app source inside the Docker image
 COPY . .
 
-# This is a kind of documentation that informs Docker that the application
-# inside the Docker container is listening on the specified ports at runtime.
-# It doesn't actually publish the port or make it accessible to the host or network.
-# Rather, it serves as a kind of documentation between the person who builds the
-# image and the person who runs the container, about which ports are intended to be published
+### BUILD TARGET - for compiling ###
+FROM base as build
+WORKDIR /app
+# Copy prisma schema
+COPY prisma ./prisma/
+# Copy .env file
+COPY .env.staging ./
+# Run prisma generate # Have to use dotenv-cli to force prisma to use this specific .env file
+RUN dotenv -e .env.staging npx prisma generate
+# Run the build script to compile the TypeScript code
+RUN npm run build
+
+### STAGING TARGET ###
+FROM base as staging
+WORKDIR /app
+# Copy over the compiled code and package*.json files from the build stage
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/package*.json ./
+
+# Install production dependencies only
+RUN npm ci --only=production
+
 EXPOSE 2024
 
-# Define the command to run the app
-#CMD ["npm", "run", "start"]
+
+## Lastly, docker-compose will start from the entrypoint.sh
+
+### TESTING TARGET ###
+FROM base as testing
+WORKDIR /app
+# Install dev dependencies
+RUN npm install -D
+# Copy prisma schema
+COPY prisma ./prisma/
+# Copy .env file
+COPY .env.test ./
+# Run prisma generate 
+RUN dotenv -e .env.test npx prisma generate
+
+EXPOSE 2025
+## Lastly, docker-compose will start from the entrypoint.sh
+
+
+
+
+
+
+
