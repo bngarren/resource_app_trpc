@@ -19,5 +19,5 @@ echo "Ready to run tests. You can run the test suite with the following command:
 echo
 echo "docker-compose exec app_testing npm run test:docker"
 echo
-echo "Don't forget to shutdown afterwards with `docker-compose down`"
+echo "Don't forget to shutdown afterwards with docker-compose down"
 echo

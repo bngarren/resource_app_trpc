@@ -1,7 +1,10 @@
 # Use an official Node runtime as the base image
 
 ### BASE IMAGE ###
-FROM node:19 as base
+FROM node:19-alpine as base
+ENV NPM_CONFIG_LOGLEVEL warn
+# Add bash to alpine build
+RUN apk add --no-cache bash
 # DOCKERIZE
 ENV DOCKERIZE_VERSION v0.7.0
 RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
@@ -13,25 +16,20 @@ WORKDIR /app
 COPY package*.json ./
 # Install global dependencies
 RUN npm install -g dotenv-cli
-# Install the application dependencies
-RUN npm ci
-# Entrypoint scripts are copied to the Docker image during build and have the execute permission
-COPY entrypoint.staging.docker.sh entrypoint.testing.docker.sh ./
-RUN chmod +x entrypoint.staging.docker.sh 
-RUN chmod +x entrypoint.testing.docker.sh
-
-# Bundle the app source inside the Docker image
-COPY . .
+# Install only production dependencies
+RUN npm ci --omit=dev
 
 ### BUILD TARGET - for compiling ###
 FROM base as build
 WORKDIR /app
+RUN npm install typescript -D
 # Copy prisma schema
 COPY prisma ./prisma/
 # Copy .env file
 COPY .env.staging ./
 # Run prisma generate # Have to use dotenv-cli to force prisma to use this specific .env file
 RUN dotenv -e .env.staging npx prisma generate
+COPY . .
 # Run the build script to compile the TypeScript code
 RUN npm run build
 
@@ -42,8 +40,9 @@ WORKDIR /app
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/package*.json ./
 
-# Install production dependencies only
-RUN npm ci --only=production
+# Entrypoint scripts are copied to the Docker image during build and have the execute permission
+COPY entrypoint.staging.docker.sh ./
+RUN chmod +x entrypoint.staging.docker.sh
 
 EXPOSE 2024
 
@@ -53,6 +52,7 @@ EXPOSE 2024
 ### TESTING TARGET ###
 FROM base as testing
 WORKDIR /app
+
 # Install dev dependencies
 RUN npm install -D
 # Copy prisma schema
@@ -61,6 +61,11 @@ COPY prisma ./prisma/
 COPY .env.test ./
 # Run prisma generate 
 RUN dotenv -e .env.test npx prisma generate
+
+COPY entrypoint.testing.docker.sh ./
+RUN chmod +x entrypoint.testing.docker.sh
+
+COPY . .
 
 EXPOSE 2025
 ## Lastly, docker-compose will start from the entrypoint.sh

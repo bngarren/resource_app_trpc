@@ -44,8 +44,13 @@
 ## Dockerized E2E testing
 
 ### Getting testing up and running
+- I made a helper script `run-docker-testing.sh` that spins up a new app_testing container
 - `docker-compose up app_testing -d` - this should spin up the app_testing container, including the db_testing postgres container that it depends on. It should remain running.
+- `docker exec -it app_testing /bin/bash` - this starts an interactive shell inside the app_testing container. From here we can run npm run test:docker as many times as needed
 - `docker-compose exec app_testing npm run test:docker` - this executes the script inside the app_testing container
+
+### Cleaning up
+- `docker rmi $(docker images -q -f dangling=true)` - removes dangling images
 
 ### The "Dockerization" of My App
 

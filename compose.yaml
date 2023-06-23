@@ -1,6 +1,7 @@
 version: '3.8'
 services:
   app_staging:
+    container_name: app_staging
     build:
       context: .
       target: staging
@@ -16,6 +17,7 @@ services:
     env_file:
       - .env.staging
   app_testing:
+    container_name: app_testing
     build:
       context: .
       target: testing
