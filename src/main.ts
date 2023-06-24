@@ -9,11 +9,22 @@ import { TRPCError } from "@trpc/server";
 import config from "./config";
 import { logger } from "./logger/logger";
 import { logScanResult } from "./logger/loggerHelper";
+import { prisma } from "./prisma";
 
 const appRouter = trpcRouter({
   greeting: publicProcedure.query(async () => {
-    // TODO: Do some server health checks
-    const isHealthy = true;
+    let isHealthy: boolean;
+
+    try {
+      await prisma.user.findFirst();
+      // If the above statement did not throw an error, the database is healthy
+      isHealthy = true;
+    } catch (error) {
+      // If an error was thrown, the database is not healthy
+      isHealthy = false;
+      logger.error(`Database connection failed: ${error}`);
+    }
+
     logger.info(`Received greeting from client. API isHealthy: ${isHealthy}`);
     return {
       isHealthy: isHealthy,
