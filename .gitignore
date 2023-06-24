@@ -23,6 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 
-.env
+.env*
+
+#ignore docker images
+*.tar
 
 gptprompt.txt
