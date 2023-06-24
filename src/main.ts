@@ -10,6 +10,9 @@ import config from "./config";
 import { logger } from "./logger/logger";
 import { logScanResult } from "./logger/loggerHelper";
 import { prisma } from "./prisma";
+import https from "https";
+import http, { Server } from "http";
+import fs from "fs";
 
 const appRouter = trpcRouter({
   greeting: publicProcedure.query(async () => {
@@ -79,7 +82,12 @@ Resource App
 
 
 `;
+/*
+- - - - Create the Express app and add our TRPC router - - - -
 
+Our TRPC router is our main router for our server
+
+*/
 const app = express();
 app.use(cors());
 app.use(
@@ -89,12 +97,37 @@ app.use(
     createContext,
   }),
 );
-app.get("/", (_req, res) => res.send("hello"));
+
+/*
+ - - - - Create the HTTPS server - - - - 
+
+- In non-production (development, testing, staging), we will use a self-signed certificate and handle the
+HTTPS server ourselves
+
+- In a production (e.g. Heroku), we create a basic HTTP server, knowing that Heroku will handle the HTTPS and our
+app will just listen on the port that Heroku provides
+  - If we deployed production code to somewhere else, we need to know if HTTPS is automatically handled or if we need
+  to get a signed cert from a trusted authority to use here...
+
+*/
+let server: Server;
+if (process.env.NODE_ENV === "production") {
+  // In production, rely on the platform (like Heroku) to handle HTTPS
+  server = http.createServer(app);
+} else {
+  // In development, use a self-signed certificate for HTTPS
+  const privateKey = fs.readFileSync("resource_app_trpc_https.key");
+  const certificate = fs.readFileSync("resource_app_trpc_https.cert");
+  const credentials = { key: privateKey, cert: certificate };
+  server = https.createServer(credentials, app);
+}
 
 async function main() {
   const startTime = new Date();
 
-  app.listen(config.server_port, () => {
+  // The server_port in our config must distinguish our node environment
+  // Usually HTTPS traffic is on 443
+  server.listen(config.server_port, () => {
     logger.info(message);
     logger.info(
       `Server start: ${startTime.toLocaleDateString()} at ${startTime.toLocaleTimeString()}`,

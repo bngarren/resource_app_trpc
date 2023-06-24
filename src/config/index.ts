@@ -17,7 +17,7 @@ dotenv.config({
 });
 
 export default {
-  server_port: parseInt(process.env.PORT as string, 10),
+  server_port: parseInt(process.env.PORT as string, 10) || 443, // default HTTPS port
   node_env: node_env,
   log_level: process.env.LOG_LEVEL ?? "info",
   //

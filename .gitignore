@@ -28,4 +28,8 @@ dist-ssr
 #ignore docker images
 *.tar
 
+#ignore self-signed certs for HTTPS
+*.cert
+*.key
+
 gptprompt.txt
