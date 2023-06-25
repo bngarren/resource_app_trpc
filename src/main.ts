@@ -1,9 +1,13 @@
-import { publicProcedure, router as trpcRouter } from "./trpc";
+import {
+  protectedProcedure,
+  publicProcedure,
+  router as trpcRouter,
+} from "./trpc/trpc";
 import express from "express";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import cors from "cors";
 import { z } from "zod";
-import { createContext } from "./trpc";
+import { createContext } from "./trpc/trpc";
 import { handleScan } from "./services/scanService";
 import { TRPCError } from "@trpc/server";
 import config from "./config";
@@ -32,6 +36,9 @@ const appRouter = trpcRouter({
     return {
       isHealthy: isHealthy,
     };
+  }),
+  protectedGreeting: protectedProcedure.query(async () => {
+    return "You have received an authenticated endpoint!";
   }),
   scan: publicProcedure
     .input(

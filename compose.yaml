@@ -15,6 +15,7 @@ services:
       db_staging:
         condition: service_healthy
     env_file:
+      - .env.common
       - .env.staging
   app_testing:
     container_name: app_testing
@@ -28,6 +29,7 @@ services:
       db_testing:
         condition: service_healthy
     env_file:
+      - .env.common
       - .env.test
     volumes:
       - ./tests:/app/tests:ro #Allow container to read from host's ./tests/
