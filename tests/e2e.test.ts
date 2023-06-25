@@ -67,19 +67,25 @@ describe("Testing the Express/TRPC server", () => {
     });
 
     describe("with a valid, authenticated request", () => {
+      /*
+        The following setup allows us to use an authenticated test user.
+
+        This code is replicated again other test suites.
+        ! Any changes need to be changed everywhere
+      */
+      // -------------------------------------------------
       let clientFbAuth: Auth;
       let idToken: string;
-      let userUid: string;
       beforeAll(async () => {
         const res = await signInTestUser();
         clientFbAuth = res.clientFbAuth;
         idToken = res.idToken;
-        userUid = res.userUid;
       });
 
       afterAll(async () => {
         await clientFbAuth.signOut();
       });
+      // -------------------------------------------------
 
       it("should NOT return error code 401", async () => {
         const res = await request(server)
@@ -88,6 +94,28 @@ describe("Testing the Express/TRPC server", () => {
 
         expect(res).not.toBe(401);
       });
+    });
+  });
+
+  describe("Game Routes", () => {
+    // Since all game routes (e.g. /scan) are protected routes, i.e. require an authenticated user,
+    // we setup our logged in test user first
+    let clientFbAuth: Auth;
+    let idToken: string;
+    beforeAll(async () => {
+      const res = await signInTestUser();
+      clientFbAuth = res.clientFbAuth;
+      idToken = res.idToken;
+    });
+
+    afterAll(async () => {
+      await clientFbAuth.signOut();
+    });
+
+    describe("POST /scan", () => {
+      it(
+        "should return status code 400 (Bad request) if missing/malformed POST body",
+      );
     });
   });
 });

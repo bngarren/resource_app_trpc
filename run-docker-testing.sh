@@ -1,5 +1,13 @@
 #!/bin/sh
 
+# This script is a helper to get our Docker container for testing up and running.
+#
+# Our container is "app_testing", as defined in the compose.yaml file
+#
+#
+echo
+echo
+
 echo "Do you wish to rebuild the Docker images? [y/n]"
 
 read answer
@@ -10,24 +18,26 @@ if [ "$answer" != "${answer#[Yy]}" ] ;then
     docker-compose build app_testing
 fi
 
+echo
 echo "Starting app_testing container..."
+echo
 
 docker-compose up -d app_testing
 
 echo
-echo "Ready to run tests."
+echo "Container is READY."
 echo
 echo "Don't forget to shutdown afterwards with docker-compose down"
 
 while true; do
     echo
     echo "Select an option:"
-    echo "1. Start bash within container"
+    echo "1. Bash"
     echo "2. Run one-off test suite"
     echo "3. Exit"
     echo
 
-    read -p "Enter the number of your option: " option
+    read -p "Choose option: " option
 
     case $option in
         1)
