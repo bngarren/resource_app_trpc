@@ -12,14 +12,37 @@ const node_env =
 
 // To use the .env file, we use the dotenv module to load the values
 // Have to give the dotenv config the relative path to .env for it to work properly
+
+/*
+Note: Any variables defined in your environment at runtime will always override
+anything loaded by dotenv from the .env file. So if you have different values
+in your .env file and in your Docker environment, the Docker environment value will be used.
+*/
+
+// First, load the common .env file
+dotenv.config({
+  path: path.resolve(__dirname, `../../.env.common`),
+});
+
+// The load the environment-specific file
 dotenv.config({
   path: path.resolve(__dirname, `../../.env.${node_env}`),
 });
+
+const firebase_service_acct_key: string | undefined =
+  process.env.FIREBASE_SERVICE_ACCT_KEY;
+
+if (!firebase_service_acct_key) {
+  throw new Error("Missing Firebase Service Account Key.");
+}
 
 export default {
   server_port: parseInt(process.env.PORT as string, 10) || 443, // default HTTPS port
   node_env: node_env,
   log_level: process.env.LOG_LEVEL ?? "info",
+  firebase_service_acct_key: firebase_service_acct_key,
+  firebase_test_user_uid: process.env.FIREBASE_TEST_USER_UID,
+  firebase_client_config: process.env.FIREBASE_CLIENT_CONFIG ?? "",
   //
   //
   // App

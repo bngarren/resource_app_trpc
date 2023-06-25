@@ -26,7 +26,7 @@ RUN npm install typescript -D
 # Copy prisma schema
 COPY prisma ./prisma/
 # Copy .env file
-COPY .env.staging ./
+COPY .env.common .env.staging ./
 # Run prisma generate # Have to use dotenv-cli to force prisma to use this specific .env file
 RUN dotenv -e .env.staging npx prisma generate
 COPY . .
@@ -39,6 +39,16 @@ WORKDIR /app
 # Copy over the compiled code and package*.json files from the build stage
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/package*.json ./
+
+# Copy prisma schema
+COPY prisma ./prisma/
+# Copy .env file
+COPY .env.common .env.staging ./
+# Run prisma generate # Have to use dotenv-cli to force prisma to use this specific .env file
+RUN dotenv -e .env.staging npx prisma generate
+
+# Copy our certificates for HTTPS
+COPY resource_app_trpc_https.cert resource_app_trpc_https.key ./
 
 # Entrypoint scripts are copied to the Docker image during build and have the execute permission
 COPY entrypoint.staging.docker.sh ./
@@ -58,7 +68,7 @@ RUN npm install -D
 # Copy prisma schema
 COPY prisma ./prisma/
 # Copy .env file
-COPY .env.test ./
+COPY .env.common .env.test ./
 # Run prisma generate 
 RUN dotenv -e .env.test npx prisma generate
 

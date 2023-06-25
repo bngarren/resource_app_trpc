@@ -1,3 +1,5 @@
+import { Auth } from "firebase/auth";
+import { signInTestUser } from "./../src/auth/firebaseHelpers";
 import request from "supertest";
 import { Server } from "http";
 import app from "../src/main";
@@ -46,6 +48,45 @@ describe("Testing the Express/TRPC server", () => {
       );
       expect(data).toEqual({
         isHealthy: false,
+      });
+    });
+  });
+
+  describe("Authentication", () => {
+    describe("with missing or invalid authentication in requests to protected endpoints", () => {
+      it("should return error code 401 if lacking authorization header", async () => {
+        const res = await request(server).get("/protectedGreeting");
+        expect(res.statusCode).toBe(401);
+      });
+      it("should return error code 401 if auth token is invalid", async () => {
+        await request(server)
+          .get("/protectedGreeting")
+          .set("Authorization", `Bearer FAKE-TOKEN`)
+          .expect(401);
+      });
+    });
+
+    describe("with a valid, authenticated request", () => {
+      let clientFbAuth: Auth;
+      let idToken: string;
+      let userUid: string;
+      beforeAll(async () => {
+        const res = await signInTestUser();
+        clientFbAuth = res.clientFbAuth;
+        idToken = res.idToken;
+        userUid = res.userUid;
+      });
+
+      afterAll(async () => {
+        await clientFbAuth.signOut();
+      });
+
+      it("should NOT return error code 401", async () => {
+        const res = await request(server)
+          .get("/protectedGreeting")
+          .set("Authorization", `Bearer ${idToken}`);
+
+        expect(res).not.toBe(401);
       });
     });
   });
