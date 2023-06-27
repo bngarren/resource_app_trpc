@@ -1,24 +1,17 @@
-import {
-  protectedProcedure,
-  publicProcedure,
-  router as trpcRouter,
-} from "./trpc/trpc";
+import { protectedProcedure, publicProcedure, router } from "./trpc/trpc";
 import express from "express";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import cors from "cors";
 import { createContext } from "./trpc/trpc";
-import { handleScan } from "./services/scanService";
-import { TRPCError } from "@trpc/server";
 import config from "./config";
 import { logger } from "./logger/logger";
-import { logScanResult } from "./logger/loggerHelper";
 import { prisma } from "./prisma";
 import https from "https";
 import http, { Server } from "http";
 import fs from "fs";
-import { scanRequestSchema } from "./schema";
+import { scanRouter } from "./routers/scanRouter";
 
-const appRouter = trpcRouter({
+const appRouter = router({
   greeting: publicProcedure.query(async () => {
     let isHealthy: boolean;
 
@@ -40,19 +33,7 @@ const appRouter = trpcRouter({
   protectedGreeting: protectedProcedure.query(async () => {
     return "You have received an authenticated endpoint!";
   }),
-  scan: publicProcedure.input(scanRequestSchema).mutation(async ({ input }) => {
-    try {
-      const res = await handleScan(input.userLocation, config.scan_distance);
-      logScanResult(res);
-      return res;
-    } catch (err) {
-      logger.error(err);
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Problem with handleScan..." + err,
-      });
-    }
-  }),
+  scan: scanRouter.scan,
 });
 
 // Export type router type signature,
