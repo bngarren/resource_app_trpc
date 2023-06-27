@@ -6,7 +6,6 @@ import {
 import express from "express";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import cors from "cors";
-import { z } from "zod";
 import { createContext } from "./trpc/trpc";
 import { handleScan } from "./services/scanService";
 import { TRPCError } from "@trpc/server";
@@ -17,6 +16,7 @@ import { prisma } from "./prisma";
 import https from "https";
 import http, { Server } from "http";
 import fs from "fs";
+import { scanRequestSchema } from "./schema";
 
 const appRouter = trpcRouter({
   greeting: publicProcedure.query(async () => {
@@ -40,29 +40,19 @@ const appRouter = trpcRouter({
   protectedGreeting: protectedProcedure.query(async () => {
     return "You have received an authenticated endpoint!";
   }),
-  scan: publicProcedure
-    .input(
-      // The latitude must be a number between -90 and 90 and the longitude between -180 and 180
-      z.object({
-        userLocation: z.object({
-          latitude: z.number().min(-90).max(90),
-          longitude: z.number().min(-180).max(180),
-        }),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      try {
-        const res = await handleScan(input.userLocation, config.scan_distance);
-        logScanResult(res);
-        return res;
-      } catch (err) {
-        logger.error(err);
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Problem with handleScan..." + err,
-        });
-      }
-    }),
+  scan: publicProcedure.input(scanRequestSchema).mutation(async ({ input }) => {
+    try {
+      const res = await handleScan(input.userLocation, config.scan_distance);
+      logScanResult(res);
+      return res;
+    } catch (err) {
+      logger.error(err);
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Problem with handleScan..." + err,
+      });
+    }
+  }),
 });
 
 // Export type router type signature,

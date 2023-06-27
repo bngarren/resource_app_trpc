@@ -20,13 +20,25 @@ const devLogger = () =>
     },
   });
 
+const testLogger = () =>
+  pino({
+    enabled: false,
+  });
+
 const prodLogger = () =>
   pino({
     level: "info",
   });
 
 const getLogger = () => {
-  return shouldUseDevLogger ? devLogger() : prodLogger();
+  switch (config.node_env) {
+    case "development":
+      return devLogger();
+    case "test":
+      return testLogger();
+    default:
+      return prodLogger();
+  }
 };
 
 export const logger = getLogger();

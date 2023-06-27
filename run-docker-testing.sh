@@ -1,59 +1,65 @@
 #!/bin/sh
 
-# This script is a helper to get our Docker container for testing up and running.
-#
-# Our container is "app_testing", as defined in the compose.yaml file
-#
-#
-echo
-echo
+LIGHT_BLUE='\033[1;34m'
+PURPLE_WHITE='\033[35;47m'
+PURPLE='\033[0;35m'
+NC='\033[0m' # No Color
 
-echo "Do you wish to rebuild the Docker images? [y/n]"
+PREFIX="${PURPLE_WHITE}run-docker-testing: ${NC} "
+
+printf "\n\n"
+
+printf "${PREFIX}${PURPLE}- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ${NC}\n\n"
+
+printf "${PREFIX}${LIGHT_BLUE}Do you wish to rebuild the Docker images? [y/n]${NC} "
 
 read answer
 
 if [ "$answer" != "${answer#[Yy]}" ] ;then
-    echo "Rebuilding Docker images..."
+    printf "${PREFIX}${LIGHT_BLUE}Rebuilding Docker images...${NC}\n"
     docker-compose down
     docker-compose build app_testing
 fi
 
-echo
-echo "Starting app_testing container..."
-echo
+printf "\n${PREFIX}${LIGHT_BLUE}Starting app_testing container...${NC}\n\n"
 
-docker-compose up -d app_testing
+docker-compose up -d app_testing --wait
 
-echo
-echo "Container is READY."
-echo
-echo "Don't forget to shutdown afterwards with docker-compose down"
+printf "\n${PREFIX}${LIGHT_BLUE}Container is READY.${NC}\n\n"
+printf "${PREFIX}${PURPLE}Don't forget to shutdown afterwards with docker-compose down${NC}\n"
 
 while true; do
-    echo
-    echo "Select an option:"
-    echo "1. Bash"
-    echo "2. Run one-off test suite"
-    echo "3. Exit"
-    echo
+    printf "\n${PREFIX}${LIGHT_BLUE}Select an option:${NC}\n"
+    printf "${PURPLE}1. Bash${NC}\n"
+    printf "${PURPLE}2. Run test suite${NC}\n"
+    printf "${PURPLE}3. Run test suite with debugger attached${NC}\n"
+    printf "${PURPLE}4. Logs${NC}\n"
+    printf "${PURPLE}*Press enter to exit with docker-compose down${NC}\n\n"
 
     read -p "Choose option: " option
+    printf "\n"
 
     case $option in
         1)
-            echo "Starting bash..."
+            printf "${PREFIX}${LIGHT_BLUE}Starting bash...${NC}\n"
             docker-compose exec app_testing /bin/bash
             ;;
         2)
-            echo "Running test suite..."
+            printf "${PREFIX}${LIGHT_BLUE}Running test suite...${NC}\n"
             docker-compose exec app_testing npm run test:docker
             ;;
         3)
-            echo "All done..."
-            break
+            printf "${PREFIX}${LIGHT_BLUE}Running test suite with debugger attached...${NC}\n"
+            docker-compose exec app_testing \
+            node --inspect-brk=0.0.0.0:9229 --nolazy -r ./node_modules/ts-node/register ./node_modules/jest/bin/jest.js --runInBand
+            ;;
+        4)
+            docker-compose logs -t
             ;;
         *)
-            echo "Invalid option. Please enter a number between 1 and 3."
+            printf "${PREFIX}${LIGHT_BLUE}See ya! Docker-compose down...${NC}\n\n"
+            docker-compose down
+            break
             ;;
     esac
 done

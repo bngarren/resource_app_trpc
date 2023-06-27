@@ -1,15 +1,17 @@
 # Use an official Node runtime as the base image
 
 ### BASE IMAGE ###
-FROM node:19-alpine as base
+FROM node:19 as base
 ENV NPM_CONFIG_LOGLEVEL warn
-# Add bash to alpine build
-RUN apk add --no-cache bash
-# DOCKERIZE
+
+RUN apt-get update
+RUN apt-get install -y openssl wget
+
 ENV DOCKERIZE_VERSION v0.7.0
-RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
-    && tar -C /usr/local/bin -xzvf dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
-    && rm dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz
+RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
+    && tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
+    && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
+
 # Set the working directory in the container to /app
 WORKDIR /app
 # Copy package.json and package-lock.json into the directory
