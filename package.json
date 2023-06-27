@@ -15,6 +15,7 @@
     "prisma:migrate:deploy": "npx prisma migrate deploy",
     "prisma:push": "npx prisma db push",
     "prisma:reset": "npx prisma migrate reset --skip-seed && npm run prisma:push && npx prisma db seed",
+    "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
     "build": "rm -rf dist && tsc",
     "heroku-postbuild": "echo heroku-postbuild",
@@ -22,7 +23,7 @@
     "deploy:master": "git push heroku master",
     "start": "NODE_ENV=PRODUCTION node dist/main.js",
     "start:dev": "NODE_ENV=DEVELOPMENT ts-node-dev --respawn --clear --transpile-only --debounce 1000 ./src/main.ts",
-    "test": "NODE_ENV=TEST jest --detectOpenHandles --runInBand tests/",
+    "test": "NODE_ENV=TEST jest --detectOpenHandles --runInBand --verbose tests/",
     "test:docker": "NODE_ENV=TEST jest --detectOpenHandles --runInBand --verbose tests/"
   },
   "author": "Ben Garren",

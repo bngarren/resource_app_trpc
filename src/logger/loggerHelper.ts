@@ -8,10 +8,15 @@ type NestedUnknown<T> = {
 /**
  * ### Logs a ScanResult in abbreviated format
  * Uses the pino logger instance
- * @param scanResult 
+ * @param scanResult
  */
 export const logScanResult = (scanResult: ScanResult) => {
-  const interactablesLog = `There are ${scanResult.interactables.length} included.`;
+  if (!scanResult) {
+    logger.warn("Cannot logScanResult. Null/undefined.");
+    return;
+  }
+
+  const interactablesLog = `There are ${scanResult.interactables?.length} included.`;
 
   const result: NestedUnknown<Required<ScanResult>> = {
     metadata: {

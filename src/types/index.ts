@@ -36,16 +36,6 @@ export interface SpawnRegionWithResourcesPartial
 
 type test = Expand<SpawnRegionWithResources>;
 
-/**
- * TRPC wraps all HTTP responses in this way, so we create a type that represents this
- * Useful for jest/testing
- */
-export interface TRPCResponseData<T> {
-  result: {
-    data: T;
-  };
-}
-
 export type Coordinate = {
   latitude: number;
   longitude: number;

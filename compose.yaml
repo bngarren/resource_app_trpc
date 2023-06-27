@@ -25,6 +25,7 @@ services:
     entrypoint: ["/bin/bash", "./entrypoint.testing.docker.sh"]
     ports:
       - "2025:2025"
+      - "9229:9229" #expose the debug port to the outside world
     depends_on:
       db_testing:
         condition: service_healthy

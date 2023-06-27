@@ -52,6 +52,46 @@
 ### Cleaning up
 - `docker rmi $(docker images -q -f dangling=true)` - removes dangling images
 
+### Attaching a debugger
+- We expose the "debugging" port in the compose file
+  - ```yaml
+    app_testing:
+    container_name: app_testing
+    build:
+      context: .
+      target: testing
+    entrypoint: ["/bin/bash", "./entrypoint.testing.docker.sh"]
+    ports:
+      - "2025:2025"
+      - "9229:9229" #expose the debug port to the outside world
+      ```
+- Can then run the following command to setup a debugger while running jest tests:
+  ```bash
+  node --inspect-brk=0.0.0.0:9229 --nolazy -r ./node_modules/ts-node/register ./node_modules/jest/bin/jest.js --runInBand
+  ```
+  - I've included this command in the `run-docker-testing.sh` script for easy access
+  - Within VSCode, we add a launch configuration in launch.json (within .vscode/) that resembles this:
+  ```json
+  {
+            "type": "node",
+            "name": "docker-jest",
+            "request": "attach",
+            "address": "0.0.0.0",
+            "port": 9229,
+            "localRoot": "${workspaceFolder}",
+            "remoteRoot": "/app", // Will depend on your setup
+            "skipFiles": [
+              "<node_internals>/**/*.js",
+              "${workspaceFolder}/node_modules/**/*.js"
+            ],
+            "internalConsoleOptions": "neverOpen",
+            "presentation": {
+              "reveal": "silent"
+            }
+          }
+  ```
+  - See https://stackoverflow.com/a/67213840
+
 ### The "Dockerization" of My App
 
 ### Multistage Docker Build
