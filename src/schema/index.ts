@@ -8,3 +8,7 @@ export const userLocationSchema = z.object({
 export const scanRequestSchema = z.object({
   userLocation: userLocationSchema,
 });
+
+export const getUserInventoryRequestSchema = z.object({
+  userUid: z.string(),
+});

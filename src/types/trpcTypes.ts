@@ -23,5 +23,12 @@ type RouterOutput = inferRouterOutputs<AppRouter>;
 
 export type GreetingRequestOutput = RouterOutput["greeting"];
 
+// Scan routes
 export type ScanRequestInput = RouterInput["scan"];
 export type ScanRequestOutput = RouterOutput["scan"];
+
+// UserInventory routes
+export type GetUserInventoryRequestInput =
+  RouterInput["userInventory"]["getUserInventory"];
+export type GetUserInventoryRequestOutput =
+  RouterOutput["userInventory"]["getUserInventory"];
