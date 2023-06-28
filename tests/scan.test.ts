@@ -20,16 +20,6 @@ describe("/scan", () => {
   beforeAll(() => {
     server = TestSingleton.getInstance().server;
     idToken = TestSingleton.getInstance().idToken;
-
-    // Mock our config variables
-    jest.mock("../src/config", () => ({
-      ...jest.requireActual("../src/config"),
-      spawn_region_h3_resolution: 9,
-      scan_distance: 1,
-    }));
-  });
-  afterAll(() => {
-    jest.resetModules();
   });
 
   afterEach(async () => {

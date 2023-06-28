@@ -36,10 +36,15 @@ if (!firebase_service_acct_key) {
   throw new Error("Missing Firebase Service Account Key.");
 }
 
+// Always use protected routes unless we are in development environment
+// * Test environment requires protected routes to pass authentication tests
+const shouldUseProtectedRoutes = node_env !== "development";
+
 export default {
   server_port: parseInt(process.env.PORT as string, 10) || 443, // default HTTPS port
   node_env: node_env,
   log_level: process.env.LOG_LEVEL ?? "info",
+  use_protected_routes: shouldUseProtectedRoutes,
   firebase_service_acct_key: firebase_service_acct_key,
   firebase_test_user_uid: process.env.FIREBASE_TEST_USER_UID,
   firebase_client_config: process.env.FIREBASE_CLIENT_CONFIG ?? "",

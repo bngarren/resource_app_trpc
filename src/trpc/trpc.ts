@@ -3,12 +3,15 @@ import * as trpcExpress from "@trpc/server/adapters/express";
 import { logger } from "../logger/logger";
 import { Request } from "express";
 import { decodeAndVerifyJwtToken } from "../auth/firebaseAuth";
+import config from "../config";
 
 /**
  * ### Get's authenticated user from request header
  * This helper function reads the Request and using the authorization header,
  * it tries to extract a JWT token (which should be a valid Firebase ID token),
  * and if successful, returns the Firebase user
+ *
+ * @returns A UserRecord (Firebase type that includes uid, email, displayName, etc.), or undefined
  */
 const getUserFromRequestHeader = async (req: Request) => {
   if (req.headers.authorization) {
@@ -16,6 +19,8 @@ const getUserFromRequestHeader = async (req: Request) => {
       req.headers.authorization.split(" ")[1],
     );
     return user;
+  } else {
+    logger.warn(`No authorization header with request.`);
   }
   return null;
 };
@@ -52,7 +57,7 @@ export const middleware = t.middleware;
 // Logging middleware
 const loggerMiddleware = middleware(async (opts) => {
   logger.info(
-    { client: opts.ctx.client, body: opts.rawInput },
+    { client: opts.ctx.client, type: opts.type, input: opts.rawInput },
     `Request received for /${opts.path}`,
   );
 
@@ -61,8 +66,13 @@ const loggerMiddleware = middleware(async (opts) => {
 
 function createProtectedRouter() {
   return middleware(({ ctx, next }) => {
-    if (!ctx.user) {
-      throw new TRPCError({ code: "UNAUTHORIZED" });
+    if (!config.use_protected_routes) {
+      logger.warn("Not using protectedRoutes for TRPC. Allowing request...");
+    } else {
+      // We are using protectedRoutes, so let's throw Error if unauthorized user...
+      if (!ctx.user) {
+        throw new TRPCError({ code: "UNAUTHORIZED" });
+      }
     }
     return next({
       ctx: {
@@ -80,6 +90,4 @@ function createProtectedRouter() {
  */
 export const router = t.router;
 export const publicProcedure = t.procedure.use(loggerMiddleware);
-export const protectedProcedure = t.procedure
-  .use(loggerMiddleware)
-  .use(createProtectedRouter());
+export const protectedProcedure = publicProcedure.use(createProtectedRouter());
