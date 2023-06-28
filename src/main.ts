@@ -73,6 +73,9 @@ app.use(
   trpcExpress.createExpressMiddleware({
     router: appRouter,
     createContext,
+    onError({ error }) {
+      logger.error(error);
+    },
   }),
 );
 
@@ -101,6 +104,20 @@ if (process.env.NODE_ENV === "production") {
 }
 
 async function main() {
+  logger.info(message);
+
+  // We can turn protected routes off for API testing, debugging, etc.
+  if (!config.use_protected_routes) {
+    logger.warn(
+      "Protected routes have been turned OFF! Make sure this is a dev environment!!",
+    );
+
+    if (config.node_env === "production") {
+      logger.error("Can't run production with protected routes OFF.");
+      return;
+    }
+  }
+
   const startTime = new Date();
 
   // The server_port in our config must distinguish our node environment
