@@ -21,5 +21,7 @@ export interface TRPCResponseData<T> {
 type RouterInput = inferRouterInputs<AppRouter>;
 type RouterOutput = inferRouterOutputs<AppRouter>;
 
+export type GreetingRequestOutput = RouterOutput["greeting"];
+
 export type ScanRequestInput = RouterInput["scan"];
 export type ScanRequestOutput = RouterOutput["scan"];
