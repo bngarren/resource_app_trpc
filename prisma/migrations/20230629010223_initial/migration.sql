@@ -10,6 +10,7 @@ CREATE TYPE "ItemType" AS ENUM ('RESOURCE', 'COMPONENT', 'HARVESTER');
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
+    "firebase_uid" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "username" TEXT,
 
@@ -73,6 +74,9 @@ CREATE TABLE "Harvester" (
 
     CONSTRAINT "Harvester_pkey" PRIMARY KEY ("id")
 );
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_firebase_uid_key" ON "User"("firebase_uid");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");

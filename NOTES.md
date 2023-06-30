@@ -7,6 +7,8 @@
   - `--transpile-only` means don't do typechecking, just transpiile it
 
 ### Scripts
+#### Prisma scripts
+We prefix each prisma related script with `dotenv -e .env.${NODE_ENV}` so that the schema.prisma has access to an appropriate DATABASE_URL. This would typically be found in a .env file, but since we are using multiple .env files (i.e. .env.test, .env.development), we need to specify where to look. Dotenv can be used to provide a specific .env file here based on the current NODE_ENV variable. 
 - **`prisma:generate`**: Generates Prisma Client JavaScript code based on our Prisma schema (`prisma/schema.prisma`).
   - This client is then used in our application code to interact with our database.
 - **`prisma:migrate:dev`**: Applies database migrations in a development environment.
@@ -40,6 +42,11 @@
 - The settings enable ESLint to automatically fix identified issues on save
 - ESLint is set as the default formatter for JavaScript and TypeScript files
 - Using a specific .vscode/settings.json file for these configurations allows project-specific settings without affecting the global VSCode settings.
+
+## App Structure/Philosophy
+- API requests are handled by an Express app which designates TRPC to handle most routes
+- TRPC provides type safety and input validation for the routes (procedures)
+- Theses procedures call various modules in the "service layer", e.g. scanService, userService, to handle the request. The services provide the business logic of our app. The services make calls to a "query layer", e.g. queryResource, queryUserInventoryItem, which represent the database/ORM layer. Therefore, service code should be database/ORM agnostic, and the query modules represent the actual database/ORM implementation, e.g. Prisma related calls.
 
 ## Dockerized E2E testing
 

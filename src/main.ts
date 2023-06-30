@@ -1,9 +1,9 @@
+import config from "./config";
 import { protectedProcedure, publicProcedure, router } from "./trpc/trpc";
 import express from "express";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import cors from "cors";
 import { createContext } from "./trpc/trpc";
-import config from "./config";
 import { logger } from "./logger/logger";
 import { prisma } from "./prisma";
 import https from "https";

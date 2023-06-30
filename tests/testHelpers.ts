@@ -2,7 +2,9 @@ import { Response as SuperAgentResponse } from "superagent";
 import { TRPCResponseData } from "../src/types/trpcTypes";
 import { prisma } from "../src/prisma";
 import config from "../src/config";
-import { testUser } from "../seed/user/testUser";
+import { Server } from "http";
+import request, { Test } from "supertest";
+import { setupBaseSeed } from "../seed/setupBaseSeed";
 
 /**
  * ### Helper function to extract data from a TRPC response
@@ -42,6 +44,67 @@ export const getDataFromTRPCResponse = <T>(
   response: SuperAgentResponse,
 ): T | undefined => {
   return response.body?.result?.data as T;
+};
+
+/**
+ * ### Wraps a typical supertest Test with authentication header and input for GET and POST requests
+ * If a typical request with supertest looks like the following:
+ * ```javascript
+ * const res = await request(server)
+          .get("/endpoint")
+          .set("Authorization", `Bearer ${idToken}`)
+          .query({
+            input: JSON.stringify({key: value})
+          })
+ * ```
+ * One can see the boilerplate needed to send an authorization header as well as the unique way that TRPC
+ * expects any values passed as query parameters. 
+ * 
+ * This function wraps this into:
+ * ```javascript
+ * const res = await authenticatedRequest(
+        server,
+        "GET",
+        "/endpoint",
+        idToken,
+        { key: value },
+      );
+ * ```
+ * 
+ * @param api The API/app that supertest expects as a parameter
+ * @param type GET or POST
+ * @param endpoint The TRPC procedure
+ * @param idToken The authenticated user idToken (i.e. Firebase)
+ * @param input Input object that will be passed as query param (GET) or JSON body (POST)
+ */
+export const authenticatedRequest = (
+  api: Server,
+  type: "GET" | "POST",
+  endpoint: string,
+  idToken: string,
+  input?: Record<string, unknown>,
+) => {
+  let req: Test;
+  switch (type) {
+    case "GET":
+      req = request(api)
+        .get(endpoint)
+        .set("Authorization", `Bearer ${idToken}`);
+      if (input) {
+        req.query({
+          input: JSON.stringify(input),
+        });
+      }
+      return req;
+    case "POST":
+      req = request(api)
+        .post(endpoint)
+        .set("Authorization", `Bearer ${idToken}`);
+      if (input) {
+        req.send(input);
+      }
+      return req;
+  }
 };
 
 /**
@@ -86,10 +149,13 @@ export const resetPrisma = async () => {
 
   // - - - - - - - - - NEXT, re-seed our test data - - - - - - - -
 
-  // we always ensure our testUser is present at a minimum
-  await prisma.user.create({ data: testUser });
+  await setupBaseSeed(prisma);
 };
 
+/**
+ * ### Utility function for moving a given latitude by a specified distance, in meters
+ * Useful for testing nearby but different locations
+ */
 export const translateLatitude = (origLatitude: number, meters: number) => {
   const coef = meters / 111320.0;
   return origLatitude + coef;

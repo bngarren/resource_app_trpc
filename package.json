@@ -10,11 +10,12 @@
     "seed": "ts-node-dev --transpile-only prisma/seed.ts"
   },
   "scripts": {
-    "prisma:generate": "npx prisma generate",
-    "prisma:migrate:dev": "npx prisma migrate dev",
-    "prisma:migrate:deploy": "npx prisma migrate deploy",
-    "prisma:push": "npx prisma db push",
-    "prisma:reset": "npx prisma migrate reset --skip-seed && npm run prisma:push && npx prisma db seed",
+    "prisma:generate": "dotenv -e .env.${NODE_ENV} -- npx prisma generate",
+    "prisma:migrate:dev": "dotenv -e .env.${NODE_ENV} -- npx prisma migrate dev",
+    "prisma:migrate:deploy": "dotenv -e .env.${NODE_ENV} -- npx prisma migrate deploy",
+    "prisma:push": "dotenv -e .env.${NODE_ENV} -- npx prisma db push",
+    "prisma:seed": "dotenv -e .env.${NODE_ENV} -- npx prisma db seed",
+    "prisma:reset": "dotenv -e .env.${NODE_ENV} -- npx prisma migrate reset --skip-seed && npm run prisma:push && dotenv -e .env.${NODE_ENV} -- npx prisma db seed",
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
     "build": "rm -rf dist && tsc",
