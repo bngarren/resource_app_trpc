@@ -35,6 +35,7 @@ services:
     volumes:
       - ./tests:/app/tests:ro #Allow container to read from host's ./tests/
       - ./src:/app/src:ro #Allow container to read from host's ./src/
+      - ./logs:/app/logs # Map the logs directory
   db_staging:
     container_name: db_staging
     image: postgres:14

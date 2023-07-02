@@ -12,12 +12,15 @@ import { prisma } from "../src/prisma";
 import * as SpawnRegionService from "../src/services/spawnRegionService";
 import { scanRequestSchema } from "../src/schema";
 import { ScanRequestOutput } from "../src/types/trpcTypes";
+import { logger } from "../src/logger/logger";
 
 describe("/scan", () => {
   let server: Server;
   let idToken: string;
 
   beforeAll(() => {
+    logger.info("Starting test suite: /scan");
+
     server = TestSingleton.getInstance().server;
     idToken = TestSingleton.getInstance().idToken;
   });

@@ -59,6 +59,8 @@ while true; do
         *)
             printf "${PREFIX}${LIGHT_BLUE}See ya! Docker-compose down...${NC}\n\n"
             docker-compose down
+            printf "${PREFIX}${LIGHT_BLUE}Clearing app_testing.log...${NC}\n\n"
+            rm -i ./logs/app_testing.log
             break
             ;;
     esac
