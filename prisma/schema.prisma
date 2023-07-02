@@ -37,19 +37,31 @@ enum ResourceType {
   ARCANE_ENERGY
 }
 
-enum ResourceRarity {
+enum ResourceRarityLevel {
+  VERY_COMMON
   COMMON
   UNCOMMON
   RARE
+  EPIC
+  LEGENDARY
+}
+
+model ResourceRarity {
+  level         ResourceRarityLevel @id @default(VERY_COMMON)
+  name       String
+  likelihood Int                 @unique @default(1) // Should be 1-6
+  Resource   Resource[]
 }
 
 model Resource {
-  id               String            @id @default(uuid())
-  url              String            @unique
-  name             String
-  resourceType     ResourceType      @map("resource_type")
-  rarity           ResourceRarity
-  SpawnedResources SpawnedResource[]
+  id                  String              @id @default(uuid())
+  url                 String              @unique
+  name                String
+  metadata            Json                @default("{}")
+  resourceType        ResourceType        @map("resource_type")
+  resourceRarity      ResourceRarity      @relation(fields: [resourceRarityLevel], references: [level])
+  resourceRarityLevel ResourceRarityLevel
+  SpawnedResources    SpawnedResource[]
 }
 
 model SpawnedResource {
@@ -60,7 +72,10 @@ model SpawnedResource {
   h3Index       String      @unique @map("h3_index")
   h3Resolution  Int         @map("h3_resolution")
 
-  @@id([resourceId, spawnRegionId])
+  // Defines a composite primary key
+  // Each SpawnedResource is uniquely defined by an h3Index and spawnRegionId
+  // Thus, you can't have an h3Index used by more than one SpawnedResource per region
+  @@id([h3Index, spawnRegionId])
 }
 
 enum ItemType {
@@ -73,17 +88,20 @@ model UserInventoryItem {
   id       String   @id @default(cuid())
   user     User     @relation(fields: [userId], references: [id])
   userId   String   @map("user_id")
-  itemId   String   @unique @map("item_id")
+  itemId   String   @map("item_id")
   itemType ItemType @map("item_type")
   quantity Int
+
+  @@unique([userId, itemId])
 }
 
 model Harvester {
   id              String    @id @default(uuid())
+  name            String
   user            User      @relation(fields: [userId], references: [id])
   userId          String    @map("user_id")
   deployedDate    DateTime? @map("deployed_date")
-  meta            Json // includes energy efficiency, extraction rate, inventory max size, etc.
+  metadata        Json      @default("{}") // includes energy efficiency, extraction rate, inventory max size, etc.
   h3Index         String?   @map("h3_index") // deployment location
   initialEnergy   Int?      @map("initial_energy") // starting energy level
   energyStartTime DateTime? @map("energy_start_time") // start time of initial energy usage

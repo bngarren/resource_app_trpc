@@ -40,9 +40,10 @@ export async function extractDataFromTRPCResponse<T>(
  * This helper simply reaches into the response object and returns the data located
  * at `response.body.result.data`. This is where TRPC puts the response payload.
  */
-export const getDataFromTRPCResponse = <T>(
-  response: SuperAgentResponse,
-): T | undefined => {
+export const getDataFromTRPCResponse = <T>(response: SuperAgentResponse): T => {
+  if (!response.body.result.data) {
+    throw new Error("no data in response");
+  }
   return response.body?.result?.data as T;
 };
 

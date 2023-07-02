@@ -3,7 +3,10 @@ import { getUserInventoryRequestSchema } from "../schema";
 import { getUserByUid } from "../services/userService";
 import { protectedProcedure, router } from "../trpc/trpc";
 import { User } from "@prisma/client";
-import { getUserInventory } from "../services/userInventoryService";
+import {
+  getPlayerInventoryFromUserInventoryItems,
+  getUserInventoryItems,
+} from "../services/userInventoryService";
 
 export const userInventoryRouter = router({
   getUserInventory: protectedProcedure
@@ -17,8 +20,10 @@ export const userInventoryRouter = router({
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
-      const userInventory = await getUserInventory(user.id);
+      // OK if returns empty []
+      const userInventoryItems = await getUserInventoryItems(user.id);
 
-      return userInventory;
+      // Now convert to a PlayerInventory (which is client facing)
+      return await getPlayerInventoryFromUserInventoryItems(userInventoryItems);
     }),
 });

@@ -1,4 +1,4 @@
-import { UserInventoryItem } from "@prisma/client";
+import { ItemType } from "@prisma/client";
 import { TestSingleton } from "./TestSingleton";
 import {
   authenticatedRequest,
@@ -8,6 +8,8 @@ import {
 import { Server } from "http";
 import { prisma } from "../src/prisma";
 import { addResourceToUserInventory } from "../src/services/userInventoryService";
+import { GetUserInventoryRequestOutput } from "../src/types/trpcTypes";
+import { PlayerInventory } from "../src/types";
 
 describe("/userInventory", () => {
   let server: Server;
@@ -62,7 +64,7 @@ describe("/userInventory", () => {
       expect(res.statusCode).toBe(200);
     });
 
-    it("should return an empty array if the user has no inventory items", async () => {
+    it("should return an object with an empty items array if the user has no inventory items", async () => {
       // The base seed should include 1 item (Resource, gold) for testUser
       // Let's clear the user's inventory items...
       const user = await prisma.user.findUniqueOrThrow({
@@ -84,10 +86,10 @@ describe("/userInventory", () => {
         { userUid: userUid },
       );
 
-      const data = getDataFromTRPCResponse<UserInventoryItem[]>(res);
+      const data = getDataFromTRPCResponse<PlayerInventory>(res);
 
-      expect(data).toBeInstanceOf(Array);
-      expect(data).toHaveLength(0);
+      expect(data).toBeInstanceOf(Object);
+      expect(data.items).toHaveLength(0);
     });
 
     it("should return the all of the user's inventory items", async () => {
@@ -98,7 +100,7 @@ describe("/userInventory", () => {
           firebase_uid: userUid,
         },
       });
-      const actualUserInventory = await prisma.userInventoryItem.findMany({
+      const actualUserInventoryItems = await prisma.userInventoryItem.findMany({
         where: {
           userId: user.id,
         },
@@ -112,12 +114,19 @@ describe("/userInventory", () => {
         { userUid: userUid },
       );
 
-      const data = getDataFromTRPCResponse<UserInventoryItem[]>(res);
+      const data = getDataFromTRPCResponse<PlayerInventory>(res);
 
-      if (!data) throw new Error("data is missing");
+      expect(data.items).toHaveLength(1);
 
-      expect(data).toHaveLength(1);
-      expect(data).toEqual(actualUserInventory);
+      const actualUserInventoryItemIds = actualUserInventoryItems.map(
+        (i) => i.id,
+      );
+      const returnedItemIds = data.items.map((i) => i.id);
+
+      // The item id's in the returned PlayerInventory should equal the query result's id's from UserInventoryItems[]
+      expect(returnedItemIds).toEqual(
+        expect.arrayContaining(actualUserInventoryItemIds),
+      );
     });
 
     it("should not return another user's inventory items", async () => {
@@ -156,19 +165,63 @@ describe("/userInventory", () => {
         { userUid: userUid },
       );
 
-      const data = getDataFromTRPCResponse<UserInventoryItem[]>(res);
+      const data = getDataFromTRPCResponse<PlayerInventory>(res);
 
-      if (!data) throw new Error("data is missing");
-
-      // Expect that our actual user's inventory does not contain the other user's inventory item
-      expect(data).not.toBe(
+      // Expect that our returned player inventory does not contain the other user's inventory item
+      expect(data.items).not.toBe(
         expect.arrayContaining(
           expect.objectContaining(anotherUserInventoryItem),
         ),
       );
 
-      // Expect that our inventory item's user id is indeed our user's id
-      expect(data[0]).toMatchObject({ userId: user.id });
+      // The returned inventory item (wihtin PlayerInventory response)
+      const returnedInventoryItem = data.items[0];
+
+      // Expect that the UserInventoryItem associated with our test user (should only be one in the base seed) is the same
+      // item that was returned as the InventoryItem in PlayerInventory
+      expect(
+        prisma.userInventoryItem.findFirst({
+          where: {
+            userId: user.id,
+          },
+        }),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: returnedInventoryItem.id,
+        }),
+      );
+    });
+
+    it("should return a correct PlayerInventory", async () => {
+      const res = await authenticatedRequest(
+        server,
+        "GET",
+        "/userInventory.getUserInventory",
+        idToken,
+        { userUid: userUid },
+      );
+
+      const data = getDataFromTRPCResponse<GetUserInventoryRequestOutput>(res);
+
+      // Confirm that our GetUserInventoryRequestOutput is what we expect to send
+      // to our client, i.e. PlayerInventory type
+      expect(data).toMatchObject({
+        timestamp: expect.any(String),
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            id: expect.any(String),
+            name: expect.any(String),
+            type: expect.any(String),
+            quantity: expect.any(Number),
+            metadata: expect.any(Object),
+          }),
+        ]),
+      });
+
+      // Additional check for type field to match our ItemType typescript type
+      data.items.forEach((item) => {
+        expect(Object.values(ItemType)).toContain(item.type);
+      });
     });
   });
 });

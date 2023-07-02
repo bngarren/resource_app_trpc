@@ -2,7 +2,7 @@
 CREATE TYPE "ResourceType" AS ENUM ('REGULAR', 'ARCANE_ELEMENT', 'ARCANE_ENERGY');
 
 -- CreateEnum
-CREATE TYPE "ResourceRarity" AS ENUM ('COMMON', 'UNCOMMON', 'RARE');
+CREATE TYPE "ResourceRarityLevel" AS ENUM ('VERY_COMMON', 'COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY');
 
 -- CreateEnum
 CREATE TYPE "ItemType" AS ENUM ('RESOURCE', 'COMPONENT', 'HARVESTER');
@@ -30,12 +30,22 @@ CREATE TABLE "SpawnRegion" (
 );
 
 -- CreateTable
+CREATE TABLE "ResourceRarity" (
+    "level" "ResourceRarityLevel" NOT NULL DEFAULT 'VERY_COMMON',
+    "name" TEXT NOT NULL,
+    "likelihood" INTEGER NOT NULL DEFAULT 1,
+
+    CONSTRAINT "ResourceRarity_pkey" PRIMARY KEY ("level")
+);
+
+-- CreateTable
 CREATE TABLE "Resource" (
     "id" TEXT NOT NULL,
     "url" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "metadata" JSONB NOT NULL DEFAULT '{}',
     "resource_type" "ResourceType" NOT NULL,
-    "rarity" "ResourceRarity" NOT NULL,
+    "resourceRarityLevel" "ResourceRarityLevel" NOT NULL,
 
     CONSTRAINT "Resource_pkey" PRIMARY KEY ("id")
 );
@@ -47,7 +57,7 @@ CREATE TABLE "SpawnedResource" (
     "h3_index" TEXT NOT NULL,
     "h3_resolution" INTEGER NOT NULL,
 
-    CONSTRAINT "SpawnedResource_pkey" PRIMARY KEY ("resource_id","spawn_region_id")
+    CONSTRAINT "SpawnedResource_pkey" PRIMARY KEY ("h3_index","spawn_region_id")
 );
 
 -- CreateTable
@@ -64,9 +74,10 @@ CREATE TABLE "UserInventoryItem" (
 -- CreateTable
 CREATE TABLE "Harvester" (
     "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
     "user_id" TEXT NOT NULL,
     "deployed_date" TIMESTAMP(3),
-    "meta" JSONB NOT NULL,
+    "metadata" JSONB NOT NULL DEFAULT '{}',
     "h3_index" TEXT,
     "initial_energy" INTEGER,
     "energy_start_time" TIMESTAMP(3),
@@ -85,7 +96,19 @@ CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 CREATE UNIQUE INDEX "SpawnRegion_h3_index_key" ON "SpawnRegion"("h3_index");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "ResourceRarity_likelihood_key" ON "ResourceRarity"("likelihood");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Resource_url_key" ON "Resource"("url");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "SpawnedResource_h3_index_key" ON "SpawnedResource"("h3_index");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UserInventoryItem_user_id_item_id_key" ON "UserInventoryItem"("user_id", "item_id");
+
+-- AddForeignKey
+ALTER TABLE "Resource" ADD CONSTRAINT "Resource_resourceRarityLevel_fkey" FOREIGN KEY ("resourceRarityLevel") REFERENCES "ResourceRarity"("level") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SpawnedResource" ADD CONSTRAINT "SpawnedResource_resource_id_fkey" FOREIGN KEY ("resource_id") REFERENCES "Resource"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

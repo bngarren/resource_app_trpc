@@ -1,5 +1,14 @@
 import { PrismaClient } from "@prisma/client";
+import { resourcesSeed } from "./resourcesSeed";
+import { resourceRaritySeed } from "./resourceRaritySeed";
 
+/**
+ * ### Seeds the database (via the given Prisma client)
+ * - Adds testUser@gmail.com with a real Firebase uid
+ * - Adds 3 resources
+ * - Adds 1 user inventory item (gold) for testUser
+ * @param _prisma
+ */
 export const setupBaseSeed = async (_prisma: PrismaClient) => {
   // Create our test User
   const testUser = await _prisma.user.create({
@@ -9,28 +18,14 @@ export const setupBaseSeed = async (_prisma: PrismaClient) => {
     },
   });
 
+  // Create ResourceRarity options
+  await _prisma.resourceRarity.createMany({
+    data: resourceRaritySeed,
+  });
+
   // Create some Resources
   await _prisma.resource.createMany({
-    data: [
-      {
-        url: "gold",
-        name: "Gold",
-        resourceType: "REGULAR",
-        rarity: "COMMON",
-      },
-      {
-        url: "silver",
-        name: "Silver",
-        resourceType: "REGULAR",
-        rarity: "COMMON",
-      },
-      {
-        url: "temuride",
-        name: "Temuride",
-        resourceType: "ARCANE_ELEMENT",
-        rarity: "RARE",
-      },
-    ],
+    data: resourcesSeed,
   });
 
   // Create a user inventory item

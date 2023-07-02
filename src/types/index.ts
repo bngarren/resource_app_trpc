@@ -1,4 +1,4 @@
-import { Prisma, SpawnedResource, Resource } from "@prisma/client";
+import { Prisma, SpawnedResource, Resource, ItemType } from "@prisma/client";
 
 // A dev type that helps me to see to full type structure of my types
 type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
@@ -89,4 +89,17 @@ export type ScanResult = {
    * Includes only those interactables with userCanInteract = true
    */
   sortedCanInteractableIds: string[];
+};
+
+export type InventoryItem = {
+  id: string; // matches an id in the UserInventoryItem table
+  name: string;
+  type: ItemType;
+  quantity: number;
+  metadata: Record<string, unknown>;
+};
+
+export type PlayerInventory = {
+  timestamp: string; // time obtained from API
+  items: InventoryItem[];
 };
