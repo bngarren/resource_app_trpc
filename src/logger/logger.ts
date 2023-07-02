@@ -1,7 +1,7 @@
+import fs from "fs";
 import pino from "pino";
 import config from "../config";
-
-const shouldUseDevLogger = ["development", "test"].includes(config.node_env);
+import path from "path";
 
 const devLogger = () =>
   pino({
@@ -20,10 +20,30 @@ const devLogger = () =>
     },
   });
 
-const testLogger = () =>
-  pino({
-    enabled: false,
+/**
+ * For testLogger, we will log to a specific file in the /logs directory.
+ */
+const testLogger = () => {
+  const logDirectory = path.join(process.cwd(), "/logs"); // This points to the project root /logs
+
+  // Append timestamp to log filename.
+  const testLogPath = path.join(logDirectory, `app_testing.log`);
+
+  // Creates the directory if it doesn't exist.
+  fs.mkdirSync(logDirectory, { recursive: true });
+
+  // Stream where the logs will be written.
+  const stream = fs.createWriteStream(testLogPath, {
+    flags: "a", // 'a' means appending (old data will be preserved)
   });
+
+  return pino(
+    {
+      level: config.log_level,
+    },
+    stream,
+  );
+};
 
 const prodLogger = () =>
   pino({

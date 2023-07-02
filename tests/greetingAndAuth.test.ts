@@ -4,12 +4,15 @@ import { prisma } from "../src/prisma";
 import { TestSingleton } from "./TestSingleton";
 import { Server } from "http";
 import { GreetingRequestOutput } from "../src/types/trpcTypes";
+import { logger } from "../src/logger/logger";
 
 describe("Greeting/Authentication", () => {
   let server: Server;
   let idToken: string;
 
   beforeAll(() => {
+    logger.info("Starting test suite: Greeting/Authentication");
+
     server = TestSingleton.getInstance().server;
     idToken = TestSingleton.getInstance().idToken;
   });

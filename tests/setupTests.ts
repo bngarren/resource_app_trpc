@@ -1,7 +1,5 @@
 import { TestSingleton } from "./TestSingleton";
 
-export {};
-
 beforeAll(async () => {
   await TestSingleton.getInstance().ready;
 });
