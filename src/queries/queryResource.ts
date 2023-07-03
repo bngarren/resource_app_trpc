@@ -189,8 +189,9 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
     // * i.e. these things may make database queries but don't mutate (nothing to roll back)
 
     // Make some new spawned resource models
-    const spawnedResourceModels =
-      await generateSpawnedResourceModelsForSpawnRegion(
+    let spawnedResourceModels: Prisma.SpawnedResourceCreateInput[];
+    try {
+      spawnedResourceModels = await generateSpawnedResourceModelsForSpawnRegion(
         spawnRegion,
         [
           config.min_resources_per_spawn_region,
@@ -198,6 +199,9 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
         ],
         config.resource_h3_resolution,
       );
+    } catch (err) {
+      throw err;
+    }
 
     let trxResult: SpawnRegionWithResourcesPartial;
 

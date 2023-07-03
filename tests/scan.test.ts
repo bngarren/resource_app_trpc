@@ -2,6 +2,7 @@ import request from "supertest";
 import h3 from "h3-js";
 import { TestSingleton } from "./TestSingleton";
 import {
+  authenticatedRequest,
   extractDataFromTRPCResponse,
   resetPrisma,
   translateLatitude,
@@ -10,6 +11,7 @@ import { Server } from "http";
 import config from "../src/config";
 import { prisma } from "../src/prisma";
 import * as SpawnRegionService from "../src/services/spawnRegionService";
+import * as ResourceService from "../src/services/resourceService";
 import { scanRequestSchema } from "../src/schema";
 import { ScanRequestOutput } from "../src/types/trpcTypes";
 import { logger } from "../src/logger/logger";
@@ -171,7 +173,7 @@ describe("/scan", () => {
     );
 
     spy_updateSpawnRegion.mockImplementation(() =>
-      Promise.reject(new Error("update error")),
+      Promise.reject(new Error("mock - updateSpawnRegion error")),
     );
 
     const response = await request(server)
@@ -198,6 +200,36 @@ describe("/scan", () => {
 
     // Remove the spy
     spy_updateSpawnRegion.mockRestore();
+  });
+  // -------------------------------------------------
+
+  // Test incorrect database state failure (un-seeded)
+  // -------------------------------------------------
+  it("should handle a database error (bad state/migration), i.e missing Resources and return status code 500", async () => {
+    // Let's setup this test by clearing the Resources table (which should have been seeded already)
+    await prisma.resource.deleteMany();
+
+    // Create a spy on getRandomResource and mock it to throw an error
+    const spy_getRandomResource = jest.spyOn(
+      ResourceService,
+      "getRandomResource",
+    );
+
+    spy_getRandomResource.mockImplementation(() =>
+      Promise.reject(new Error("mock - getRandomResource Error")),
+    );
+
+    const response = await authenticatedRequest(
+      server,
+      "POST",
+      "/scan",
+      idToken,
+      getValidRequestBody(),
+    );
+
+    expect(response.statusCode).toBe(500);
+
+    spy_getRandomResource.mockRestore();
   });
   // -------------------------------------------------
 

@@ -64,9 +64,15 @@ export const getResourcesInSpawnRegion = async (spawnRegionId: string) => {
 export const getRandomResource = async () => {
   const allResources = await getResources();
 
+  if (allResources.length === 0) {
+    throw new Error(
+      "Could not find any resources when attempting to select random resource",
+    );
+  }
+
   const weightedResourceIds: string[] = [];
   allResources.forEach((resource) => {
-    // likelihood is between 1 and 10
+    // likelihood is between 1 and 6
     for (let i = 0; i < resource.resourceRarity.likelihood; i++) {
       weightedResourceIds.push(resource.id);
     }
@@ -77,7 +83,10 @@ export const getRandomResource = async () => {
     (r) => r.id === weightedResourceIds[index],
   );
 
-  if (!selectedResource) throw new Error("problem selecting random resource");
+  if (!selectedResource)
+    throw new Error(
+      `Unexpected problem selecting random resource with id=${weightedResourceIds[index]}`,
+    );
 
   const { resourceRarity, ...resource } = selectedResource;
 
@@ -168,24 +177,59 @@ export const generateSpawnedResourceModelsForSpawnRegion = async (
 
     First we select some random resource
     Then we make spawned resource models from these (giving a spawn region and
-      h3Index for the resource)
+    h3Index for the resource)
 
-    */
-  let spawnedResourceModels: Prisma.SpawnedResourceCreateInput[] = [];
+    The following code is a bit lengthy because we are dealing with Promise.allSettled()
+    and handling the fulfilled or rejected promises for each attempt at creating a
+    spawned resource model. This is currently favored over Promise.all() so that we
+    can get the reject reason/error for why each operation failed. Either way,
+    the generateSpawnedResourceModelsForSpawnRegion() function should throw and 
+    not result in any subsequent database operation related to these spawned resource models.
 
-  try {
-    spawnedResourceModels = await Promise.all(
-      // Promise all returns a promise that resolves when all of the promises in the map iterable have resolved
-      selectedH3Indices.map(async (s) => {
-        const resource = await getRandomResource();
-        return createSpawnedResourceModel(spawnRegion.id, s, resource.id);
-      }),
+  */
+
+  const results: PromiseSettledResult<Prisma.SpawnedResourceCreateInput>[] =
+    // Promise.allSettled will run all operations even if one rejects/throws
+    await Promise.allSettled(
+      selectedH3Indices.map(
+        async (selectedIndex): Promise<Prisma.SpawnedResourceCreateInput> => {
+          const resource = await getRandomResource();
+          return createSpawnedResourceModel(
+            spawnRegion.id,
+            selectedIndex,
+            resource.id,
+          );
+        },
+      ),
     );
-  } catch (err) {
-    logger.error(
-      "A promise failed to resolve while trying to generate spawnedResourceModels",
-      err,
-    );
+
+  // Now we sift through the results and see which ones fufilled and which ones rejected
+  const spawnedResourceModels = results
+    .filter(
+      (r): r is PromiseFulfilledResult<Prisma.SpawnedResourceCreateInput> =>
+        r.status === "fulfilled",
+    )
+    .map((r) => r.value);
+  const errors: unknown[] = results
+    .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+    .map((r) => r.reason);
+
+  // Safety check
+  // We want to throw an error if any one createSpawnedResourceModel failed because something
+  // might be corrupted and the others might be incorrect as well
+  if (
+    errors.length !== 0 ||
+    selectedH3Indices.length !== spawnedResourceModels.length
+  ) {
+    errors.forEach((err) => {
+      logger.error(
+        { err },
+        `Error occurred within generateSpawnedResourceModelsForSpawnRegion`,
+        spawnRegion,
+      );
+    });
+
+    throw new Error("Problem with generateSpawnedResourceModelsForSpawnRegion");
   }
 
   return spawnedResourceModels;
