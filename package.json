@@ -23,6 +23,7 @@
     "deploy:dev": "git push heroku development",
     "deploy:master": "git push heroku master",
     "start": "NODE_ENV=PRODUCTION node dist/main.js",
+    "start:staging": "NODE_ENV=STAGING node dist/main.js",
     "start:dev": "NODE_ENV=DEVELOPMENT ts-node-dev --respawn --clear --transpile-only --debounce 1000 ./src/main.ts",
     "test": "NODE_ENV=TEST jest --detectOpenHandles --runInBand --verbose",
     "test:docker": "NODE_ENV=TEST jest --detectOpenHandles --runInBand --verbose"
