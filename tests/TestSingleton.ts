@@ -1,6 +1,6 @@
 import { Server } from "http";
 import app from "../src/main";
-import { signInTestUser } from "../src/auth/firebaseHelpers";
+import { signInTestUser } from "../src/auth/signInUser";
 import { Auth, signOut } from "firebase/auth";
 
 /**
