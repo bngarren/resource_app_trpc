@@ -44,6 +44,18 @@ export const addResourceToUserInventory = async (
   });
 };
 
+/**
+ * ### Assembles a PlayerInventory object from the UserInventoryItems associated with a User
+ * - UserInventoryItems are the database representation of a user "owning" a certain item (i.e., resource, component, harvester, etc.)
+ * - An InventoryItem is the client-facing representation, which is held within a PlayerInventory
+ *
+ * #### Details
+ * - This function takes an array of a user's UserInventoryItems and builds each into an InventoryItem by
+ * combining with the actual item representation (Resource, Component, Harvester) to provide additional data
+ * - The client-facing PlayerInventory object holds the InventoryItems, as well as additional metadata...TBD
+ * @param userInventoryItems
+ * @returns PlayerInventory
+ */
 export const getPlayerInventoryFromUserInventoryItems = async (
   userInventoryItems: UserInventoryItem[],
 ): Promise<PlayerInventory> => {

@@ -10,6 +10,7 @@ import { prisma } from "../src/prisma";
 import { addResourceToUserInventory } from "../src/services/userInventoryService";
 import { GetUserInventoryRequestOutput } from "../src/types/trpcTypes";
 import { PlayerInventory } from "../src/types";
+import { logger } from "../src/logger/logger";
 
 describe("/userInventory", () => {
   let server: Server;
@@ -17,6 +18,7 @@ describe("/userInventory", () => {
   let userUid: string;
 
   beforeAll(() => {
+    logger.info("Starting test suite: /scan");
     server = TestSingleton.getInstance().server;
     idToken = TestSingleton.getInstance().idToken;
     userUid = TestSingleton.getInstance().userId;
