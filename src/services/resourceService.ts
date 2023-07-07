@@ -1,19 +1,15 @@
-import {
-  Prisma,
-  SpawnRegion,
-  SpawnedResource,
-  ResourceType,
-  ResourceRarity,
-} from "@prisma/client";
+import { Prisma, Resource, SpawnRegion, SpawnedResource } from "@prisma/client";
 import selectRandom from "../util/selectRandom";
 import {
   createResource,
   createResources,
   getResource,
+  getResources,
   getResourcesForSpawnRegion,
 } from "../queries/queryResource";
 import { cellToChildren, getResolution } from "h3-js";
 import { SpawnedResourceWithResource } from "../types";
+import { rethrowWith } from "../util/rethrowWith";
 
 /**
  * ### Helper function for converting a SpawnedResourceWithResource back to a SpawnedResource type
@@ -56,27 +52,45 @@ export const getResourcesInSpawnRegion = async (spawnRegionId: string) => {
 };
 
 /**
- * ### Creates a Resource model with some random properties
+ * ### Retrieves a random Resource based on rarity
  *
  * **This function does not alter the database.**
  *
- * @returns Resource
+ * - Each resource is "weighted" by its its likelihood value,
+ * which ranges from 1 to 6.
+ * - Resources with a higher likelihood are more likely
+ *
  */
-export const createRandomResourceModel = () => {
-  // TODO move somewhere else
-  const RESOURCE_NAMES = ["Gold", "Silver", "Iron", "Copper"];
+export const getRandomResource = async () => {
+  const allResources = await getResources();
 
-  const [name] = selectRandom(RESOURCE_NAMES, [1, 1]);
+  if (allResources.length === 0) {
+    throw new Error(
+      "Could not find any resources when attempting to select random resource",
+    );
+  }
 
-  // TODO Currently all resources are the same resource type and rarity
-  const result: Prisma.ResourceCreateInput = {
-    url: name.toLocaleLowerCase(),
-    name: name,
-    resourceType: ResourceType.REGULAR,
-    rarity: ResourceRarity.COMMON,
-  };
+  const weightedResourceIds: string[] = [];
+  allResources.forEach((resource) => {
+    // likelihood is between 1 and 6
+    for (let i = 0; i < resource.resourceRarity.likelihood; i++) {
+      weightedResourceIds.push(resource.id);
+    }
+  });
 
-  return result;
+  const index = Math.floor(Math.random() * weightedResourceIds.length);
+  const selectedResource = allResources.find(
+    (r) => r.id === weightedResourceIds[index],
+  );
+
+  if (!selectedResource)
+    throw new Error(
+      `Unexpected problem selecting random resource with id=${weightedResourceIds[index]}`,
+    );
+
+  const { resourceRarity, ...resource } = selectedResource;
+
+  return resource as Resource;
 };
 
 /**
@@ -96,7 +110,7 @@ export const createRandomResourceModel = () => {
 export const createSpawnedResourceModel = (
   spawnRegionId: string,
   resourceH3Index: string,
-  partialResourceModel: Prisma.ResourceCreateInput,
+  resourceId: string,
 ) => {
   // using "connect" is the idiomatic way to associate the new record with an existing record by its unique identifier
   const result: Prisma.SpawnedResourceCreateInput = {
@@ -106,7 +120,9 @@ export const createSpawnedResourceModel = (
       },
     },
     resource: {
-      create: partialResourceModel,
+      connect: {
+        id: resourceId,
+      },
     },
     h3Index: resourceH3Index,
     h3Resolution: getResolution(resourceH3Index),
@@ -133,7 +149,7 @@ export const handleCreateResources = async (
  *
  * The goal of this function is to create new SpawnedResource models for a given
  * SpawnRegion. These models are then used to update the SpawnedResources table
- * in the database (in some other function).
+ * in the database (in a separate function).
  *
  * **This function does not alter the database.**
  *
@@ -145,7 +161,7 @@ export const handleCreateResources = async (
  * @param resourceH3Resolution
  * @returns
  */
-export const generateSpawnedResourceModelsForSpawnRegion = (
+export const generateSpawnedResourceModelsForSpawnRegion = async (
   spawnRegion: SpawnRegion,
   quantity: [number, number],
   resourceH3Resolution: number,
@@ -159,15 +175,33 @@ export const generateSpawnedResourceModelsForSpawnRegion = (
 
   /* Now create the spawned resource models from these h3 indices
 
-    First we create random resource models
+    First we select some random resource
     Then we make spawned resource models from these (giving a spawn region and
-      h3Index for the resource)
+    h3Index for the resource)
 
-    */
-  const spawnedResourceModels = selectedH3Indices.map((s) => {
-    const resourceModel = createRandomResourceModel();
-    return createSpawnedResourceModel(spawnRegion.id, s, resourceModel);
-  });
-
+  */
+  let spawnedResourceModels: Prisma.SpawnedResourceCreateInput[] = [];
+  try {
+    spawnedResourceModels = await Promise.all(
+      selectedH3Indices.map(async (selectedIndex) => {
+        const resource = await getRandomResource();
+        return createSpawnedResourceModel(
+          spawnRegion.id,
+          selectedIndex,
+          resource.id,
+        );
+      }),
+    );
+    if (selectedH3Indices.length !== spawnedResourceModels.length) {
+      throw new Error(
+        "Did not generate as many spawnedResourceModels as intended",
+      );
+    }
+  } catch (error) {
+    rethrowWith(
+      error,
+      "Problem within generateSpawnedResourceModelsForSpawnRegion",
+    );
+  }
   return spawnedResourceModels;
 };

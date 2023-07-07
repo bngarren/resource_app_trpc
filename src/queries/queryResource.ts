@@ -11,13 +11,15 @@ import {
   generateSpawnedResourceModelsForSpawnRegion,
   pruneSpawnedResourceWithResource,
 } from "../services/resourceService";
-import { getAllSettled } from "../util/getAllSettled";
 import {
   getSpawnRegionWithResources,
   updateSpawnRegion,
 } from "./querySpawnRegion";
+import { getAllSettled } from "../util/getAllSettled";
 
 /**
+- getResource
+- getAllResources
 - getResourceForSpawnedResourceInSpawnRegion
 - getResourcesForSpawnRegion
 - getSpawnedResourcesForSpawnRegion
@@ -43,6 +45,22 @@ export const getResource = async (
 ) => {
   return await prismaClient.resource.findUniqueOrThrow({
     where: { id: resourceId },
+  });
+};
+
+/**
+ * ### Gets all Resources.
+ * This is strictly the Resource schema (not SpawnedResource or variants)
+ * @param prismaClient
+ * @returns
+ */
+export const getResources = async (
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  return await prismaClient.resource.findMany({
+    include: {
+      resourceRarity: true,
+    },
   });
 };
 
@@ -155,8 +173,6 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
     );
   }
 
-  let trxResult: SpawnRegionWithResourcesPartial;
-
   // Get the spawn region and its current (prior) resources
   const { resources: _priorResources, ...rest } =
     await getSpawnRegionWithResources(spawnRegionId);
@@ -165,20 +181,42 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
   );
   const spawnRegion: SpawnRegion = rest;
 
-  try {
-    trxResult = await prisma.$transaction(async (trx) => {
-      // * - - - - - - - START TRANSACTION - - - - - - - -
-
-      /* If a SpawnRegion's `reset_date` is stale/overdue, then repopulate a fresh
+  /* If a SpawnRegion's `reset_date` is stale/overdue, then repopulate a fresh
       set of spawned resources.
       */
+  if (priorResources.length === 0 || isSpawnRegionStale(spawnRegion)) {
+    // We do some things outside of the transaction to limit time in the transaction
+    // * i.e. these things may make database queries but don't mutate (nothing to roll back)
 
-      if (priorResources.length === 0 || isSpawnRegionStale(spawnRegion)) {
+    // Make some new spawned resource models
+    let spawnedResourceModels: Prisma.SpawnedResourceCreateInput[];
+    try {
+      spawnedResourceModels = await generateSpawnedResourceModelsForSpawnRegion(
+        spawnRegion,
+        [
+          config.min_resources_per_spawn_region,
+          config.max_resources_per_spawn_region,
+        ],
+        config.resource_h3_resolution,
+      );
+      if (spawnedResourceModels.length === 0) {
+        throw new Error("Unexpected error, 0 spawnedResourceModels returned");
+      }
+    } catch (err) {
+      throw err;
+    }
+
+    let trxResult: SpawnRegionWithResourcesPartial;
+
+    try {
+      trxResult = await prisma.$transaction(async (trx) => {
+        // * - - - - - - - START TRANSACTION - - - - - - - -
+
         logger.debug(`SpawnRegion ${spawnRegion.id} is stale`);
 
         /* Delete old/previous SpawnedResources for this SpawnRegion, if present. We
-        do not delete any rows from the Resources table (these are just model resources)
-        */
+          do not delete any rows from the Resources table (these are just model resources)
+          */
         const res_1 = await deleteSpawnedResourcesForSpawnRegion(
           spawnRegion.id,
           trx,
@@ -188,17 +226,6 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
         if (priorResources.length > 0 && res_1.count === 0) {
           throw new Error("Delete spawned resources failed");
         }
-
-        // Populate new spawned resources
-        const spawnedResourceModels =
-          generateSpawnedResourceModelsForSpawnRegion(
-            spawnRegion,
-            [
-              config.min_resources_per_spawn_region,
-              config.max_resources_per_spawn_region,
-            ],
-            config.resource_h3_resolution,
-          );
 
         const newSpawnedResources = await getAllSettled<SpawnedResource>(
           spawnedResourceModels.map((model) =>
@@ -231,31 +258,32 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
         }
 
         /* The SpawnRegion WAS stale/overdue, so we updated the resources.
-          Return the updated SpawnRegion        
-        */
+            Return the updated SpawnRegion        
+          */
         const updatedSpawnRegion: SpawnRegionWithResourcesPartial = {
           ...res_3,
           resources: newSpawnedResources,
         };
         return updatedSpawnRegion;
-      }
-      /*
+      });
+    } catch (error) {
+      logger.error(
+        error,
+        "Error within updateSpawnedResourcesForSpawnRegionTransaction",
+      );
+
+      // Any transaction query should be automatically rolled-back
+      throw error;
+    }
+    return trxResult;
+  } else {
+    /*
       The SpawnRegion was not stale/overdue, so we didn't change anything.
       Return a copy of the original
       */
-      return {
-        ...spawnRegion,
-        resources: priorResources,
-      } as SpawnRegionWithResourcesPartial;
-    });
-  } catch (error) {
-    logger.error(
-      error,
-      "Error within updateSpawnedResourcesForSpawnRegionTransaction",
-    );
-
-    // Any transaction query should be automatically rolled-back
-    throw error;
+    return {
+      ...spawnRegion,
+      resources: priorResources,
+    } as SpawnRegionWithResourcesPartial;
   }
-  return trxResult;
 };

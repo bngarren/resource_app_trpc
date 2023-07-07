@@ -24,7 +24,7 @@ RUN npm ci --omit=dev
 ### BUILD TARGET - for compiling ###
 FROM base as build
 WORKDIR /app
-RUN npm install typescript -D
+RUN npm install --save-dev typescript
 # Copy prisma schema
 COPY prisma ./prisma/
 # Copy .env file
@@ -35,9 +35,13 @@ COPY . .
 # Run the build script to compile the TypeScript code
 RUN npm run build
 
+
 ### STAGING TARGET ###
 FROM base as staging
 WORKDIR /app
+
+ENV NODE_ENV staging
+
 # Copy over the compiled code and package*.json files from the build stage
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/package*.json ./
@@ -64,6 +68,8 @@ EXPOSE 2024
 ### TESTING TARGET ###
 FROM base as testing
 WORKDIR /app
+
+ENV NODE_ENV test
 
 # Install dev dependencies
 RUN npm install -D

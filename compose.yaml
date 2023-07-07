@@ -17,6 +17,8 @@ services:
     env_file:
       - .env.common
       - .env.staging
+    volumes:
+      - ./logs:/app/logs # Map the logs directory
   app_testing:
     container_name: app_testing
     build:

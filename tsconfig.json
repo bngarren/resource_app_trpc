@@ -15,6 +15,6 @@
     "lib": ["esnext"],
     "moduleResolution": "Node"
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "seed/**/*", "prisma/seed.ts"],
   "exclude": ["node_modules"]
 }

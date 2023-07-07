@@ -1,15 +1,16 @@
+import config from "./config";
 import { protectedProcedure, publicProcedure, router } from "./trpc/trpc";
 import express from "express";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import cors from "cors";
 import { createContext } from "./trpc/trpc";
-import config from "./config";
 import { logger } from "./logger/logger";
 import { prisma } from "./prisma";
 import https from "https";
 import http, { Server } from "http";
 import fs from "fs";
 import { scanRouter } from "./routers/scanRouter";
+import { userInventoryRouter } from "./routers/userInventoryRouter";
 
 const appRouter = router({
   greeting: publicProcedure.query(async () => {
@@ -34,6 +35,7 @@ const appRouter = router({
     return "You have received an authenticated endpoint!";
   }),
   scan: scanRouter.scan,
+  userInventory: userInventoryRouter,
 });
 
 // Export type router type signature,
@@ -123,7 +125,6 @@ async function main() {
   // The server_port in our config must distinguish our node environment
   // Usually HTTPS traffic is on 443
   server.listen(config.server_port, () => {
-    logger.info(message);
     logger.info(
       `Server start: ${startTime.toLocaleDateString()} at ${startTime.toLocaleTimeString()}`,
     );

@@ -58,6 +58,11 @@ export class TestSingleton {
   public idToken: string;
 
   /**
+   * The testUser's uid
+   */
+  public userId: string;
+
+  /**
    * A Promise which we can await to know when the singleton is initialized/ready
    */
   public ready: Promise<void>;
@@ -81,6 +86,7 @@ export class TestSingleton {
     const res = await signInTestUser();
     this.clientFbAuth = res.clientFbAuth;
     this.idToken = res.idToken;
+    this.userId = res.userUid;
   }
 
   public async teardown() {
