@@ -9,7 +9,7 @@ import {
 } from "../queries/queryResource";
 import { cellToChildren, getResolution } from "h3-js";
 import { SpawnedResourceWithResource } from "../types";
-import { logger } from "../logger/logger";
+import { rethrowWith } from "../util/rethrowWith";
 
 /**
  * ### Helper function for converting a SpawnedResourceWithResource back to a SpawnedResource type
@@ -179,58 +179,29 @@ export const generateSpawnedResourceModelsForSpawnRegion = async (
     Then we make spawned resource models from these (giving a spawn region and
     h3Index for the resource)
 
-    The following code is a bit lengthy because we are dealing with Promise.allSettled()
-    and handling the fulfilled or rejected promises for each attempt at creating a
-    spawned resource model. This is currently favored over Promise.all() so that we
-    can get the reject reason/error for why each operation failed. Either way,
-    the generateSpawnedResourceModelsForSpawnRegion() function should throw and 
-    not result in any subsequent database operation related to these spawned resource models.
-
   */
-
-  const results: PromiseSettledResult<Prisma.SpawnedResourceCreateInput>[] =
-    // Promise.allSettled will run all operations even if one rejects/throws
-    await Promise.allSettled(
-      selectedH3Indices.map(
-        async (selectedIndex): Promise<Prisma.SpawnedResourceCreateInput> => {
-          const resource = await getRandomResource();
-          return createSpawnedResourceModel(
-            spawnRegion.id,
-            selectedIndex,
-            resource.id,
-          );
-        },
-      ),
+  let spawnedResourceModels: Prisma.SpawnedResourceCreateInput[] = [];
+  try {
+    spawnedResourceModels = await Promise.all(
+      selectedH3Indices.map(async (selectedIndex) => {
+        const resource = await getRandomResource();
+        return createSpawnedResourceModel(
+          spawnRegion.id,
+          selectedIndex,
+          resource.id,
+        );
+      }),
     );
-
-  // Now we sift through the results and see which ones fufilled and which ones rejected
-  const spawnedResourceModels = results
-    .filter(
-      (r): r is PromiseFulfilledResult<Prisma.SpawnedResourceCreateInput> =>
-        r.status === "fulfilled",
-    )
-    .map((r) => r.value);
-  const errors: unknown[] = results
-    .filter((r): r is PromiseRejectedResult => r.status === "rejected")
-    .map((r) => r.reason);
-
-  // Safety check
-  // We want to throw an error if any one createSpawnedResourceModel failed because something
-  // might be corrupted and the others might be incorrect as well
-  if (
-    errors.length !== 0 ||
-    selectedH3Indices.length !== spawnedResourceModels.length
-  ) {
-    errors.forEach((err) => {
-      logger.error(
-        { err },
-        `Error occurred within generateSpawnedResourceModelsForSpawnRegion`,
-        spawnRegion,
+    if (selectedH3Indices.length !== spawnedResourceModels.length) {
+      throw new Error(
+        "Did not generate as many spawnedResourceModels as intended",
       );
-    });
-
-    throw new Error("Problem with generateSpawnedResourceModelsForSpawnRegion");
+    }
+  } catch (error) {
+    rethrowWith(
+      error,
+      "Problem within generateSpawnedResourceModelsForSpawnRegion",
+    );
   }
-
   return spawnedResourceModels;
 };

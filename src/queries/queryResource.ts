@@ -199,6 +199,9 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
         ],
         config.resource_h3_resolution,
       );
+      if (spawnedResourceModels.length === 0) {
+        throw new Error("Unexpected error, 0 spawnedResourceModels returned");
+      }
     } catch (err) {
       throw err;
     }
