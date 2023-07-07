@@ -43,7 +43,8 @@ while true; do
             docker-compose exec app_staging /bin/bash
             ;;
         2)
-            npx prisma migrate reset
+            docker-compose exec app_staging npx prisma migrate reset --skip-seed
+            docker-compose exec app_staging node dist/prisma/seed.js
             ;;
         3)
             docker-compose logs -t

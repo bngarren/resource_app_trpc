@@ -5,6 +5,9 @@ const prisma = new PrismaClient();
 
 async function main() {
   await setupBaseSeed(prisma);
+
+  const count = await prisma.resource.count();
+  logger.info(`Finished base seed. There are ${count} Resource rows.`);
 }
 
 main()

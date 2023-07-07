@@ -43,8 +43,6 @@ const testLogger = () => {
     stream,
   );
 
-  logger.info(`Started testLogger, writing to ${testLogPath}`);
-
   return logger;
 };
 
@@ -61,16 +59,12 @@ const stagingLogger = () => {
     flags: "a", // 'a' means appending (old data will be preserved)
   });
 
-  console.log(`Started stagingLogger, writing to ${stagingLogPath}`);
-
   const logger = pino(
     {
       level: config.log_level,
     },
     stream,
   );
-
-  logger.info(`Started stagingLogger, writing to ${stagingLogPath}`);
 
   return logger;
 };
