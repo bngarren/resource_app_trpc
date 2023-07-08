@@ -16,6 +16,7 @@
     "prisma:push": "dotenv -e .env.${NODE_ENV} -- npx prisma db push",
     "prisma:seed": "dotenv -e .env.${NODE_ENV} -- npx prisma db seed",
     "prisma:reset": "dotenv -e .env.${NODE_ENV} -- npx prisma migrate reset --skip-seed && npm run prisma:push && dotenv -e .env.${NODE_ENV} -- npx prisma db seed",
+    "heroku:prisma:migrate:deploy": "npx prisma migrate deploy",
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
     "build": "rm -rf dist && tsc",
