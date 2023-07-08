@@ -1,2 +1,2 @@
-release: npm run prisma:migrate:deploy
-web: node dist/main.js
+release: npm run heroku:prisma:migrate:deploy
+web: node dist/src/main.js
