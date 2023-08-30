@@ -1,10 +1,11 @@
 
 ## Package.json
 
-- **"prisma"** - Prisma's integrated seeding functionality expects a command in the "seed" key within this "prisma" key. **Seeding** populates the database with initial data for testing and development purposes, as well as staging, since some static data such as Resources for example, need to be present at runtime if the database has been reset
+- **"prisma"** - Prisma's integrated seeding functionality expects a command in the "seed" key within this "prisma" key. **Seeding** populates the database with initial data for testing and development purposes, as well as staging and production, since some static data such as Resources need to be present at runtime if the database has been reset
   - `"seed": "ts-node-dev --transpile-only prisma/seed.ts"`
-  - Uses ts-node-dev to compile the seed.ts to javascript and then run it
-  - `--transpile-only` means don't do typechecking, just transpiile it
+    - Uses ts-node-dev to compile the seed.ts to javascript and then run it
+    - `--transpile-only` means don't do typechecking, just transpiile it
+  - Refer to README in /seed
 
 ### Scripts
 #### Prisma scripts
@@ -149,5 +150,32 @@ We prefix each prisma related script with `dotenv -e .env.${NODE_ENV}` so that t
 - The EXPOSE instruction in the Dockerfile and the ports key in your docker-compose.yml file are used to expose ports from the Docker container to the host machine.
 - In our case, EXPOSE 2024 in the Dockerfile is indicating that the application inside the Docker container will be listening on port 2024. (This EXPOSE command doesn't actually do anything) The port is only exposed to other Docker containers, not to the host machine.
 - The ports key in compose.yaml is what actually maps this port to a port on the host machine. The line - "2024:2024" under ports is mapping port 2024 from the Docker container to port 2024 on the host machine. This means that the application will be accessible on localhost:2024 on the host machine.
+
+## Heroku Deployment
+
+- We are using a Heroku pipeline setup which can enable us to deploy different app stages in the future
+- Currently, only deploying 1 heroku app as our "development" build and development environment. This is the original "resource-app-backend" named app on Heroku. It is setup to use heroku buildpacks to compile the typescript and uses NODE_ENV=development
+- We only have 1 heroku postgres database, so it is being used for development currently. Will have to figure out how to handle staging/production builds
+  - **One issue that will arise**: Seeding the staging/production database. Though this would happening infrequently (much less for production), currently we rely on typescript to perform the seeding, i.e. prisma db seed will call "ts-node-dev --transpile-only prisma/seed.ts". This will not work in env's without typescript. Refer to the README in /seed for details about seeding.
+
+### Development
+- The resource-app-backend app is set to auto-deploy on every push to our github development branch.
+- Our app only have 1 Procfile and it currently runs:
+  ```
+  release: npm run heroku:prisma:migrate:deploy
+  web: node dist/src/main.js
+  ```
+- Notably, 'migrate deploy' only applies new migrations; it does not look for schema drift, reset the data, or apply seeds
+- We can run the following command to tell heroku to reset our heroku postgres db:
+  ```bash
+  heroku restart && heroku pg:reset
+  ```
+- Then we can manually call our prisma seeding:
+  ```bash
+  npx prisma db seed
+  ```
+
+  ### Staging/Production
+  - Not yet fleshed out for Heroku and part of the pipeline. I imagine we will need a separate database, at least for production. And the production code will not include typescript compilation, thus we have to figure out how to seed the database.
 
 

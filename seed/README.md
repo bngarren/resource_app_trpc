@@ -1,8 +1,15 @@
 # /seed
 
 ## Overview
-- The contents of this directory all relate to making database calls to seed the database
+- The contents of the /seed directory all relate to making database calls to seed the database
 - These modules are tightly coupled to using Prisma
+
+## Static Game Data
+- We are including in our "seeding" paradigm the insertion of static game data into whatever database is being used...usually after a hard reset of the database (most often in testing/development environments, some in staging, and infrequently in production).
+- This static data includes:
+    - Resource Rarity
+    - Resources
+- This data is currently hard coded into typescript files that are called from setupBaseSeed.ts
 
 ## Considerations
 - An alternative to seeding our static game data (rather than just seeding test/development data), is to write out raw SQL queries that could be run from bash scripts. This might make it easier to deploy a database in any given environment without being so tightly coupled to the typescript or transpiled javascript code that currently performs our seeding via Prisma.
