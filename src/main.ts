@@ -84,21 +84,22 @@ app.use(
 /*
  - - - - Create the HTTPS server - - - - 
 
-- In non-production (development, testing, staging), we will use a self-signed certificate and handle the
+- For local development/testing/etc, we will use a self-signed certificate and handle the
 HTTPS server ourselves
 
-- In a production (e.g. Heroku), we create a basic HTTP server, knowing that Heroku will handle the HTTPS and our
+- In a remotely deployed environment (e.g. Heroku), we create a basic HTTP server, knowing that Heroku will handle the HTTPS and our
 app will just listen on the port that Heroku provides
-  - If we deployed production code to somewhere else, we need to know if HTTPS is automatically handled or if we need
+  - If we ever deploy code to somewhere else, we need to know if HTTPS is automatically handled or if we need
   to get a signed cert from a trusted authority to use here...
 
 */
 let server: Server;
-if (process.env.NODE_ENV === "production") {
-  // In production, rely on the platform (like Heroku) to handle HTTPS
+if (!config.shouldCreateHTTPSServer) {
+  // In a remotely deployed setting, rely on the platform (like Heroku) to handle HTTPS,
+  // therefore, only make a basic HTTP server and don't worry about certs
   server = http.createServer(app);
 } else {
-  // In development, use a self-signed certificate for HTTPS
+  // In local development, use a self-signed certificate for HTTPS
   const privateKey = fs.readFileSync("resource_app_trpc_https.key");
   const certificate = fs.readFileSync("resource_app_trpc_https.cert");
   const credentials = { key: privateKey, cert: certificate };

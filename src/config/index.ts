@@ -40,8 +40,14 @@ if (!firebase_service_acct_key) {
 // * Test environment requires protected routes to pass authentication tests
 const shouldUseProtectedRoutes = node_env !== "development";
 
+// Plan to always use a HTTPS server. However, if deployed to Heroku, it will automatically
+// do this, so we just create a HTTP server in code and let Heroku do the rest.
+// We look for the env variable IS_REMOTE_HOST from Heroku to determine this
+const shouldCreateHTTPSServer = process.env.IS_REMOTE_HOST === "false" || true;
+
 export default {
   server_port: parseInt(process.env.PORT as string, 10) || 443, // default HTTPS port
+  shouldCreateHTTPSServer: shouldCreateHTTPSServer,
   node_env: node_env,
   log_level: process.env.LOG_LEVEL ?? "info",
   use_protected_routes: shouldUseProtectedRoutes,
