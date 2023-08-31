@@ -158,6 +158,16 @@ We prefix each prisma related script with `dotenv -e .env.${NODE_ENV}` so that t
 - We only have 1 heroku postgres database, so it is being used for development currently. Will have to figure out how to handle staging/production builds
   - **One issue that will arise**: Seeding the staging/production database. Though this would happening infrequently (much less for production), currently we rely on typescript to perform the seeding, i.e. prisma db seed will call "ts-node-dev --transpile-only prisma/seed.ts". This will not work in env's without typescript. Refer to the README in /seed for details about seeding.
 
+### Heroku Config Vars
+- These 'config vars' are injected into the app as environmental variables at runtime, i.e. process.env.VARIABLE.
+- Details
+  - **DATABASE_URL** - points to the remote database URL. Heroku manages this and can change it.
+  - **FIREBASE_SERVICE_ACCT_KEY** - private key used to authenticate with Google services, e.g. Firebase stuff
+  - **IS_REMOTE_HOST** - used as a flag (always true) so the app knows it is being run on Heroku. This is important for deciding whether to create a HTTPS server (local only) or just an HTTP server and let Heroku handle the HTTPS stuff
+  - **LOG_LEVEL** - can set the LOG_LEVEL (if local, this would be set in an .env file)
+  - **NODE_ENV** - the NODE env to run in. Since we use Heroku as a development server as well, this can be development. 
+  - **NPM_CONFIG_PRODUCTION** - settings this to false allows us to run Heroku according to the environment set in NODE_ENV, otherwise it defaults everything to 'production' and will prune devDependencies (which we don't want when in development as we need the typescript compiler and stuff)
+
 ### Development
 - The resource-app-backend app is set to auto-deploy on every push to our github development branch.
 - Our app only have 1 Procfile and it currently runs:
