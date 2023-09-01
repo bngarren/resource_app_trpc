@@ -282,6 +282,7 @@ describe("/scan", () => {
           location: expect.any(Array),
           distanceFromHarvestRegionCenter: expect.any(Number),
           userCanInteract: expect.any(Boolean),
+          data: expect.any(Object),
         }),
       ]),
       sortedCanInteractableIds: expect.any(Array),
