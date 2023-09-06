@@ -4,16 +4,44 @@ import {
   Resource,
   UserInventoryItem,
 } from "@prisma/client";
-import { getUserInventoryItemsByUserId } from "../queries/queryUserInventoryItem";
+import {
+  getUserInventoryItemsByUserId,
+  upsertUserInventoryItem,
+} from "../queries/queryUserInventoryItem";
 import { prisma } from "../prisma";
 import { InventoryItem, PlayerInventory } from "../types";
 import { logger } from "../logger/logger";
+import { getResourcesByIds } from "../queries/queryResource";
+import { getHarvestersByIds } from "../queries/queryHarvester";
 
+/**
+ * ### Gets all UserInventoryItems associated with a User
+ * @param userId
+ * @returns
+ */
 export const getUserInventoryItems = async (userId: string) => {
   return await getUserInventoryItemsByUserId(userId);
 };
 
 /**
+ * ### Adds a new or updates an existing user inventory item
+ * @param itemId The resourceId, componentId, or harvesterId
+ * @param itemType
+ * @param userId
+ * @param quantity
+ * @returns
+ */
+export const addOrUpdateUserInventoryItem = async (
+  itemId: string,
+  itemType: ItemType,
+  userId: string,
+  quantity: number,
+) => {
+  return await upsertUserInventoryItem(itemId, itemType, userId, quantity);
+};
+
+/**
+ * TODO: Need to refactor this to go through queryUserInventory instead of prisma calls directly...
  * ### Adds a resource to a user's inventory
  * - Resource and User must already exist in the database, thus we are using their respective id's
  * - This effectively creates a new UserInventoryItem in the database
@@ -59,7 +87,7 @@ export const addResourceToUserInventory = async (
 export const getPlayerInventoryFromUserInventoryItems = async (
   userInventoryItems: UserInventoryItem[],
 ): Promise<PlayerInventory> => {
-  // Collect the item IDs for each type
+  // Collect the item IDs for each item type
   const resourceIds = userInventoryItems
     .filter((item) => item.itemType === "RESOURCE")
     .map((item) => item.itemId);
@@ -71,13 +99,7 @@ export const getPlayerInventoryFromUserInventoryItems = async (
     .map((item) => item.itemId);
 
   // Query each table once to get the details for all items of each type
-  const resources = await prisma.resource.findMany({
-    where: {
-      id: {
-        in: resourceIds,
-      },
-    },
-  });
+  const resources = await getResourcesByIds(resourceIds);
 
   // TODO Need to implement components
   /* const components = await prisma.component.findMany({
@@ -88,13 +110,7 @@ export const getPlayerInventoryFromUserInventoryItems = async (
     },
   }); */
 
-  const harvesters = await prisma.harvester.findMany({
-    where: {
-      id: {
-        in: harvesterIds,
-      },
-    },
-  });
+  const harvesters = await getHarvestersByIds(harvesterIds);
 
   /* 
   Build each inventory item by combining data from a UserInventoryItem and the specific

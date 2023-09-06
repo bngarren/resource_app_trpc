@@ -12,3 +12,11 @@ export const scanRequestSchema = z.object({
 export const getUserInventoryRequestSchema = z.object({
   userUid: z.string(),
 });
+
+/**
+ * The input schema for the "/harvester.collect" endpoint
+ */
+export const harvesterCollectRequestSchema = z.object({
+  userUid: z.string(),
+  harvesterId: z.string(),
+});

@@ -11,6 +11,7 @@ import http, { Server } from "http";
 import fs from "fs";
 import { scanRouter } from "./routers/scanRouter";
 import { userInventoryRouter } from "./routers/userInventoryRouter";
+import { harvesterRouter } from "./routers/harvesterRouter";
 
 const appRouter = router({
   greeting: publicProcedure.query(async () => {
@@ -36,6 +37,7 @@ const appRouter = router({
   }),
   scan: scanRouter.scan,
   userInventory: userInventoryRouter,
+  harvester: harvesterRouter,
 });
 
 // Export type router type signature,

@@ -7,6 +7,7 @@ import { resourceRaritySeed } from "./resourceRaritySeed";
  * - Adds testUser@gmail.com with a real Firebase uid
  * - Adds 3 resources
  * - Adds 1 user inventory item (gold) for testUser
+ * - Adds 1 user inventory item (Basic harvester) for testUser
  * @param _prisma
  */
 export const setupBaseSeed = async (_prisma: PrismaClient) => {
@@ -48,6 +49,38 @@ export const setupBaseSeed = async (_prisma: PrismaClient) => {
       itemId: gold.id,
       itemType: "RESOURCE",
       quantity: 10,
+    },
+  });
+
+  // Create a new Harvester associated with our test user
+  // *setting it to a deployed state
+  const { id: harvesterId } = await _prisma.harvester.create({
+    data: {
+      name: "Basic Harvester",
+      deployedDate: new Date(),
+      h3Index: "8a2a30640907fff", // Longwood Park, Boston at h3 resolution 10
+      user: {
+        connect: {
+          id: testUser.id,
+        },
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  // now create the UserInventoryItem for the harvester
+  await _prisma.userInventoryItem.create({
+    data: {
+      user: {
+        connect: {
+          id: testUser.id,
+        },
+      },
+      itemId: harvesterId,
+      itemType: "HARVESTER",
+      quantity: 1,
     },
   });
 };

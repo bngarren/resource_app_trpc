@@ -92,7 +92,8 @@ model UserInventoryItem {
   itemType ItemType @map("item_type")
   quantity Int
 
-  @@unique([userId, itemId])
+  @@unique([userId, itemId]) // only 1 UserInventoryItem for a given user and itemId combo
+  // i.e., a user should not have 2 records in UserInventoryItem table for the same item
 }
 
 model Harvester {
@@ -102,8 +103,10 @@ model Harvester {
   userId          String    @map("user_id")
   deployedDate    DateTime? @map("deployed_date")
   metadata        Json      @default("{}") // includes energy efficiency, extraction rate, inventory max size, etc.
-  h3Index         String?   @map("h3_index") // deployment location
+  h3Index         String?   @map("h3_index") // deployment location. Should be size/resolution of harvest region. If null, not deployed
   initialEnergy   Int?      @map("initial_energy") // starting energy level
   energyStartTime DateTime? @map("energy_start_time") // start time of initial energy usage
   energyEndTime   DateTime? @map("energy_end_time") // expected end time for energy
+
+  @@unique([id, userId]) // only 1 user per harvester
 }

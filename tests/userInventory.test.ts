@@ -18,7 +18,7 @@ describe("/userInventory", () => {
   let userUid: string;
 
   beforeAll(() => {
-    logger.info("Starting test suite: /scan");
+    logger.info("Starting test suite: /userInventory");
     server = TestSingleton.getInstance().server;
     idToken = TestSingleton.getInstance().idToken;
     userUid = TestSingleton.getInstance().userId;
@@ -32,7 +32,7 @@ describe("/userInventory", () => {
     await resetPrisma();
   });
 
-  describe("/getUserInventory", () => {
+  describe("/userInventory.getUserInventory", () => {
     it("should return status code 400 (Bad Request) if missing user uid", async () => {
       const res = await authenticatedRequest(
         server,
@@ -95,7 +95,6 @@ describe("/userInventory", () => {
     });
 
     it("should return the all of the user's inventory items", async () => {
-      // The base seed should include 1 item (Resource, gold) for testUser
       // ! If the test fails, check the base seed
       const user = await prisma.user.findUniqueOrThrow({
         where: {
@@ -118,7 +117,7 @@ describe("/userInventory", () => {
 
       const data = getDataFromTRPCResponse<PlayerInventory>(res);
 
-      expect(data.items).toHaveLength(1);
+      expect(data.items).toHaveLength(actualUserInventoryItems.length);
 
       const actualUserInventoryItemIds = actualUserInventoryItems.map(
         (i) => i.id,
@@ -132,8 +131,8 @@ describe("/userInventory", () => {
     });
 
     it("should not return another user's inventory items", async () => {
-      // The base seed should include 1 item (Resource, gold) for testUser
-      // We need to add another user and userInventoryItem
+      // ! If the test fails, check the base seed
+      // We need to add another user and userInventoryItem (apart from the base testUser and items)
 
       const anotherUser = await prisma.user.create({
         data: {
@@ -149,9 +148,6 @@ describe("/userInventory", () => {
         anotherUser.id,
         1,
       );
-
-      // Ensure there are now 2 userinventoryitems
-      expect(prisma.userInventoryItem.findMany()).resolves.toHaveLength(2);
 
       const user = await prisma.user.findUniqueOrThrow({
         where: {
@@ -174,23 +170,6 @@ describe("/userInventory", () => {
         expect.arrayContaining(
           expect.objectContaining(anotherUserInventoryItem),
         ),
-      );
-
-      // The returned inventory item (wihtin PlayerInventory response)
-      const returnedInventoryItem = data.items[0];
-
-      // Expect that the UserInventoryItem associated with our test user (should only be one in the base seed) is the same
-      // item that was returned as the InventoryItem in PlayerInventory
-      expect(
-        prisma.userInventoryItem.findFirst({
-          where: {
-            userId: user.id,
-          },
-        }),
-      ).resolves.toEqual(
-        expect.objectContaining({
-          id: returnedInventoryItem.id,
-        }),
       );
     });
 

@@ -51,6 +51,10 @@ export const getResource = async (
 /**
  * ### Gets all Resources.
  * This is strictly the Resource schema (not SpawnedResource or variants)
+ *
+ * We include a join on the ResourceRarity table as this function is used when
+ * creating random resources (thus needs info on rarity, likelihood, etc.)
+ *
  * @param prismaClient
  * @returns
  */
@@ -60,6 +64,25 @@ export const getResources = async (
   return await prismaClient.resource.findMany({
     include: {
       resourceRarity: true,
+    },
+  });
+};
+
+/**
+ * ### Gets all Resources, by the provided Ids
+ * @param resourceIds
+ * @param prismaClient
+ * @returns
+ */
+export const getResourcesByIds = async (
+  resourceIds: string[],
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  return await prismaClient.resource.findMany({
+    where: {
+      id: {
+        in: resourceIds,
+      },
     },
   });
 };
