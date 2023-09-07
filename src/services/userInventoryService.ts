@@ -13,6 +13,8 @@ import { InventoryItem, PlayerInventory } from "../types";
 import { logger } from "../logger/logger";
 import { getResourcesByIds } from "../queries/queryResource";
 import { getHarvestersByIds } from "../queries/queryHarvester";
+import { getResource } from "./resourceService";
+import { getHarvester } from "./harvesterService";
 
 /**
  * ### Gets all UserInventoryItems associated with a User
@@ -73,6 +75,45 @@ export const addResourceToUserInventory = async (
 };
 
 /**
+ * ### Returns an InventoryItem from a UserInventoryItem model
+ * This converts a server-side UserInventoryItem into a client-facing InventoryItem (including details
+ * about the specific item)
+ * @param userInventoryItem
+ * @returns
+ */
+export const getInventoryItemFromUserInventoryItem = async (
+  userInventoryItem: UserInventoryItem,
+) => {
+  let itemDetails: Resource | Harvester | undefined;
+
+  // Must switch on itemType to know which table to look up with itemId
+  switch (userInventoryItem.itemType) {
+    case ItemType.RESOURCE:
+      itemDetails = await getResource(userInventoryItem.itemId);
+      break;
+    case ItemType.COMPONENT:
+      break; // TODO
+    case ItemType.HARVESTER:
+      itemDetails = await getHarvester(userInventoryItem.itemId);
+      break;
+  }
+
+  if (!itemDetails) {
+    logger.error(
+      `Failed to get associated itemDetails for userInventoryItem (${userInventoryItem.id}) with itemId (${userInventoryItem.itemId})`,
+    );
+  }
+
+  return {
+    id: userInventoryItem.id,
+    name: itemDetails?.name ?? "error",
+    type: userInventoryItem.itemType,
+    quantity: userInventoryItem.quantity,
+    metadata: itemDetails?.metadata ?? "error",
+  } as InventoryItem;
+};
+
+/**
  * ### Assembles a PlayerInventory object from the UserInventoryItems associated with a User
  * - UserInventoryItems are the database representation of a user "owning" a certain item (i.e., resource, component, harvester, etc.)
  * - An InventoryItem is the client-facing representation, which is held within a PlayerInventory
@@ -119,6 +160,7 @@ export const getPlayerInventoryFromUserInventoryItems = async (
   const items = userInventoryItems.map((userInventoryItem) => {
     let itemDetails: Resource | Harvester | undefined;
 
+    // Must switch on itemType to know which table to look up with itemId
     switch (userInventoryItem.itemType) {
       case ItemType.RESOURCE:
         itemDetails = resources.find((r) => r.id === userInventoryItem.itemId);

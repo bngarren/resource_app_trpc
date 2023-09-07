@@ -33,13 +33,14 @@ import { getAllSettled } from "../util/getAllSettled";
 
 /**
  * ### Gets a Resource, by id.
+ * **Throws** error if Resource is not found.
  * This is strictly the Resource schema (not SpawnedResource or variants)
  * @param resourceId
  * @param spawnRegionId
  * @param prismaClient
  * @returns
  */
-export const getResource = async (
+export const getResourceById = async (
   resourceId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {

@@ -1,6 +1,9 @@
 import { Harvester } from "@prisma/client";
 import { getHarvesterById } from "../queries/queryHarvester";
-import { addOrUpdateUserInventoryItem } from "./userInventoryService";
+import {
+  addOrUpdateUserInventoryItem,
+  getInventoryItemFromUserInventoryItem,
+} from "./userInventoryService";
 import { prisma } from "../prisma";
 
 /**
@@ -27,7 +30,7 @@ export const isHarvesterDeployed = (harvester: Harvester) => {
 };
 
 /**
- *
+ * ### handleCollect
  * ! TODO: In Progress.
  * - Find the HarvestOperations associated with this Harvester
  * - Calculate the amount of resources harvested
@@ -38,7 +41,7 @@ export const isHarvesterDeployed = (harvester: Harvester) => {
  */
 export const handleCollect = async (userId: string, harvesterId: string) => {
   /*
-    Let's pretend the Harvester has a HarvestOperation that reports 10 of Gold
+    Let's pretend the Harvester has a HarvestOperation that reports 50 of Gold
     */
   // Update the UserInventoryItem table to add or update this Resource for this user
   // !EXPERIMENTAL - using test data for now
@@ -58,5 +61,13 @@ export const handleCollect = async (userId: string, harvesterId: string) => {
     throw Error("Error in handleCollect");
   }
 
-  await addOrUpdateUserInventoryItem(copper.id, "RESOURCE", testUser.id, 50);
+  // Perform the user inventory update
+  const resultUserInventoryItem = await addOrUpdateUserInventoryItem(
+    copper.id,
+    "RESOURCE",
+    testUser.id,
+    50,
+  );
+  // Return a client facing InventoryItem
+  return await getInventoryItemFromUserInventoryItem(resultUserInventoryItem);
 };
