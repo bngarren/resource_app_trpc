@@ -107,6 +107,9 @@ CREATE UNIQUE INDEX "SpawnedResource_h3_index_key" ON "SpawnedResource"("h3_inde
 -- CreateIndex
 CREATE UNIQUE INDEX "UserInventoryItem_user_id_item_id_key" ON "UserInventoryItem"("user_id", "item_id");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "Harvester_id_user_id_key" ON "Harvester"("id", "user_id");
+
 -- AddForeignKey
 ALTER TABLE "Resource" ADD CONSTRAINT "Resource_resourceRarityLevel_fkey" FOREIGN KEY ("resourceRarityLevel") REFERENCES "ResourceRarity"("level") ON DELETE RESTRICT ON UPDATE CASCADE;
 

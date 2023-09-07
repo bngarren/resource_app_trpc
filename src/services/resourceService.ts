@@ -3,13 +3,23 @@ import selectRandom from "../util/selectRandom";
 import {
   createResource,
   createResources,
-  getResource,
+  getResourceById,
   getResources,
   getResourcesForSpawnRegion,
 } from "../queries/queryResource";
 import { cellToChildren, getResolution } from "h3-js";
 import { SpawnedResourceWithResource } from "../types";
 import { rethrowWith } from "../util/rethrowWith";
+
+/**
+ * ### Gets a single Resource
+ * **Throws** error if resource is not found.
+ * @param resourceId
+ * @returns
+ */
+export const getResource = async (resourceId: string) => {
+  return await getResourceById(resourceId);
+};
 
 /**
  * ### Helper function for converting a SpawnedResourceWithResource back to a SpawnedResource type
@@ -39,7 +49,7 @@ export const pruneSpawnedResourceWithResource = (
 export const extendSpawnedResource = async (
   spawnedResource: SpawnedResource,
 ): Promise<SpawnedResourceWithResource> => {
-  const res = await getResource(spawnedResource.resourceId);
+  const res = await getResourceById(spawnedResource.resourceId);
   return {
     ...spawnedResource,
     resource: res,
