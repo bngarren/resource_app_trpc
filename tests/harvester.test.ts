@@ -30,7 +30,7 @@ describe("/harvester", () => {
   describe("/harvester.deploy", () => {
     let testUser: User;
     let testHarvester: Harvester;
-    let harvestRegion: string;
+    const harvestRegion = "8a2a30640907fff"; // Longwood Park, Boston at h3 resolution 10
 
     // Setup testUser and testHarvester
     beforeEach(async () => {
@@ -51,9 +51,6 @@ describe("/harvester", () => {
       } else {
         testHarvester = testHarvesterResult;
       }
-
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      harvestRegion = testHarvester.h3Index!;
 
       // make the testHarvester not yet deployed
       await prisma.harvester.update({
