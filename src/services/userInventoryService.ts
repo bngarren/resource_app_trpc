@@ -5,6 +5,8 @@ import {
   UserInventoryItem,
 } from "@prisma/client";
 import {
+  deleteUserInventoryItem,
+  getUserInventoryItemByItemId,
   getUserInventoryItemsByUserId,
   upsertUserInventoryItem,
 } from "../queries/queryUserInventoryItem";
@@ -17,6 +19,24 @@ import { getResource } from "./resourceService";
 import { getHarvester } from "./harvesterService";
 
 /**
+ * ### Gets a UserInventoryItem from an itemId
+ * An itemType and userId is also required in order to locate the correct user's inventory item
+ *
+ * **This function should be used over the database-specific query `getUserInventoryItemByItemId()`**
+ * @param itemId
+ * @param itemType
+ * @param userId
+ * @returns
+ */
+export const getUserInventoryItemWithItemId = async (
+  itemId: string,
+  itemType: ItemType,
+  userId: string,
+) => {
+  return await getUserInventoryItemByItemId(itemId, itemType, userId);
+};
+
+/**
  * ### Gets all UserInventoryItems associated with a User
  * @param userId
  * @returns
@@ -27,6 +47,12 @@ export const getUserInventoryItems = async (userId: string) => {
 
 /**
  * ### Adds a new or updates an existing user inventory item
+ * TODO: if quantity is zero, should delete the user inventory item
+ *
+ *
+ * This function requires itemId, itemType, and userId in order to create a new
+ * UserInventoryItem, if necessary.
+ *
  * @param itemId The resourceId, componentId, or harvesterId
  * @param itemType
  * @param userId
@@ -40,6 +66,40 @@ export const addOrUpdateUserInventoryItem = async (
   quantity: number,
 ) => {
   return await upsertUserInventoryItem(itemId, itemType, userId, quantity);
+};
+
+/**
+ * ### Removes a UserInventoryItem from a user's inventory.
+ *
+ * This requires passing the unique `id` of the UserInventoryItem.
+ * If the id is not known, use `removeUserInventoryItemByItemId()`
+ *
+ * @param userInventoryItemId
+ * @returns
+ */
+export const removeUserInventoryItem = async (userInventoryItemId: string) => {
+  return await deleteUserInventoryItem(userInventoryItemId);
+};
+
+/**
+ * ### Removes a UserInventoryItem from a user's inventory
+ * #### Instead of using the `id` of the UserInventoryItem, it performs a lookup based on the itemId and itemType
+ * If you already know the `id`, should use `removeUserInventoryItem()`
+ * @param itemId
+ * @param itemType
+ * @param userId
+ */
+export const removeUserInventoryItemByItemId = async (
+  itemId: string,
+  itemType: ItemType,
+  userId: string,
+) => {
+  const userInventoryItem = await getUserInventoryItemWithItemId(
+    itemId,
+    itemType,
+    userId,
+  );
+  return await deleteUserInventoryItem(userInventoryItem.id);
 };
 
 /**

@@ -52,12 +52,13 @@ CREATE TABLE "Resource" (
 
 -- CreateTable
 CREATE TABLE "SpawnedResource" (
+    "id" TEXT NOT NULL,
     "resource_id" TEXT NOT NULL,
     "spawn_region_id" TEXT NOT NULL,
     "h3_index" TEXT NOT NULL,
     "h3_resolution" INTEGER NOT NULL,
 
-    CONSTRAINT "SpawnedResource_pkey" PRIMARY KEY ("h3_index","spawn_region_id")
+    CONSTRAINT "SpawnedResource_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -86,6 +87,19 @@ CREATE TABLE "Harvester" (
     CONSTRAINT "Harvester_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "HarvestOperation" (
+    "id" TEXT NOT NULL,
+    "harvester_id" TEXT NOT NULL,
+    "spawned_resource_id" TEXT NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "start_time" TIMESTAMP(3),
+    "end_time" TIMESTAMP(3),
+    "priorPeriodHarvested" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "HarvestOperation_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_firebase_uid_key" ON "User"("firebase_uid");
 
@@ -103,6 +117,9 @@ CREATE UNIQUE INDEX "Resource_url_key" ON "Resource"("url");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "SpawnedResource_h3_index_key" ON "SpawnedResource"("h3_index");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SpawnedResource_h3_index_spawn_region_id_key" ON "SpawnedResource"("h3_index", "spawn_region_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "UserInventoryItem_user_id_item_id_key" ON "UserInventoryItem"("user_id", "item_id");
@@ -124,3 +141,9 @@ ALTER TABLE "UserInventoryItem" ADD CONSTRAINT "UserInventoryItem_user_id_fkey" 
 
 -- AddForeignKey
 ALTER TABLE "Harvester" ADD CONSTRAINT "Harvester_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HarvestOperation" ADD CONSTRAINT "HarvestOperation_harvester_id_fkey" FOREIGN KEY ("harvester_id") REFERENCES "Harvester"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HarvestOperation" ADD CONSTRAINT "HarvestOperation_spawned_resource_id_fkey" FOREIGN KEY ("spawned_resource_id") REFERENCES "SpawnedResource"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
