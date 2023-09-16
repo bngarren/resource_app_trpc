@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
 
 /**
@@ -32,6 +33,38 @@ export const getHarvestersByIds = async (
       id: {
         in: harvesterIds,
       },
+    },
+  });
+};
+
+/**
+ * ### Gets all Harvesters owned by a user, by the userId
+ * @param userId
+ * @param prismaClient
+ * @returns
+ */
+export const getHarvestersByUserId = async (
+  userId: string,
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  return await prismaClient.harvester.findMany({
+    where: {
+      userId: userId,
+    },
+  });
+};
+
+export const updateHarvesterById = async (
+  harvesterId: string,
+  partialModel: Prisma.HarvesterUpdateInput,
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  return await prismaClient.harvester.update({
+    data: {
+      ...partialModel,
+    },
+    where: {
+      id: harvesterId,
     },
   });
 };

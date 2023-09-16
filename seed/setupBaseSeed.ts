@@ -57,8 +57,8 @@ export const setupBaseSeed = async (_prisma: PrismaClient) => {
   const { id: harvesterId } = await _prisma.harvester.create({
     data: {
       name: "Basic Harvester",
-      deployedDate: new Date(),
-      h3Index: "8a2a30640907fff", // Longwood Park, Boston at h3 resolution 10
+      deployedDate: null,
+      h3Index: null,
       user: {
         connect: {
           id: testUser.id,

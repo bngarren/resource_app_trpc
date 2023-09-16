@@ -1,15 +1,43 @@
+import * as h3 from "h3-js";
 import { Harvester, User } from "@prisma/client";
-import { harvesterCollectRequestSchema } from "../schema";
+import {
+  harvesterCollectRequestSchema,
+  harvesterDeployRequestSchema,
+} from "../schema";
 import { protectedProcedure, router } from "../trpc/trpc";
 import { getUserByUid } from "../services/userService";
 import { TRPCError } from "@trpc/server";
 import {
   getHarvester,
   handleCollect,
+  handleDeploy,
   isHarvesterDeployed,
 } from "../services/harvesterService";
+import config from "../config";
 
 export const harvesterRouter = router({
+  /**
+   * /harvester.deploy
+   */
+  deploy: protectedProcedure
+    .input(harvesterDeployRequestSchema)
+    .mutation(async ({ input }) => {
+      // validate h3 index
+      const isValid =
+        h3.getResolution(input.harvestRegion) === config.harvest_h3_resolution;
+
+      if (isValid === false) {
+        throw new TRPCError({
+          message: `harvesterRegion: ${input.harvestRegion} not valid or wrong resolution.`,
+          code: "NOT_FOUND",
+        });
+      }
+
+      // throws TRPCErrors
+      const result = await handleDeploy(input.harvesterId, input.harvestRegion);
+
+      return 200;
+    }),
   /***
    * /harvester.collect
    */

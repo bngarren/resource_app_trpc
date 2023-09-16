@@ -14,6 +14,14 @@ export const getUserInventoryRequestSchema = z.object({
 });
 
 /**
+ * The input schema for the "/harvester.deploy" endpoint
+ */
+export const harvesterDeployRequestSchema = z.object({
+  harvesterId: z.string(),
+  harvestRegion: z.string(), // h3 index
+});
+
+/**
  * The input schema for the "/harvester.collect" endpoint
  */
 export const harvesterCollectRequestSchema = z.object({

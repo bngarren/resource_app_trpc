@@ -21,7 +21,7 @@
     "lint:fix": "eslint --fix 'src/**/*.ts'",
     "build": "rm -rf dist && tsc",
     "heroku-postbuild": "echo heroku-postbuild",
-    "deploy:dev": "git push heroku development",
+    "deploy:dev": "git push heroku development:main",
     "deploy:master": "git push heroku master",
     "start": "NODE_ENV=PRODUCTION node dist/src/main.js",
     "start:staging": "NODE_ENV=STAGING node dist/src/main.js",
