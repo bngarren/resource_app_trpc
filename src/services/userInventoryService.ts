@@ -23,6 +23,8 @@ import { getHarvester } from "./harvesterService";
  * An itemType and userId is also required in order to locate the correct user's inventory item
  *
  * **This function should be used over the database-specific query `getUserInventoryItemByItemId()`**
+ *
+ * **Throws error** if not found
  * @param itemId
  * @param itemType
  * @param userId

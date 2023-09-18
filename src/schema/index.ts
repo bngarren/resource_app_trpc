@@ -25,6 +25,13 @@ export const harvesterDeployRequestSchema = z.object({
  * The input schema for the "/harvester.collect" endpoint
  */
 export const harvesterCollectRequestSchema = z.object({
-  userUid: z.string(),
+  userUid: z.string(), // TODO: is userUid needed? We could assume the harvester owner is collecting..,
+  harvesterId: z.string(),
+});
+
+/**
+ * The input schema for the "/harvester.reclaim" endpoint
+ */
+export const harvesterReclaimRequestSchema = z.object({
   harvesterId: z.string(),
 });

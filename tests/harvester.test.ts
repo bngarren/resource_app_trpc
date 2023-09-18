@@ -4,8 +4,14 @@ import { Server } from "http";
 import { logger } from "../src/logger/logger";
 import { prisma } from "../src/prisma";
 import { Harvester, User, UserInventoryItem } from "@prisma/client";
-import { handleDeploy } from "../src/services/harvesterService";
-import { getUserInventoryItems } from "../src/services/userInventoryService";
+import {
+  handleDeploy,
+  isHarvesterDeployed,
+} from "../src/services/harvesterService";
+import {
+  getUserInventoryItemWithItemId,
+  getUserInventoryItems,
+} from "../src/services/userInventoryService";
 
 describe("/harvester", () => {
   let server: Server;
@@ -305,7 +311,7 @@ describe("/harvester", () => {
       expect(res.statusCode).toBe(403);
     });
 
-    it("should return status code 500 (Internal Error) if harvester is not deployed", async () => {
+    it("should return status code 409 (Conflict) if harvester is not deployed", async () => {
       const harvester = await prisma.harvester.findFirst();
 
       if (!harvester) {
@@ -331,7 +337,144 @@ describe("/harvester", () => {
         idToken,
         { userUid: userUid, harvesterId: harvester.id },
       );
-      expect(res.statusCode).toBe(500);
+      expect(res.statusCode).toBe(409);
+    });
+  });
+
+  describe("/harvester.reclaim", () => {
+    let testUser: User;
+    let testHarvester: Harvester;
+    const harvestRegion = "8a2a30640907fff"; // Longwood Park, Boston at h3 resolution 10
+
+    // Setup testUser and testHarvester
+    beforeEach(async () => {
+      testUser = await prisma.user.findUniqueOrThrow({
+        where: {
+          email: "testUser@gmail.com",
+        },
+      });
+
+      const testHarvesterResult = await prisma.harvester.findFirst({
+        where: {
+          userId: testUser.id,
+        },
+      });
+
+      if (!testHarvesterResult) {
+        throw Error("Failed test due to seed data problem.");
+      } else {
+        testHarvester = testHarvesterResult;
+      }
+
+      // make the testHarvester not yet deployed
+      await prisma.harvester.update({
+        data: {
+          deployedDate: null,
+          h3Index: null,
+        },
+        where: {
+          id: testHarvester.id,
+        },
+      });
+    });
+
+    it("should return status code 400 (Bad Request) if missing harvester id", async () => {
+      const res = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.reclaim",
+        idToken,
+        { harvesterId: null },
+      );
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it("should return status code 409 (Conflict) if harvester is not deployed", async () => {
+      // get current testHarvester
+      testHarvester = await prisma.harvester.findFirstOrThrow({
+        where: {
+          id: testHarvester.id,
+        },
+      });
+
+      // The testHarvester should start off not deployed
+      expect(isHarvesterDeployed(testHarvester)).toBe(false);
+
+      const res = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.reclaim",
+        idToken,
+        { harvesterId: testHarvester.id },
+      );
+
+      expect(res.statusCode).toBe(409);
+    });
+
+    it("should return status 200 for success, un-deploy the harvester, and return the harvester to the user's inventory", async () => {
+      // Harvester should start off in the user's inventory
+      expect(
+        getUserInventoryItemWithItemId(
+          testHarvester.id,
+          "HARVESTER",
+          testUser.id,
+        ),
+      ).resolves.not.toThrow();
+
+      // First, deploy the testHarvester
+      try {
+        await authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.deploy",
+          idToken,
+          { harvesterId: testHarvester.id, harvestRegion: harvestRegion },
+        );
+      } catch (error) {
+        console.error(
+          `Couldn't complete /harvester.reclaim test due to error with /harvester.deploy`,
+          error,
+        );
+      }
+
+      // Harvester (deployed) should no longer be in the user's inventory
+      expect(
+        getUserInventoryItemWithItemId(
+          testHarvester.id,
+          "HARVESTER",
+          testUser.id,
+        ),
+      ).rejects.toThrow();
+
+      const res = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.reclaim",
+        idToken,
+        { harvesterId: testHarvester.id },
+      );
+
+      // get current testHarvester
+      testHarvester = await prisma.harvester.findFirstOrThrow({
+        where: {
+          id: testHarvester.id,
+        },
+      });
+
+      // The testHarvester should not be deployed anymore
+      expect(isHarvesterDeployed(testHarvester)).toBe(false);
+
+      // Harvester should once again be in the user's inventory
+      expect(
+        getUserInventoryItemWithItemId(
+          testHarvester.id,
+          "HARVESTER",
+          testUser.id,
+        ),
+      ).resolves.not.toThrow();
+
+      expect(res.statusCode).toBe(200);
     });
   });
 });

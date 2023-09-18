@@ -156,3 +156,17 @@ export const handleCollect = async (userId: string, harvesterId: string) => {
   // TODO: will need to return an array of InventoryItems for multiple collected resources...
   return await getInventoryItemFromUserInventoryItem(resultUserInventoryItem);
 };
+
+export const handleReclaim = async (harvesterId: string) => {
+  // get the harvester's user
+  const { userId } = await getHarvesterById(harvesterId);
+
+  // remove the deployed status
+  await updateHarvesterById(harvesterId, {
+    deployedDate: null,
+    h3Index: null,
+  });
+
+  // add the harvester back to the user's (owner) inventory
+  await addOrUpdateUserInventoryItem(harvesterId, "HARVESTER", userId, 1);
+};

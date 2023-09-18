@@ -4,6 +4,8 @@ import { PrismaClientOrTransaction, prisma } from "../prisma";
 /**
  * ### Gets a UserInventoryItem, by id
  * If the `id` is not known, use `getUserInventoryItemByItemId()`
+ *
+ * **Throws error** if not found
  * @param userInventoryItemId
  * @param prismaClient
  * @returns
@@ -22,6 +24,8 @@ export const getUserInventoryItemById = async (
 /**
  * ### Gets a UserInventoryItem by lookup using the itemId, itemType, and userId
  * Use this if you don't know the `id` of the UserInventoryItem
+ *
+ * **Throws error** if not found
  * @param itemId
  * @param itemType
  * @param userId

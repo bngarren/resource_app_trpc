@@ -3,6 +3,7 @@ import { Harvester, User } from "@prisma/client";
 import {
   harvesterCollectRequestSchema,
   harvesterDeployRequestSchema,
+  harvesterReclaimRequestSchema,
 } from "../schema";
 import { protectedProcedure, router } from "../trpc/trpc";
 import { getUserByUid } from "../services/userService";
@@ -11,13 +12,16 @@ import {
   getHarvester,
   handleCollect,
   handleDeploy,
+  handleReclaim,
   isHarvesterDeployed,
 } from "../services/harvesterService";
 import config from "../config";
 
 export const harvesterRouter = router({
   /**
-   * /harvester.deploy
+   * ### /harvester.deploy
+   * Places a harvester in a harvestRegion. Removes the harvester from the user's inventory.
+   * Note, the harvester does not start until energy is added.
    */
   deploy: protectedProcedure
     .input(harvesterDeployRequestSchema)
@@ -39,7 +43,9 @@ export const harvesterRouter = router({
       return 200;
     }),
   /***
-   * /harvester.collect
+   * ### /harvester.collect
+   * Collects the resources from the harvester and puts them in the
+   * user's inventory.
    */
   collect: protectedProcedure
     .input(harvesterCollectRequestSchema)
@@ -90,7 +96,7 @@ export const harvesterRouter = router({
       if (!isDeployed) {
         throw new TRPCError({
           message: `harvester: ${input.harvesterId} is not deployed`,
-          code: "INTERNAL_SERVER_ERROR",
+          code: "CONFLICT",
         });
       }
 
@@ -101,5 +107,46 @@ export const harvesterRouter = router({
       // ! For now, we are just performing the UserInventoryItem update portion...
 
       const collectResult = handleCollect(user.id, harvester.id);
+    }),
+  /**
+   * ### /harvester.reclaim
+   * Returns the harvester to the user's inventory.
+   * This will also `collect` all resources in the harvester.
+   */
+  reclaim: protectedProcedure
+    .input(harvesterReclaimRequestSchema)
+    .mutation(async ({ input }) => {
+      // Get the harvester with this id
+      let harvester: Harvester;
+      try {
+        harvester = await getHarvester(input.harvesterId);
+      } catch (error) {
+        throw new TRPCError({
+          message: `harvester: ${input.harvesterId}`,
+          code: "NOT_FOUND",
+        });
+      }
+      // Verify that this harvester is currently deployed.
+      // We can't reclaim a harvester that isn't deployed. This shouldn't even be doable
+      // from the client side, but we still check here
+
+      let isDeployed;
+      try {
+        isDeployed = isHarvesterDeployed(harvester);
+      } catch (error) {
+        throw new TRPCError({
+          message: `harvester: ${input.harvesterId}`,
+          code: "NOT_FOUND",
+        });
+      }
+
+      if (!isDeployed) {
+        throw new TRPCError({
+          message: `harvester: ${input.harvesterId} is not deployed`,
+          code: "CONFLICT",
+        });
+      }
+
+      const res = await handleReclaim(harvester.id);
     }),
 });
