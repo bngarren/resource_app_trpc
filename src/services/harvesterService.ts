@@ -157,16 +157,31 @@ export const handleCollect = async (userId: string, harvesterId: string) => {
   return await getInventoryItemFromUserInventoryItem(resultUserInventoryItem);
 };
 
+/**
+ * ### Picks up the harvester and puts it back in the user's inventory
+ * - Will also perform `handleCollect()`, i.e. collect all resources in the harvester (HarvestOperations)
+ * and add those to the user's inventory
+ * @param harvesterId
+ */
 export const handleReclaim = async (harvesterId: string) => {
-  // get the harvester's user
+  // get the harvester's user (owner)
   const { userId } = await getHarvesterById(harvesterId);
 
-  // remove the deployed status
+  /**
+   * TODO: Need to calculate how much remaining energy and which energy item to return to the user
+   * Currently, just clearing the energy data on reclaim
+   */
+
+  // remove the deployed status and energy data from the harvester
   await updateHarvesterById(harvesterId, {
     deployedDate: null,
     h3Index: null,
+    initialEnergy: null,
+    energyStartTime: null,
+    energyEndTime: null,
+    energySourceId: null,
   });
 
-  // add the harvester back to the user's (owner) inventory
+  // add the harvester item back to the user's (owner) inventory
   await addOrUpdateUserInventoryItem(harvesterId, "HARVESTER", userId, 1);
 };

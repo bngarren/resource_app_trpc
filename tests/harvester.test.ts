@@ -12,6 +12,7 @@ import {
   getUserInventoryItemWithItemId,
   getUserInventoryItems,
 } from "../src/services/userInventoryService";
+import { updateHarvesterById } from "../src/queries/queryHarvester";
 
 describe("/harvester", () => {
   let server: Server;
@@ -475,6 +476,65 @@ describe("/harvester", () => {
       ).resolves.not.toThrow();
 
       expect(res.statusCode).toBe(200);
+    });
+
+    it("should clear/reset energy data for the reclaimed harvester", async () => {
+      // First, deploy the testHarvester
+      try {
+        await authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.deploy",
+          idToken,
+          { harvesterId: testHarvester.id, harvestRegion: harvestRegion },
+        );
+      } catch (error) {
+        console.error(
+          `Couldn't complete /harvester.reclaim test due to error with /harvester.deploy`,
+          error,
+        );
+      }
+
+      // Now manually add some energy data via updateHarvester
+      // TODO: could eventually use actual endpoint calls
+
+      const arcaneFlux = await prisma.resource.findUniqueOrThrow({
+        where: {
+          url: "arcane_flux",
+        },
+      });
+
+      await updateHarvesterById(testHarvester.id, {
+        initialEnergy: 100,
+        energyStartTime: new Date(),
+        energyEndTime: new Date(Date.now() + 3600 * 1000 * 24), // add 24 hours, not important...
+        energySourceId: arcaneFlux.id,
+      });
+
+      const res = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.reclaim",
+        idToken,
+        { harvesterId: testHarvester.id },
+      );
+
+      // get current testHarvester
+      testHarvester = await prisma.harvester.findFirstOrThrow({
+        where: {
+          id: testHarvester.id,
+        },
+      });
+
+      // confirm that energy data is removed
+      expect(testHarvester.initialEnergy).toBeFalsy();
+      expect(testHarvester.energyStartTime).toBeNull();
+      expect(testHarvester.energyEndTime).toBeNull();
+      expect(testHarvester.energySourceId).toBeNull();
+    });
+
+    it("should collect all resources in the harvester and add them to the user's inventory", async () => {
+      throw new Error("Not implemented");
     });
   });
 });

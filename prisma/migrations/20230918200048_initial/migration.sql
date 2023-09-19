@@ -83,6 +83,7 @@ CREATE TABLE "Harvester" (
     "initial_energy" INTEGER,
     "energy_start_time" TIMESTAMP(3),
     "energy_end_time" TIMESTAMP(3),
+    "energy_source_id" TEXT,
 
     CONSTRAINT "Harvester_pkey" PRIMARY KEY ("id")
 );

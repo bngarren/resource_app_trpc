@@ -108,6 +108,7 @@ model Harvester {
   initialEnergy     Int?               @map("initial_energy") // starting energy level
   energyStartTime   DateTime?          @map("energy_start_time") // start time of initial energy usage
   energyEndTime     DateTime?          @map("energy_end_time") // expected end time for energy
+  energySourceId    String?            @map("energy_source_id") // references a Resource id for the Arcane Energy source input
   HarvestOperations HarvestOperation[]
 
   @@unique([id, userId]) // only 1 user per harvester
