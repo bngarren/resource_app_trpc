@@ -1,5 +1,4 @@
 import * as h3 from "h3-js";
-import { SpawnRegion } from "@prisma/client";
 import { getAllSettled } from "../util/getAllSettled";
 import {
   updateSpawnRegion,
@@ -14,8 +13,9 @@ import {
 } from "../types";
 import config from "../config";
 import { v4 as uuid } from "uuid";
-import { getSpawnRegionsFromH3Indices } from "../queries/querySpawnRegion";
 import { logger } from "../logger/logger";
+import { getDistanceBetweenCells } from "../util/getDistanceBetweenCells";
+import { getSpawnRegionsAround } from "../util/getSpawnRegionsAround";
 
 export const handleScan = async (
   fromLocation: Coordinate,
@@ -39,14 +39,12 @@ export const handleScan = async (
     config.spawn_region_h3_resolution,
   );
 
-  /**
-   * Array of h3 indices that represent all the SpawnRegions included in the scan
-   */
-  const h3Group = h3.gridDisk(h3Index, scanDistance);
-
-  // Query the database for existing SpawnRegions
-  const existingSpawnRegions: SpawnRegion[] =
-    await getSpawnRegionsFromH3Indices(h3Group);
+  // Finds the h3 indices around the center scan region and any existing SpawnRegions associated with these.
+  //
+  // h3Group - all the h3 indices, including the center, that were 'scanned' at a distance of `config.scan_distance`
+  // existingSpawnRegions - the spawnRegions that exist in the database associated with the h3 indices in h3Group
+  const { h3Group, spawnRegions: existingSpawnRegions } =
+    await getSpawnRegionsAround(h3Index, config.scan_distance);
 
   // Missing regions - not present in the database
   // i.e., An array of h3Indexes that need to be added to db
@@ -136,10 +134,9 @@ export const handleScan = async (
         /**
          * The distance of the resource from the center of the harvestRegion (i.e the scan region), in **meters**
          */
-        const distanceFromHarvestRegionCenter = h3.greatCircleDistance(
-          resourceLatLngCenter,
-          h3.cellToLatLng(harvestRegion),
-          h3.UNITS.m,
+        const distanceFromHarvestRegionCenter = getDistanceBetweenCells(
+          r.h3Index,
+          harvestRegion,
         );
 
         const interactableResource: InteractableResource = {

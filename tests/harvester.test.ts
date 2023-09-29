@@ -1,5 +1,10 @@
+import * as h3 from "h3-js";
 import { TestSingleton } from "./TestSingleton";
-import { authenticatedRequest, resetPrisma } from "./testHelpers";
+import {
+  authenticatedRequest,
+  getDataFromTRPCResponse,
+  resetPrisma,
+} from "./testHelpers";
 import { Server } from "http";
 import { logger } from "../src/logger/logger";
 import { prisma } from "../src/prisma";
@@ -13,6 +18,7 @@ import {
   getUserInventoryItems,
 } from "../src/services/userInventoryService";
 import { updateHarvesterById } from "../src/queries/queryHarvester";
+import { ScanRequestOutput } from "../src/types/trpcTypes";
 
 describe("/harvester", () => {
   let server: Server;
@@ -221,6 +227,67 @@ describe("/harvester", () => {
 
       // should be gone after it has been deployed
       expect(hasTestHarvester(postDeploy_userInventory)).toBe(false);
+    });
+
+    it("should create new HarvestOperations for each nearby SpawnedResource", async () => {
+      // Scan at the harvest location first to ensure updated SpawnRegions and SpawnedResources
+      const latLng = h3.cellToLatLng(harvestRegion);
+      const scanRequest = {
+        userLocation: {
+          latitude: latLng[0],
+          longitude: latLng[1],
+        },
+      };
+      const res1 = await authenticatedRequest(
+        server,
+        "POST",
+        "/scan",
+        idToken,
+        scanRequest,
+      );
+
+      const data = getDataFromTRPCResponse<ScanRequestOutput>(res1);
+
+      // is a resource and user can interact
+      const interactableResources = data.interactables.filter(
+        (i) => i.type === "resource" && i.userCanInteract === true,
+      );
+
+      // Ensure that no harvest operations currently exist for harvester
+      const preDeploy_harvestOperations =
+        await prisma.harvestOperation.findMany({
+          where: {
+            harvesterId: testHarvester.id,
+          },
+        });
+
+      expect(preDeploy_harvestOperations).toHaveLength(0);
+
+      // Now deploy the testHarvester to the same location we just scanned
+      const res2 = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.deploy",
+        idToken,
+        {
+          harvesterId: testHarvester.id,
+          harvestRegion: harvestRegion,
+        },
+      );
+
+      console.log(getDataFromTRPCResponse(res2));
+
+      const postDeploy_harvestOperations =
+        await prisma.harvestOperation.findMany({
+          where: {
+            harvesterId: testHarvester.id,
+          },
+        });
+
+      // Should have make as many HarvestOperations as there were interactable resources within range (user_can_interact)
+      expect(postDeploy_harvestOperations).toHaveLength(
+        interactableResources.length,
+      );
     });
   });
 

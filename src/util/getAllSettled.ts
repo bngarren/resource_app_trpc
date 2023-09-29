@@ -2,7 +2,10 @@
  * Provides the result of a Promise.allSettled call on an
  * array of Promises, in a typesafe manner.
  *
- * E.g., Give the function an arr.map() that performs an asynchronous process, which then returns an array of promises, and it will process each async function concurrently, not stopping on errors/rejected promises (this is Promise.allSettled), and ultimately returning a Promise that is resolved when all the provided promises resolve or reject.
+ * E.g., Give the function an arr.map() that performs an asynchronous process,
+ * which then returns an array of promises, and it will process each async function concurrently,
+ * not stopping on errors/rejected promises (this is Promise.allSettled), and ultimately returning
+ * a Promise that is resolved when all the provided promises resolve or reject.
  *
  * Notably, prior to returning, it filters the PromiseFulfilledResult for only those
  * with a "fufilled" status and only returns the value (of the generic type T)

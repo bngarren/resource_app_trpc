@@ -40,7 +40,12 @@ export const harvesterRouter = router({
       // throws TRPCErrors
       const result = await handleDeploy(input.harvesterId, input.harvestRegion);
 
-      return 200;
+      if (result == null) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+        });
+      }
+      return result;
     }),
   /***
    * ### /harvester.collect

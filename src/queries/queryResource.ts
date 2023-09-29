@@ -113,6 +113,19 @@ export const getResourcesForSpawnRegion = async (
 };
 
 /**
+ * ### Gets a SpawnedResource, by id.
+ * **Throws** error if Resource is not found.
+ */
+export const getSpawnedResourceById = async (
+  spawnedResourceId: string,
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  return await prismaClient.resource.findUniqueOrThrow({
+    where: { id: spawnedResourceId },
+  });
+};
+
+/**
  * ### Gets the SpawnedResources associated with a given SpawnRegion
  *
  * This only returns `SpawnedResource[]`, not the custom `SpawnedResourceWithResource[]` type.

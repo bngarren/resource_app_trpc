@@ -1,4 +1,5 @@
-import { Harvester } from "@prisma/client";
+import { getAllSettled } from "./../util/getAllSettled";
+import { Harvester, SpawnedResource } from "@prisma/client";
 import {
   getHarvesterById,
   getHarvestersByUserId,
@@ -11,6 +12,12 @@ import {
 } from "./userInventoryService";
 import { prisma } from "../prisma";
 import { TRPCError } from "@trpc/server";
+import { createHarvestOperationsTransaction } from "../queries/queryHarvestOperation";
+import config from "../config";
+import { getSpawnRegionsAround } from "../util/getSpawnRegionsAround";
+import { getSpawnedResourcesForSpawnRegion } from "../queries/queryResource";
+import { getDistanceBetweenCells } from "../util/getDistanceBetweenCells";
+import { logger } from "../logger/logger";
 
 /**
  * ### Gets a Harvester
@@ -100,6 +107,7 @@ export const handleDeploy = async (
     });
   }
 
+  // Update the Harvester to show as deployed
   await updateHarvesterById(harvester.id, {
     deployedDate: new Date(),
     h3Index: harvestRegion,
@@ -111,6 +119,50 @@ export const handleDeploy = async (
     "HARVESTER",
     harvester.userId,
   );
+
+  // Create new harvest operations based on the interactable spawned resources near this harvester
+
+  /**
+   * Similar to handleScan, we find all the spawnRegions nearby the harvester
+   *
+   * TODO: The scan_distance is used to capture all the spawn regions that were also captured in the scan
+   * This distance isn't strictly accurate, we just want to encompass all possible resources for now, then
+   * we will filter them out based on how far they are from the harvestRegion center
+   */
+  const { spawnRegions } = await getSpawnRegionsAround(
+    harvestRegion,
+    config.scan_distance,
+  );
+
+  // Get spawned resources for each spawn region and filter by user_interact_distance (from config)
+  const harvestableSpawnedResources = await getAllSettled<SpawnedResource[]>(
+    spawnRegions.map((spawnRegion) => {
+      return getSpawnedResourcesForSpawnRegion(spawnRegion.id);
+    }),
+  ).then((res) =>
+    // take the array of arrays and flatten into single array and then filter for distance
+    res
+      .flat()
+      .filter(
+        (resource) =>
+          getDistanceBetweenCells(resource.h3Index, harvestRegion) <=
+          config.user_interact_distance,
+      ),
+  );
+
+  // Create a HarvestOperation for each nearby SpawnedResource
+  const harvestOperations = await createHarvestOperationsTransaction({
+    harvesterId,
+    spawnedResourceIds: harvestableSpawnedResources.map((i) => i.id),
+  });
+
+  // ! DEBUG
+  logger.debug(
+    harvestOperations,
+    `Created ${harvestOperations?.length} harvest operations within handleDeploy()`,
+  );
+
+  return harvestOperations;
 };
 
 /**
@@ -184,4 +236,35 @@ export const handleReclaim = async (harvesterId: string) => {
 
   // add the harvester item back to the user's (owner) inventory
   await addOrUpdateUserInventoryItem(harvesterId, "HARVESTER", userId, 1);
+};
+
+/**
+ * ### Creates new HarvestOperations for a Harvester based on given SpawnedResources
+ * @param harvesterId
+ * @param spawnedResourceIds
+ */
+const newHarvestOperationsForHarvester = async (
+  harvesterId: string,
+  spawnedResourceIds: string[],
+) => {
+  // Ensure there is at least 1 SpawnedResource to make 1 HarvestOperation
+  if (spawnedResourceIds.length < 1) {
+    throw new TRPCError({
+      message: `Cannot make new HarvestOperations with ${spawnedResourceIds.length} spawnedResources.`,
+      code: "INTERNAL_SERVER_ERROR",
+    });
+  }
+
+  const res = await createHarvestOperationsTransaction({
+    harvesterId,
+    spawnedResourceIds,
+  });
+
+  if (res === null) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+    });
+  } else {
+    return res;
+  }
 };
