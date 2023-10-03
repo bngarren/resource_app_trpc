@@ -105,7 +105,7 @@ model Harvester {
   deployedDate      DateTime?          @map("deployed_date") // the time the harvester was deployed to a harvestRegion
   metadata          Json               @default("{}") // includes energy efficiency, extraction rate, inventory max size, etc.
   h3Index           String?            @map("h3_index") // deployment location. Should be size/resolution of harvest region. If null, not deployed
-  initialEnergy     Int?               @map("initial_energy") // starting energy level
+  initialEnergy     Float              @map("initial_energy") @default(0.0) // starting energy level
   energyStartTime   DateTime?          @map("energy_start_time") // start time of initial energy usage
   energyEndTime     DateTime?          @map("energy_end_time") // expected end time for energy
   energySourceId    String?            @map("energy_source_id") // references a Resource id for the Arcane Energy source input

@@ -5,6 +5,21 @@ import {
   SpawnedResourceWithResource,
 } from "../types";
 
+export const getSpawnRegionBySpawnedResourceId = async (
+  spawnedResourceId: string,
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  const res = await prismaClient.spawnedResource.findUniqueOrThrow({
+    where: {
+      id: spawnedResourceId,
+    },
+    select: {
+      spawnRegion: true,
+    },
+  });
+  return res.spawnRegion;
+};
+
 export const createSpawnRegion = async (
   model: Prisma.SpawnRegionCreateInput,
   prismaClient: PrismaClientOrTransaction = prisma,

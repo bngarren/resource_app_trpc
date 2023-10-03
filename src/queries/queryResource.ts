@@ -50,6 +50,23 @@ export const getResourceById = async (
 };
 
 /**
+ * ### Gets a Resource, by url
+ * **Throws** error if Resource is not found.
+ * This is strictly the Resource schema (not SpawnedResource or variants)
+ * @param resourceUrl
+ * @param prismaClient
+ * @returns
+ */
+export const getResourceByUrl = async (
+  resourceUrl: string,
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  return await prismaClient.resource.findUniqueOrThrow({
+    where: { url: resourceUrl },
+  });
+};
+
+/**
  * ### Gets all Resources.
  * This is strictly the Resource schema (not SpawnedResource or variants)
  *

@@ -35,3 +35,16 @@ export const harvesterCollectRequestSchema = z.object({
 export const harvesterReclaimRequestSchema = z.object({
   harvesterId: z.string(),
 });
+
+/**
+ * The input schema for the "/harvester.addEnergy" endpoint
+ */
+export const harvesterAddEnergyRequestSchema = z.object({
+  harvesterId: z.string(),
+  energySourceId: z.string(),
+  amount: z.number().int().min(0),
+});
+
+export const arcaneEnergyResourceMetadataSchema = z.object({
+  energyEfficiency: z.number().min(0).max(1),
+});

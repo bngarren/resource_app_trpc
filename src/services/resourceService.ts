@@ -4,6 +4,7 @@ import {
   createResource,
   createResources,
   getResourceById,
+  getResourceByUrl,
   getResources,
   getResourcesForSpawnRegion,
 } from "../queries/queryResource";
@@ -12,13 +13,23 @@ import { SpawnedResourceWithResource } from "../types";
 import { rethrowWith } from "../util/rethrowWith";
 
 /**
- * ### Gets a single Resource
+ * ### Gets a single Resource, by ID
  * **Throws** error if resource is not found.
  * @param resourceId
  * @returns
  */
 export const getResource = async (resourceId: string) => {
   return await getResourceById(resourceId);
+};
+
+/**
+ * ### Gets a single Resource, by URL
+ * **Throws** error if resource is not found.
+ * @param resourceUrl
+ * @returns
+ */
+export const getResourceWithUrl = async (resourceUrl: string) => {
+  return await getResourceByUrl(resourceUrl);
 };
 
 /**

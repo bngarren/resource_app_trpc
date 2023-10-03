@@ -66,4 +66,6 @@ export default {
   harvest_h3_resolution: 10, // the size of the scan/harvest h3 cells
 
   user_interact_distance: 250, // meters
+
+  base_minutes_per_arcane_energy_unit: 60,
 };

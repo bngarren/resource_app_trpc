@@ -1,6 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, ResourceType } from "@prisma/client";
 import { resourcesSeed } from "./resourcesSeed";
 import { resourceRaritySeed } from "./resourceRaritySeed";
+import { arcaneEnergyResourceMetadataSchema } from "../src/schema";
 
 /**
  * ### Seeds the database (via the given Prisma client)
@@ -25,6 +26,25 @@ export const setupBaseSeed = async (_prisma: PrismaClient) => {
   });
 
   // Create some Resources
+
+  // first, verify the metadata schema
+  resourcesSeed.forEach((r) => {
+    switch (r.resourceType) {
+      case ResourceType.ARCANE_ENERGY:
+        const validationResult = arcaneEnergyResourceMetadataSchema.safeParse(
+          r.metadata,
+        );
+        if (!validationResult.success) {
+          throw new Error(
+            `Incorrect metadata for ${r.url} ${validationResult.error}`,
+          );
+        }
+        break;
+      default:
+        break;
+    }
+  });
+
   await _prisma.resource.createMany({
     data: resourcesSeed,
   });
@@ -53,7 +73,6 @@ export const setupBaseSeed = async (_prisma: PrismaClient) => {
   });
 
   // Create a new Harvester associated with our test user
-  // *setting it to a deployed state
   const { id: harvesterId } = await _prisma.harvester.create({
     data: {
       name: "Basic Harvester",

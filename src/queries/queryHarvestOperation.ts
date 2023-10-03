@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
 import { logger } from "../logger/logger";
+import { getSpawnRegionParentOfSpawnedResource } from "../services/spawnRegionService";
 
 export const createHarvestOperation = async (
   partialModel: Prisma.HarvestOperationCreateInput,
@@ -32,6 +33,11 @@ export const createHarvestOperationsTransaction = async (
       // Loop through each spawned resource and create a HarvestOperation
       return await Promise.all(
         input.spawnedResourceIds.map(async (spawnedResourceId) => {
+          // get the parent spawn region of this resource so we can get the reset_date
+          const spawnRegion = await getSpawnRegionParentOfSpawnedResource(
+            spawnedResourceId,
+          );
+
           return await createHarvestOperation(
             {
               harvester: {
@@ -44,6 +50,7 @@ export const createHarvestOperationsTransaction = async (
                   id: spawnedResourceId,
                 },
               },
+              endTime: spawnRegion.resetDate,
             },
             trx, // pass in the transaction client
           );

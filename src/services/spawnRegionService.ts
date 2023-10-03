@@ -1,6 +1,7 @@
 import {
   createSpawnRegion,
   createSpawnRegions,
+  getSpawnRegionBySpawnedResourceId,
   getSpawnRegionWithResources,
 } from "../queries/querySpawnRegion";
 import { Prisma } from "@prisma/client";
@@ -8,7 +9,14 @@ import { updateSpawnedResourcesForSpawnRegionTransaction } from "../queries/quer
 import { SpawnRegionWithResources } from "../types";
 import { logger } from "../logger/logger";
 
+// TODO: Probably not the best to just re-export a database method.
 export { getSpawnRegionsFromH3Indices as getRegionsFromH3Array } from "../queries/querySpawnRegion";
+
+export const getSpawnRegionParentOfSpawnedResource = async (
+  spawnedResourceId: string,
+) => {
+  return await getSpawnRegionBySpawnedResourceId(spawnedResourceId);
+};
 
 export const handleCreateSpawnRegion = async (
   spawnRegionModel: Prisma.SpawnRegionCreateInput,

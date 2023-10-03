@@ -80,7 +80,7 @@ CREATE TABLE "Harvester" (
     "deployed_date" TIMESTAMP(3),
     "metadata" JSONB NOT NULL DEFAULT '{}',
     "h3_index" TEXT,
-    "initial_energy" INTEGER,
+    "initial_energy" DOUBLE PRECISION NOT NULL DEFAULT 0.0,
     "energy_start_time" TIMESTAMP(3),
     "energy_end_time" TIMESTAMP(3),
     "energy_source_id" TEXT,

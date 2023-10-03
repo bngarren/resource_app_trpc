@@ -19,6 +19,21 @@ import {
 } from "../src/services/userInventoryService";
 import { updateHarvesterById } from "../src/queries/queryHarvester";
 import { ScanRequestOutput } from "../src/types/trpcTypes";
+import { getResourceByUrl } from "../src/queries/queryResource";
+import { arcaneEnergyResourceMetadataSchema } from "../src/schema";
+import config from "../src/config";
+import {
+  addDays,
+  addMinutes,
+  addSeconds,
+  hoursToMinutes,
+  isSameMinute,
+  isSameSecond,
+  minutesToSeconds,
+  subHours,
+  subSeconds,
+} from "date-fns";
+import { validateWithZod } from "../src/util/validateWithZod";
 
 describe("/harvester", () => {
   let server: Server;
@@ -149,7 +164,7 @@ describe("/harvester", () => {
       expect(res.statusCode).toBe(409);
     });
 
-    it("should return status code 409 (Conflict) if another harvester is already deployed to this location", async () => {
+    it("should return status code 409 (Conflict) if another harvester (by same user) is already deployed to this location", async () => {
       // make the additional harvester
       const otherHarvester = await prisma.harvester.create({
         data: {
@@ -248,7 +263,7 @@ describe("/harvester", () => {
 
       const data = getDataFromTRPCResponse<ScanRequestOutput>(res1);
 
-      // is a resource and user can interact
+      // is a resource and user can interact...These should be represented by HarvestOperations
       const interactableResources = data.interactables.filter(
         (i) => i.type === "resource" && i.userCanInteract === true,
       );
@@ -274,8 +289,6 @@ describe("/harvester", () => {
           harvestRegion: harvestRegion,
         },
       );
-
-      console.log(getDataFromTRPCResponse(res2));
 
       const postDeploy_harvestOperations =
         await prisma.harvestOperation.findMany({
@@ -602,6 +615,314 @@ describe("/harvester", () => {
 
     it("should collect all resources in the harvester and add them to the user's inventory", async () => {
       throw new Error("Not implemented");
+    });
+  });
+
+  describe("/harvester.addEnergy", () => {
+    let testUser: User;
+    let testHarvester: Harvester;
+    const harvestRegion = "8a2a30640907fff"; // Longwood Park, Boston at h3 resolution 10
+
+    // Setup testUser and testHarvester
+    beforeEach(async () => {
+      testUser = await prisma.user.findUniqueOrThrow({
+        where: {
+          email: "testUser@gmail.com",
+        },
+      });
+
+      const testHarvesterResult = await prisma.harvester.findFirst({
+        where: {
+          userId: testUser.id,
+        },
+      });
+
+      if (!testHarvesterResult) {
+        throw Error("Failed test due to seed data problem.");
+      } else {
+        testHarvester = testHarvesterResult;
+      }
+
+      // make the testHarvester deployed
+      const res = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.deploy",
+        idToken,
+        {
+          harvesterId: testHarvester.id,
+          harvestRegion: harvestRegion,
+        },
+      );
+    });
+
+    it("should return status code 400 (Bad Request) if harvester id, energySourceId, or amount is missing", async () => {
+      const res1 = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.addEnergy",
+        idToken,
+        { energySourceId: "test", amount: 0 },
+      );
+
+      expect(res1.statusCode).toBe(400);
+
+      const res2 = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.addEnergy",
+        idToken,
+        { harvesterId: testHarvester.id, amount: 0 },
+      );
+
+      expect(res2.statusCode).toBe(400);
+
+      const res3 = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.addEnergy",
+        idToken,
+        { harvesterId: testHarvester.id, energySourceId: "test" },
+      );
+
+      expect(res3.statusCode).toBe(400);
+    });
+
+    it("should return status code 409 (Conflict) if the added energy's type is not the same as what is already in the harvester", async () => {
+      // manually set the energy source type
+      await prisma.harvester.update({
+        where: {
+          id: testHarvester.id,
+        },
+        data: {
+          energySourceId: "fake-energy-source-id",
+        },
+      });
+
+      const res = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.addEnergy",
+        idToken,
+        {
+          harvesterId: testHarvester.id,
+          energySourceId: "another-energy-source-id",
+          amount: 10,
+        },
+      );
+
+      expect(res.statusCode).toBe(409);
+    });
+
+    it("should correctly add energy to a harvester without energy", async () => {
+      // verify harvester is deployed and without energy
+      const pre_TestHarvester = await prisma.harvester.findUniqueOrThrow({
+        where: {
+          id: testHarvester.id,
+        },
+      });
+
+      if (
+        !isHarvesterDeployed(pre_TestHarvester) ||
+        pre_TestHarvester.initialEnergy != 0
+      ) {
+        throw new Error(
+          `Problem with seeding harvester for this test (should be deployed and with initialEnergy 0): ${pre_TestHarvester.initialEnergy}`,
+        );
+      }
+
+      // choose the energy resource
+      const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+
+      const requestTime = new Date();
+
+      const amount = 10;
+      const res = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.addEnergy",
+        idToken,
+        {
+          harvesterId: testHarvester.id,
+          energySourceId: arcaneQuanta.id,
+          amount: amount,
+        },
+      );
+
+      const post_TestHarvester = await prisma.harvester.findUniqueOrThrow({
+        where: {
+          id: testHarvester.id,
+        },
+      });
+
+      expect(post_TestHarvester.initialEnergy).toBe(10);
+
+      // Get the metadata for the energy
+      // Validate and parse the metadata using Zod
+      const metadata = validateWithZod(
+        arcaneEnergyResourceMetadataSchema,
+        arcaneQuanta.metadata,
+        `metadata for arcane_quanta`,
+      );
+
+      // Expected energyEndTime calculation
+      const expectedEnergyEndTime = addMinutes(
+        requestTime,
+        amount *
+          metadata.energyEfficiency *
+          config.base_minutes_per_arcane_energy_unit,
+      );
+
+      // Check if the API came up with the same energyEndTime as this test did
+      const check = isSameMinute(
+        expectedEnergyEndTime,
+        post_TestHarvester.energyEndTime ?? 1,
+      );
+      expect(check).toBe(true);
+    });
+
+    it("should correctly add energy to a harvester that already has energy", async () => {
+      // choose the energy resource
+      const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+
+      // setup our test harvester to already have energy (running)
+      const initialEnergy = 10.0;
+      const hoursRunning = 3;
+      await prisma.harvester.update({
+        where: {
+          id: testHarvester.id,
+        },
+        data: {
+          initialEnergy: initialEnergy,
+          energyStartTime: subHours(new Date(), hoursRunning), // energy added 3 hours ago
+          energyEndTime: addDays(new Date(), 3), // pretend this energy will last for 3 days, not important for this test
+          energySourceId: arcaneQuanta.id,
+        },
+      });
+
+      // verify harvester is deployed and with some initialEnergy
+      const pre_TestHarvester = await prisma.harvester.findUniqueOrThrow({
+        where: {
+          id: testHarvester.id,
+        },
+      });
+
+      if (
+        !isHarvesterDeployed(pre_TestHarvester) ||
+        pre_TestHarvester.initialEnergy !== initialEnergy
+      ) {
+        throw new Error(
+          `Problem with seeding harvester for this test (should be deployed and with initialEnergy=10): ${pre_TestHarvester.initialEnergy}`,
+        );
+      }
+
+      let requestTime = new Date();
+
+      // Now add more units of energy to the harvester
+      let amount = 3;
+      const res = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.addEnergy",
+        idToken,
+        {
+          harvesterId: testHarvester.id,
+          energySourceId: arcaneQuanta.id,
+          amount: amount,
+        },
+      );
+
+      const post1_TestHarvester = await prisma.harvester.findUniqueOrThrow({
+        where: {
+          id: testHarvester.id,
+        },
+      });
+
+      // Get the metadata for the energy
+      // Validate and parse the metadata using Zod
+      const metadata = validateWithZod(
+        arcaneEnergyResourceMetadataSchema,
+        arcaneQuanta.metadata,
+        `metadata for arcane_quanta`,
+      );
+
+      // If initialEnergy of 10 units has run for 3 hours at 0.6 energyEfficiency (Arcane Quanta),
+      // this would leave 10units - 180 min/36 min per unit = 5 units remaining at the time that
+      // new energy is added. 5 + 3 = 8
+      const r =
+        Math.max(
+          0,
+          initialEnergy -
+            hoursToMinutes(hoursRunning) /
+              (config.base_minutes_per_arcane_energy_unit *
+                metadata.energyEfficiency),
+        ) + amount;
+      expect(post1_TestHarvester.initialEnergy - r).toBeLessThanOrEqual(0.01); // equal within 0.01
+
+      // the new energyEndTime should be based on the new initialEnergy
+      const e = addSeconds(
+        requestTime,
+        minutesToSeconds(
+          r *
+            (config.base_minutes_per_arcane_energy_unit *
+              metadata.energyEfficiency),
+        ),
+      );
+
+      expect(isSameSecond(e, post1_TestHarvester.energyEndTime ?? 1)).toBe(
+        true,
+      ); // the "?? 1" is just avoiding a null check here...
+
+      // * * * * * * * *
+      // Now we will manually set the energyStartTime to 15 seconds ago so that we can test what happens
+      // when we add another unit of energy in a short time frame
+
+      const secondsRunning = 15;
+      await prisma.harvester.update({
+        where: {
+          id: testHarvester.id,
+        },
+        data: {
+          energyStartTime: subSeconds(new Date(), secondsRunning), // pretend it has been at least 15 seconds
+        },
+      });
+
+      requestTime = new Date();
+
+      // Now add 1 more unit of energy to the harvester
+      amount = 1;
+      await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.addEnergy",
+        idToken,
+        {
+          harvesterId: testHarvester.id,
+          energySourceId: arcaneQuanta.id,
+          amount: amount,
+        },
+      );
+
+      const post2_TestHarvester = await prisma.harvester.findUniqueOrThrow({
+        where: {
+          id: testHarvester.id,
+        },
+      });
+
+      // If initialEnergy of 8 units has run for 15 seconds at 0.6 energyEfficiency (Arcane Quanta),
+      // this would leave 8units - 0.25 min/36 min per unit = 7.99 units remaining at the time that
+      // new energy is added. 7.99 + 1 = 8.99
+
+      const k =
+        Math.max(
+          0,
+          post1_TestHarvester.initialEnergy -
+            secondsRunning /
+              60.0 /
+              (config.base_minutes_per_arcane_energy_unit *
+                metadata.energyEfficiency),
+        ) + amount;
+      expect(post2_TestHarvester.initialEnergy - k).toBeLessThanOrEqual(0.01); // equal within 0.01
     });
   });
 });

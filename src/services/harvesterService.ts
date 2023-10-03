@@ -1,5 +1,11 @@
+import { arcaneEnergyResourceMetadataSchema } from "./../schema/index";
 import { getAllSettled } from "./../util/getAllSettled";
-import { Harvester, SpawnedResource } from "@prisma/client";
+import {
+  Harvester,
+  Resource,
+  ResourceType,
+  SpawnedResource,
+} from "@prisma/client";
 import {
   getHarvesterById,
   getHarvestersByUserId,
@@ -18,6 +24,9 @@ import { getSpawnRegionsAround } from "../util/getSpawnRegionsAround";
 import { getSpawnedResourcesForSpawnRegion } from "../queries/queryResource";
 import { getDistanceBetweenCells } from "../util/getDistanceBetweenCells";
 import { logger } from "../logger/logger";
+import { getResource } from "./resourceService";
+import { addMilliseconds, getTime } from "date-fns";
+import { validateWithZod } from "../util/validateWithZod";
 
 /**
  * ### Gets a Harvester
@@ -166,6 +175,133 @@ export const handleDeploy = async (
 };
 
 /**
+ * ### Updates the Harvester with additional energy of a specific type
+ * This will trigger an update of all the harvester's HarvestOperations based on the new
+ * energyEndTime
+ *
+ * It is crucial that we maintain floating point precision in these calculations
+ *
+ * #### Throws TRPC errors
+ * - If energySourceId doesn't locate a Resource in the database, by id - throws NOT_FOUND
+ * - If energySourceId doesn't represent an Arcane Energy Resource, by id - throws NOT_FOUND
+ * - If the resource metadata isn't valid with regards to our Zod schema, will throw generic Error
+ *
+ * @param _harvester - either pass the harvesterId or the Harvester
+ * @param amount
+ * @param energySourceId
+ */
+export const handleAddEnergy = async (
+  _harvester: string | Harvester,
+  amount: number,
+  energySourceId: string,
+) => {
+  /*
+  ! TODO: WIP
+  - [X] Based on the energy source type's metadata, calculate how long a unit of energy will last
+  - [X] Calculate the expected energy end time
+  - [X] Update the harvester with the energyStartTime (now), energyEndTime, and initialEnergy (amount)
+  - Run updateHarvestOperationsForHarvester(energyEndTime)
+  */
+
+  let energyResource: Resource;
+  try {
+    energyResource = await getResource(energySourceId);
+  } catch (error) {
+    throw new TRPCError({
+      message: `Couldn't find Resource with id=${energySourceId}`,
+      code: "NOT_FOUND",
+    });
+  }
+
+  // Check validity of this Resource (has to be an ARCANE_ENERGY resource type)
+  if (energyResource.resourceType !== ResourceType.ARCANE_ENERGY) {
+    throw new TRPCError({
+      message: `Resource with id=${energySourceId} is not an Arcane Energy type`,
+      code: "NOT_FOUND",
+    });
+  }
+
+  // Extract the metadata information from the resource.
+  //   We use Zod schema to verify that the metadata json returned from the database is what we expected
+  const metadata = validateWithZod(
+    arcaneEnergyResourceMetadataSchema,
+    energyResource.metadata,
+    `metadata for ${energyResource.url}`,
+  );
+
+  // Calculate minutesPerEnergyUnit
+  const minutesPerEnergyUnit =
+    config.base_minutes_per_arcane_energy_unit * metadata.energyEfficiency;
+
+  // Get the harvester (either from passed in Harvester or from harvesterId)
+  let harvester: Harvester;
+  if (typeof _harvester === "string") {
+    try {
+      harvester = await getHarvester(_harvester);
+    } catch (error) {
+      throw new TRPCError({
+        message: `harvester: ${_harvester}`,
+        code: "NOT_FOUND",
+      });
+    }
+  } else {
+    harvester = _harvester;
+  }
+
+  /* New energy start time is now.
+  - When energy is added to the harvester, we recalculate the initialEnergy and new
+  energyStartTime and energyEndTime
+  */
+  const newEnergyStartTime = new Date();
+
+  // If harvester already had energy, calculate the remaining amount
+  let remainingEnergy: number;
+  if (harvester.initialEnergy > 0) {
+    remainingEnergy = harvester.initialEnergy;
+
+    // If energy has been used (i.e., harvester has an energyStartTime), calculate this duration
+    if (harvester.energyStartTime != null) {
+      // Use milliseconds to get best resolution, e.g., user adds energy very quickly after last energyStartTime
+      const minutesLapsed =
+        (getTime(newEnergyStartTime) - getTime(harvester.energyStartTime)) /
+          60000 +
+        0.000001; // milliseconds to minutes
+
+      // Remaining energy is the initialEnergy minus what was used over the period of time
+      //  If it ran out already, this may be negative so we make it zero
+      remainingEnergy = Math.max(
+        0,
+        harvester.initialEnergy -
+          minutesLapsed / minutesPerEnergyUnit +
+          0.000001, // maintain float
+      );
+    }
+  } else {
+    remainingEnergy = 0.0;
+  }
+
+  // Calculate the new initialEnergy (remainingEnergy + addedEnergy)
+  const newInitialEnergy = remainingEnergy + amount;
+
+  // Calculate the newEnergyEndTime
+  const newEnergyEndTime = addMilliseconds(
+    newEnergyStartTime,
+    newInitialEnergy * minutesPerEnergyUnit * 60000.0,
+  );
+
+  // Update the harvester with new energy data
+  const res = await updateHarvesterById(harvester.id, {
+    initialEnergy: newInitialEnergy,
+    energyStartTime: newEnergyStartTime,
+    energyEndTime: newEnergyEndTime,
+  });
+
+  // Update each harvest operation with new energyEndTime
+
+  return res;
+};
+
+/**
  * ### handleCollect
  * ! TODO: In Progress.
  * - Find the HarvestOperations associated with this Harvester
@@ -228,7 +364,7 @@ export const handleReclaim = async (harvesterId: string) => {
   await updateHarvesterById(harvesterId, {
     deployedDate: null,
     h3Index: null,
-    initialEnergy: null,
+    initialEnergy: 0.0,
     energyStartTime: null,
     energyEndTime: null,
     energySourceId: null,

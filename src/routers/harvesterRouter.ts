@@ -3,6 +3,7 @@ import { Harvester, User } from "@prisma/client";
 import {
   harvesterCollectRequestSchema,
   harvesterDeployRequestSchema,
+  harvesterAddEnergyRequestSchema,
   harvesterReclaimRequestSchema,
 } from "../schema";
 import { protectedProcedure, router } from "../trpc/trpc";
@@ -12,6 +13,7 @@ import {
   getHarvester,
   handleCollect,
   handleDeploy,
+  handleAddEnergy,
   handleReclaim,
   isHarvesterDeployed,
 } from "../services/harvesterService";
@@ -153,5 +155,59 @@ export const harvesterRouter = router({
       }
 
       const res = await handleReclaim(harvester.id);
+    }),
+  addEnergy: protectedProcedure
+    .input(harvesterAddEnergyRequestSchema)
+    .mutation(async ({ input }) => {
+      // Get the harvester with this id
+      let harvester: Harvester;
+      try {
+        harvester = await getHarvester(input.harvesterId);
+      } catch (error) {
+        throw new TRPCError({
+          message: `harvester: ${input.harvesterId}`,
+          code: "NOT_FOUND",
+        });
+      }
+
+      // Verify that this harvester is currently deployed.
+      // We can't modify the energy of a harvester that isn't deployed.
+      // This shouldn't even be doable from the client side, but we still check here
+
+      let isDeployed;
+      try {
+        isDeployed = isHarvesterDeployed(harvester);
+      } catch (error) {
+        throw new TRPCError({
+          message: `harvester: ${input.harvesterId}`,
+          code: "NOT_FOUND",
+        });
+      }
+
+      if (!isDeployed) {
+        throw new TRPCError({
+          message: `harvester: ${input.harvesterId} is not deployed`,
+          code: "CONFLICT",
+        });
+      }
+
+      // Verify that the energy type being added is the same as what is already in the harvester, if present
+      if (
+        harvester.energySourceId != null &&
+        harvester.energySourceId !== input.energySourceId
+      ) {
+        throw new TRPCError({
+          message: "Cannot add energy of a different type to this harvester",
+          code: "CONFLICT",
+        });
+      }
+
+      const res = await handleAddEnergy(
+        harvester,
+        input.amount,
+        input.energySourceId ?? null,
+      );
+
+      return res;
     }),
 });

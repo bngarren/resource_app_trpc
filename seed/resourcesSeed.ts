@@ -51,22 +51,28 @@ export const resourcesSeed: Prisma.ResourceCreateManyInput[] = [
   {
     url: "arcane_flux",
     name: "Arcane Flux",
-    metadata: {},
+    metadata: {
+      energyEfficiency: 0.2,
+    },
     resourceType: ResourceType.ARCANE_ENERGY,
     resourceRarityLevel: ResourceRarityLevel.COMMON,
   },
   {
     url: "arcane_quanta",
     name: "Arcane Quanta",
-    metadata: {},
-    resourceType: ResourceType.ARCANE_ELEMENT,
+    metadata: {
+      energyEfficiency: 0.6,
+    },
+    resourceType: ResourceType.ARCANE_ENERGY,
     resourceRarityLevel: ResourceRarityLevel.EPIC,
   },
   {
     url: "arcane_radiance",
     name: "Arcane Radiance",
-    metadata: {},
-    resourceType: ResourceType.ARCANE_ELEMENT,
+    metadata: {
+      energyEfficiency: 0.8,
+    },
+    resourceType: ResourceType.ARCANE_ENERGY,
     resourceRarityLevel: ResourceRarityLevel.LEGENDARY,
   },
 ];
