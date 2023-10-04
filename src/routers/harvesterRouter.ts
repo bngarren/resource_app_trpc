@@ -18,6 +18,7 @@ import {
   isHarvesterDeployed,
 } from "../services/harvesterService";
 import config from "../config";
+import { logger } from "../logger/logger";
 
 export const harvesterRouter = router({
   /**
@@ -153,6 +154,8 @@ export const harvesterRouter = router({
           code: "CONFLICT",
         });
       }
+
+      logger.info(harvester, `Reclaiming harvester`);
 
       const res = await handleReclaim(harvester.id);
     }),

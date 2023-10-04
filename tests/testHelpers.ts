@@ -3,7 +3,7 @@ import { TRPCResponseData } from "../src/types/trpcTypes";
 import { prisma } from "../src/prisma";
 import config from "../src/config";
 import { Server } from "http";
-import request, { Test } from "supertest";
+import request, { Response, Test } from "supertest";
 import { setupBaseSeed } from "../seed/setupBaseSeed";
 
 /**
@@ -45,6 +45,14 @@ export const getDataFromTRPCResponse = <T>(response: SuperAgentResponse): T => {
     throw new Error("no data in response");
   }
   return response.body?.result?.data as T;
+};
+
+export const throwIfBadStatus = (response: Response) => {
+  if (!response.ok) {
+    throw new Error(`Bad API response: ${response.error}
+    ${response.text}
+    `);
+  }
 };
 
 /**

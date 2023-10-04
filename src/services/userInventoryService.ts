@@ -65,7 +65,7 @@ export const addOrUpdateUserInventoryItem = async (
   itemId: string,
   itemType: ItemType,
   userId: string,
-  quantity: number,
+  quantity = 1,
 ) => {
   return await upsertUserInventoryItem(itemId, itemType, userId, quantity);
 };

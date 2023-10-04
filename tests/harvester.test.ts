@@ -4,13 +4,14 @@ import {
   authenticatedRequest,
   getDataFromTRPCResponse,
   resetPrisma,
+  throwIfBadStatus,
 } from "./testHelpers";
 import { Server } from "http";
 import { logger } from "../src/logger/logger";
 import { prisma } from "../src/prisma";
 import { Harvester, User, UserInventoryItem } from "@prisma/client";
 import {
-  handleDeploy,
+  calculateRemainingEnergy,
   isHarvesterDeployed,
 } from "../src/services/harvesterService";
 import {
@@ -27,7 +28,6 @@ import {
   addMinutes,
   addSeconds,
   hoursToMinutes,
-  isSameMinute,
   isSameSecond,
   minutesToSeconds,
   subHours,
@@ -150,8 +150,16 @@ describe("/harvester", () => {
     });
 
     it("should return status code 409 (Conflict) if harvester has non-null deployedDate or h3Index (already deployed)", async () => {
-      // deploy it before we make our request
-      await handleDeploy(testHarvester.id, harvestRegion);
+      // simulate deployment before we make our request
+      await prisma.harvester.update({
+        where: {
+          id: testHarvester.id,
+        },
+        data: {
+          deployedDate: new Date(),
+          h3Index: harvestRegion,
+        },
+      });
 
       const res = await authenticatedRequest(
         server,
@@ -504,20 +512,15 @@ describe("/harvester", () => {
       ).resolves.not.toThrow();
 
       // First, deploy the testHarvester
-      try {
-        await authenticatedRequest(
-          server,
-          "POST",
-          "/harvester.deploy",
-          idToken,
-          { harvesterId: testHarvester.id, harvestRegion: harvestRegion },
-        );
-      } catch (error) {
-        console.error(
-          `Couldn't complete /harvester.reclaim test due to error with /harvester.deploy`,
-          error,
-        );
-      }
+
+      const d = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.deploy",
+        idToken,
+        { harvesterId: testHarvester.id, harvestRegion: harvestRegion },
+      );
+      throwIfBadStatus(d);
 
       // Harvester (deployed) should no longer be in the user's inventory
       expect(
@@ -528,13 +531,14 @@ describe("/harvester", () => {
         ),
       ).rejects.toThrow();
 
-      const res = await authenticatedRequest(
+      const r = await authenticatedRequest(
         server,
         "POST",
         "/harvester.reclaim",
         idToken,
         { harvesterId: testHarvester.id },
       );
+      throwIfBadStatus(r);
 
       // get current testHarvester
       testHarvester = await prisma.harvester.findFirstOrThrow({
@@ -555,49 +559,61 @@ describe("/harvester", () => {
         ),
       ).resolves.not.toThrow();
 
-      expect(res.statusCode).toBe(200);
+      expect(r.statusCode).toBe(200);
     });
 
-    it("should clear/reset energy data for the reclaimed harvester", async () => {
+    it("should clear/reset energy data for the reclaimed harvester and return remaining energy to user's inventory", async () => {
       // First, deploy the testHarvester
-      try {
-        await authenticatedRequest(
-          server,
-          "POST",
-          "/harvester.deploy",
-          idToken,
-          { harvesterId: testHarvester.id, harvestRegion: harvestRegion },
-        );
-      } catch (error) {
-        console.error(
-          `Couldn't complete /harvester.reclaim test due to error with /harvester.deploy`,
-          error,
-        );
-      }
+      const d = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.deploy",
+        idToken,
+        { harvesterId: testHarvester.id, harvestRegion: harvestRegion },
+      );
+      throwIfBadStatus(d);
 
-      // Now manually add some energy data via updateHarvester
-      // TODO: could eventually use actual endpoint calls
-
+      // Now add energy to harvester
       const arcaneFlux = await prisma.resource.findUniqueOrThrow({
         where: {
           url: "arcane_flux",
         },
       });
 
+      const metadata = validateWithZod(
+        arcaneEnergyResourceMetadataSchema,
+        arcaneFlux.metadata,
+        `metadata for arcane_flux`,
+      );
+
+      const initialEnergy = 10;
+
+      const h = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.addEnergy",
+        idToken,
+        {
+          harvesterId: testHarvester.id,
+          energySourceId: arcaneFlux.id,
+          amount: initialEnergy,
+        },
+      );
+      throwIfBadStatus(h);
+
+      // Manually back-date the Harvester's energyStartTime to simulate time has passed
       await updateHarvesterById(testHarvester.id, {
-        initialEnergy: 100,
-        energyStartTime: new Date(),
-        energyEndTime: new Date(Date.now() + 3600 * 1000 * 24), // add 24 hours, not important...
-        energySourceId: arcaneFlux.id,
+        energyStartTime: subHours(new Date(), 1), // mimic 1 hour ago
       });
 
-      const res = await authenticatedRequest(
+      const re = await authenticatedRequest(
         server,
         "POST",
         "/harvester.reclaim",
         idToken,
         { harvesterId: testHarvester.id },
       );
+      throwIfBadStatus(re);
 
       // get current testHarvester
       testHarvester = await prisma.harvester.findFirstOrThrow({
@@ -607,14 +623,33 @@ describe("/harvester", () => {
       });
 
       // confirm that energy data is removed
-      expect(testHarvester.initialEnergy).toBeFalsy();
+      expect(testHarvester.initialEnergy).toBeCloseTo(0);
       expect(testHarvester.energyStartTime).toBeNull();
       expect(testHarvester.energyEndTime).toBeNull();
       expect(testHarvester.energySourceId).toBeNull();
+
+      // Get user's inventory
+      const inv = await getUserInventoryItems(testHarvester.userId);
+      // const playerInv = await getPlayerInventoryFromUserInventoryItems(inv);
+      // console.log(playerInv);
+
+      const invResource = inv.find((i) => i.itemId === arcaneFlux.id);
+
+      if (invResource == null) throw new Error("Failed to reclaim energy");
+
+      // Calculate how much energy we expect remaining (that should be added to inventory)
+      const k = calculateRemainingEnergy(
+        initialEnergy,
+        60.0,
+        metadata.energyEfficiency,
+      );
+
+      // Expect the difference between our calculation and the server to be small
+      expect(invResource.quantity - k).toBeLessThanOrEqual(0.5);
     });
 
     it("should collect all resources in the harvester and add them to the user's inventory", async () => {
-      throw new Error("Not implemented");
+      throw new Error("Not fully implemented");
     });
   });
 
@@ -644,7 +679,7 @@ describe("/harvester", () => {
       }
 
       // make the testHarvester deployed
-      const res = await authenticatedRequest(
+      const d = await authenticatedRequest(
         server,
         "POST",
         "/harvester.deploy",
@@ -654,6 +689,7 @@ describe("/harvester", () => {
           harvestRegion: harvestRegion,
         },
       );
+      throwIfBadStatus(d);
     });
 
     it("should return status code 400 (Bad Request) if harvester id, energySourceId, or amount is missing", async () => {
@@ -748,6 +784,7 @@ describe("/harvester", () => {
           amount: amount,
         },
       );
+      throwIfBadStatus(res);
 
       const post_TestHarvester = await prisma.harvester.findUniqueOrThrow({
         where: {
@@ -774,7 +811,7 @@ describe("/harvester", () => {
       );
 
       // Check if the API came up with the same energyEndTime as this test did
-      const check = isSameMinute(
+      const check = isSameSecond(
         expectedEnergyEndTime,
         post_TestHarvester.energyEndTime ?? 1,
       );
@@ -831,6 +868,7 @@ describe("/harvester", () => {
           amount: amount,
         },
       );
+      throwIfBadStatus(res);
 
       const post1_TestHarvester = await prisma.harvester.findUniqueOrThrow({
         where: {
@@ -846,17 +884,15 @@ describe("/harvester", () => {
         `metadata for arcane_quanta`,
       );
 
-      // If initialEnergy of 10 units has run for 3 hours at 0.6 energyEfficiency (Arcane Quanta),
-      // this would leave 10units - 180 min/36 min per unit = 5 units remaining at the time that
+      // 5 units remaining at the time that
       // new energy is added. 5 + 3 = 8
       const r =
-        Math.max(
-          0,
-          initialEnergy -
-            hoursToMinutes(hoursRunning) /
-              (config.base_minutes_per_arcane_energy_unit *
-                metadata.energyEfficiency),
+        calculateRemainingEnergy(
+          initialEnergy,
+          hoursToMinutes(hoursRunning),
+          metadata.energyEfficiency,
         ) + amount;
+
       expect(post1_TestHarvester.initialEnergy - r).toBeLessThanOrEqual(0.01); // equal within 0.01
 
       // the new energyEndTime should be based on the new initialEnergy
@@ -914,14 +950,12 @@ describe("/harvester", () => {
       // new energy is added. 7.99 + 1 = 8.99
 
       const k =
-        Math.max(
-          0,
-          post1_TestHarvester.initialEnergy -
-            secondsRunning /
-              60.0 /
-              (config.base_minutes_per_arcane_energy_unit *
-                metadata.energyEfficiency),
+        calculateRemainingEnergy(
+          post1_TestHarvester.initialEnergy,
+          secondsRunning / 60.0,
+          metadata.energyEfficiency,
         ) + amount;
+
       expect(post2_TestHarvester.initialEnergy - k).toBeLessThanOrEqual(0.01); // equal within 0.01
     });
   });
