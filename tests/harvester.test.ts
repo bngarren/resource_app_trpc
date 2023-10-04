@@ -12,6 +12,7 @@ import { prisma } from "../src/prisma";
 import { Harvester, User, UserInventoryItem } from "@prisma/client";
 import {
   calculateRemainingEnergy,
+  getHarvestOperationsForHarvester,
   isHarvesterDeployed,
 } from "../src/services/harvesterService";
 import {
@@ -646,6 +647,57 @@ describe("/harvester", () => {
 
       // Expect the difference between our calculation and the server to be small
       expect(invResource.quantity - k).toBeLessThanOrEqual(0.5);
+    });
+
+    /**
+     * If there is a problem with this test, consider that a harvester is being
+     * deployed to a location with 0 nearby spawned resources and thus 0 harvest
+     * operations. May need to consider looping the scan/deploy setup until
+     * at least 1 harvest operation is created
+     */
+    it("should remove all harvest operations associated with the harvester", async () => {
+      const latLng = h3.cellToLatLng(harvestRegion);
+
+      // First, scan the area to generate new spawned resources
+      const s = await authenticatedRequest(server, "POST", "/scan", idToken, {
+        userLocation: {
+          latitude: latLng[0],
+          longitude: latLng[1],
+        },
+      });
+      throwIfBadStatus(s);
+
+      // Then, deploy the testHarvester
+      const d = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.deploy",
+        idToken,
+        { harvesterId: testHarvester.id, harvestRegion: harvestRegion },
+      );
+      throwIfBadStatus(d);
+
+      const pre_harvestOperations = await getHarvestOperationsForHarvester(
+        testHarvester.id,
+      );
+
+      expect(pre_harvestOperations.length).toBeGreaterThan(0);
+
+      // Now reclaim the harvester
+      const r = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.reclaim",
+        idToken,
+        { harvesterId: testHarvester.id },
+      );
+      throwIfBadStatus(r);
+
+      const post_harvestOperations = await getHarvestOperationsForHarvester(
+        testHarvester.id,
+      );
+
+      expect(post_harvestOperations.length).toBe(0);
     });
 
     it("should collect all resources in the harvester and add them to the user's inventory", async () => {

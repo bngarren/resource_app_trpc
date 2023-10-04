@@ -49,11 +49,10 @@ export const getUserInventoryItems = async (userId: string) => {
 
 /**
  * ### Adds a new or updates an existing user inventory item
- * TODO: if quantity is zero, should delete the user inventory item
- *
+ * - If item quantity is 0, this will remove the item from the user's inventory
  *
  * This function requires itemId, itemType, and userId in order to create a new
- * UserInventoryItem, if necessary.
+ * UserInventoryItem, if a new one needs to be created
  *
  * @param itemId The resourceId, componentId, or harvesterId
  * @param itemType
@@ -67,7 +66,11 @@ export const addOrUpdateUserInventoryItem = async (
   userId: string,
   quantity = 1,
 ) => {
-  return await upsertUserInventoryItem(itemId, itemType, userId, quantity);
+  if (quantity === 0) {
+    return await removeUserInventoryItemByItemId(itemId, itemType, userId);
+  } else {
+    return await upsertUserInventoryItem(itemId, itemType, userId, quantity);
+  }
 };
 
 /**

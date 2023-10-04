@@ -3,6 +3,22 @@ import { PrismaClientOrTransaction, prisma } from "../prisma";
 import { logger } from "../logger/logger";
 import { getSpawnRegionParentOfSpawnedResource } from "../services/spawnRegionService";
 
+/**
+ * ### Returns all harvest operations associated with this harvester
+ * - May return empty [] if no harvest operations are associated
+ * @param harvesterId
+ * @returns
+ */
+export const getHarvestOperationsForHarvesterId = async (
+  harvesterId: string,
+) => {
+  return await prisma.harvestOperation.findMany({
+    where: {
+      harvesterId: harvesterId,
+    },
+  });
+};
+
 export const createHarvestOperation = async (
   partialModel: Prisma.HarvestOperationCreateInput,
   prismaClient: PrismaClientOrTransaction = prisma,
@@ -65,4 +81,14 @@ export const createHarvestOperationsTransaction = async (
 
     return null; // Returns null if transaction failed
   }
+};
+
+export const deleteHarvestOperationsForHarvesterId = async (
+  harvesterId: string,
+) => {
+  return await prisma.harvestOperation.deleteMany({
+    where: {
+      harvesterId: harvesterId,
+    },
+  });
 };

@@ -19,7 +19,11 @@ import {
 } from "./userInventoryService";
 import { prisma } from "../prisma";
 import { TRPCError } from "@trpc/server";
-import { createHarvestOperationsTransaction } from "../queries/queryHarvestOperation";
+import {
+  createHarvestOperationsTransaction,
+  deleteHarvestOperationsForHarvesterId,
+  getHarvestOperationsForHarvesterId,
+} from "../queries/queryHarvestOperation";
 import config from "../config";
 import { getSpawnRegionsAround } from "../util/getSpawnRegionsAround";
 import { getSpawnedResourcesForSpawnRegion } from "../queries/queryResource";
@@ -73,6 +77,27 @@ export const getDeployedHarvestersForUser = async (userId: string) => {
  */
 export const isHarvesterDeployed = (harvester: Harvester) => {
   return harvester.deployedDate != null && harvester.h3Index != null;
+};
+
+/**
+ * ### Returns all harvest operations for a harvester
+ * - May return empty []
+ * @param harvesterId
+ * @returns
+ */
+export const getHarvestOperationsForHarvester = async (harvesterId: string) => {
+  return await getHarvestOperationsForHarvesterId(harvesterId);
+};
+
+/**
+ * ### Removes all harvest operations associated with a harvester
+ * @param harvesterId
+ * @returns
+ */
+export const removeHarvestOperationsForHarvester = async (
+  harvesterId: string,
+) => {
+  return await deleteHarvestOperationsForHarvesterId(harvesterId);
 };
 
 /**
@@ -468,7 +493,10 @@ export const handleReclaim = async (harvesterId: string) => {
   );
 
   // TODO: need to perform handleCollect() to get all resources from harvester
-  // TODO: need to remove all HarvestOperations associated with this harvester
+
+  // Finally, remove all harvest operations for this harvester
+  // *Make sure that resources have been collected first (as this relies on the harvest operations!)
+  await removeHarvestOperationsForHarvester(harvesterId);
 };
 
 /**

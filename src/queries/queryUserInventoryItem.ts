@@ -101,7 +101,7 @@ export const deleteUserInventoryItem = async (
   userInventoryItemId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  await prismaClient.userInventoryItem.delete({
+  return await prismaClient.userInventoryItem.delete({
     where: {
       id: userInventoryItemId,
     },
