@@ -167,8 +167,10 @@ export const harvesterRouter = router({
       try {
         harvester = await getHarvester(input.harvesterId);
       } catch (error) {
+        const errMsg = `harvester: ${input.harvesterId} not found`;
+        logger.error(errMsg);
         throw new TRPCError({
-          message: `harvester: ${input.harvesterId}`,
+          message: errMsg,
           code: "NOT_FOUND",
         });
       }
@@ -181,15 +183,19 @@ export const harvesterRouter = router({
       try {
         isDeployed = isHarvesterDeployed(harvester);
       } catch (error) {
+        const errMsg = `harvester: ${input.harvesterId} not found`;
+        logger.error(errMsg);
         throw new TRPCError({
-          message: `harvester: ${input.harvesterId}`,
+          message: errMsg,
           code: "NOT_FOUND",
         });
       }
 
       if (!isDeployed) {
+        const errMsg = `harvester: ${input.harvesterId} is not deployed`;
+        logger.error(errMsg);
         throw new TRPCError({
-          message: `harvester: ${input.harvesterId} is not deployed`,
+          message: errMsg,
           code: "CONFLICT",
         });
       }
@@ -199,18 +205,25 @@ export const harvesterRouter = router({
         harvester.energySourceId != null &&
         harvester.energySourceId !== input.energySourceId
       ) {
+        const errMsg = `Cannot add energy of a different type to this harvester (id=${harvester.id})`;
+        logger.error(errMsg);
         throw new TRPCError({
-          message: "Cannot add energy of a different type to this harvester",
+          message: errMsg,
           code: "CONFLICT",
         });
       }
 
-      const res = await handleAddEnergy(
-        harvester,
-        input.amount,
-        input.energySourceId ?? null,
-      );
+      try {
+        const res = await handleAddEnergy(
+          harvester,
+          input.amount,
+          input.energySourceId ?? null,
+        );
 
-      return res;
+        return res;
+      } catch (err) {
+        logger.error(err);
+        throw err;
+      }
     }),
 });

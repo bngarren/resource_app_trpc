@@ -64,9 +64,9 @@ export const updateSpawnRegion = async (
 
     return updatedSpawnRegion;
   } catch (err) {
-    logger.error(err, "Error within spawnRegionService: updateSpawnRegion()", {
-      spawnRegionId,
-    });
+    logger.error(
+      `Error within spawnRegionService's updateSpawnRegion() for spawnRegionId=${spawnRegionId}, error: ${err}`,
+    );
     // Transaction did not go through
     return null;
   }

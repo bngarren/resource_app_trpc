@@ -1,7 +1,7 @@
 import * as dotenv from "dotenv";
 import path from "path";
 
-type NodeEnvironment = "development" | "test" | "staging" | "production";
+export type NodeEnvironment = "development" | "test" | "staging" | "production";
 
 // this process.env is from the environment that the node process was launched
 const node_env =
@@ -67,5 +67,6 @@ export default {
 
   user_interact_distance: 250, // meters
 
+  base_units_per_minute_harvested: 5, // Base harvester extraction rate
   base_minutes_per_arcane_energy_unit: 60,
 };

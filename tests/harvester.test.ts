@@ -4,6 +4,7 @@ import {
   authenticatedRequest,
   getDataFromTRPCResponse,
   resetPrisma,
+  scanAndDeployHarvester,
   throwIfBadStatus,
 } from "./testHelpers";
 import { Server } from "http";
@@ -269,6 +270,7 @@ describe("/harvester", () => {
         idToken,
         scanRequest,
       );
+      throwIfBadStatus(res1);
 
       const data = getDataFromTRPCResponse<ScanRequestOutput>(res1);
 
@@ -298,6 +300,7 @@ describe("/harvester", () => {
           harvestRegion: harvestRegion,
         },
       );
+      throwIfBadStatus(res2);
 
       const postDeploy_harvestOperations =
         await prisma.harvestOperation.findMany({
@@ -730,18 +733,13 @@ describe("/harvester", () => {
         testHarvester = testHarvesterResult;
       }
 
-      // make the testHarvester deployed
-      const d = await authenticatedRequest(
+      // Perform a scan and deploy test harvester
+      await scanAndDeployHarvester(
+        harvestRegion,
+        testHarvester.id,
         server,
-        "POST",
-        "/harvester.deploy",
         idToken,
-        {
-          harvesterId: testHarvester.id,
-          harvestRegion: harvestRegion,
-        },
       );
-      throwIfBadStatus(d);
     });
 
     it("should return status code 400 (Bad Request) if harvester id, energySourceId, or amount is missing", async () => {
@@ -1009,6 +1007,10 @@ describe("/harvester", () => {
         ) + amount;
 
       expect(post2_TestHarvester.initialEnergy - k).toBeLessThanOrEqual(0.01); // equal within 0.01
+    });
+
+    it("should accurately store priorPeriodHarvested as energy is added over time", async () => {
+      return false;
     });
   });
 });

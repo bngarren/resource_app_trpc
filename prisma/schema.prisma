@@ -123,5 +123,5 @@ model HarvestOperation {
   createdAt            DateTime        @default(now()) @map("created_at")
   startTime            DateTime?       @map("start_time")
   endTime              DateTime?       @map("end_time")
-  priorPeriodHarvested Int             @default(0) // The amount harvested during the prior startTime to endTime period
+  priorPeriodHarvested Float           @default(0.0) // The amount harvested during the prior startTime to endTime period
 }

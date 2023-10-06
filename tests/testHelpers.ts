@@ -1,10 +1,15 @@
 import { Response as SuperAgentResponse } from "superagent";
-import { TRPCResponseData } from "../src/types/trpcTypes";
+import { ScanRequestOutput, TRPCResponseData } from "../src/types/trpcTypes";
 import { prisma } from "../src/prisma";
 import config from "../src/config";
 import { Server } from "http";
 import request, { Response, Test } from "supertest";
 import { setupBaseSeed } from "../seed/setupBaseSeed";
+import * as h3 from "h3-js";
+import * as ScanService from "../src/services/scanService";
+import * as QueryResource from "../src/queries/queryResource";
+import { Coordinate } from "../src/types";
+import { Prisma } from "@prisma/client";
 
 /**
  * ### Helper function to extract data from a TRPC response
@@ -114,6 +119,187 @@ export const authenticatedRequest = (
       }
       return req;
   }
+};
+
+/**
+ * ### Performs a /scan then /harvester.deploy to setup environment for further testing
+ * - Requires the server (API) and idToken (authenticated user) in order to make
+ * these authenticated requests
+ * - Will throw error if a bad status returns from either request
+ * @param h3Index - Should be the correct h3 resolution for a scanRegion/harvestRegion
+ * @param harvesterId
+ * @param server
+ * @param idToken
+ */
+export const scanAndDeployHarvester = async (
+  h3Index: string,
+  harvesterId: string,
+  server: Server,
+  idToken: string,
+) => {
+  // Scan at the harvest location first to ensure updated SpawnRegions and SpawnedResources
+  const latLng = h3.cellToLatLng(h3Index);
+  const scanRequest = {
+    userLocation: {
+      latitude: latLng[0],
+      longitude: latLng[1],
+    },
+  };
+  const res1 = await authenticatedRequest(
+    server,
+    "POST",
+    "/scan",
+    idToken,
+    scanRequest,
+  );
+  throwIfBadStatus(res1);
+
+  // Now deploy the testHarvester to the same location we just scanned
+  const res2 = await authenticatedRequest(
+    server,
+    "POST",
+    "/harvester.deploy",
+    idToken,
+    {
+      harvesterId: harvesterId,
+      harvestRegion: h3Index,
+    },
+  );
+  throwIfBadStatus(res2);
+};
+
+/**
+ * ### Performs a \scan request with some mocked logic to ensure consistent result
+ * - The scan will occur at a **consistent location** (Longwood Park, Boston) which is
+ * represented by the scanRegion h3 index.
+ * - This will use a scanDistance=1 to generate 7 SpawnRegions
+ * - It will generate exactly **3 spawned resources** within the central most spawn region
+ * that will always have the same location (same h3 index, resolution 11)
+ * - All 3 spawned resources are within 250 meters
+ *
+ * ! Note, that if the h3 resolutions for scan, spawn region, resources are changed, we must
+ * ! modify the code accordingly!
+ *
+ * TODO: Add param for number of resources, i.e. 0 to 3
+ *
+ *
+ * @param server
+ * @param idToken
+ * @returns
+ */
+export const mockScan = async (server: Server, idToken: string) => {
+  const scanRegion = "8a2a30640907fff"; // Longwood Park, Boston at h3 resolution 10
+  const latLng = h3.cellToLatLng(scanRegion);
+  const scanLocation: Coordinate = {
+    latitude: latLng[0],
+    longitude: latLng[1],
+  };
+
+  /*
+  Scanning at the above scanRegion (resolution 10) at Longwood Park at a scanDistance=1
+  will produce 7 SpawnRegions (resolution 9) including the central spawn region (892a3064093ffff)
+
+  Chosen resolution 11 cells near scanRegion (within central spawn region):
+  - 8b2a30640931fff (Basketball court)
+  - 8b2a30640923fff (Baseball/Water)
+  - 8b2a3064092bfff (Lawrence crossing)
+
+  These are all within 250 meters of the scanRegion center.
+
+  */
+
+  // Mock the handleScan to force a scanDistance=1
+  // We save the original function first so we can call it from within the mock implementation
+  const orig_handleScan = ScanService.handleScan;
+  const spy_handleScan = jest
+    .spyOn(ScanService, "handleScan")
+    .mockImplementationOnce((fromLocation: Coordinate) => {
+      return orig_handleScan(fromLocation, 1);
+    });
+
+  // These are the SpawnedResources we will force to spawn at specific locations
+  // within the chosen SpawnRegion
+  const forcedSpawnedResourceModels: Prisma.SpawnedResourceCreateInput[] = [
+    {
+      h3Index: "8b2a30640931fff",
+      h3Resolution: 11,
+      resource: {
+        connect: {
+          url: "gold",
+        },
+      },
+      spawnRegion: {
+        connect: {
+          h3Index: "892a3064093ffff",
+        },
+      },
+    },
+    {
+      h3Index: "8b2a30640923fff",
+      h3Resolution: 11,
+      resource: {
+        connect: {
+          url: "arcane_quanta",
+        },
+      },
+      spawnRegion: {
+        connect: {
+          h3Index: "892a3064093ffff",
+        },
+      },
+    },
+    {
+      h3Index: "8b2a3064092bfff",
+      h3Resolution: 11,
+      resource: {
+        connect: {
+          url: "spectrite",
+        },
+      },
+      spawnRegion: {
+        connect: {
+          h3Index: "892a3064093ffff",
+        },
+      },
+    },
+  ];
+
+  // Mock the spawned resource generation for specific spawn region
+  const orig_updateSpawnedResourcesForSpawnRegionTransaction =
+    QueryResource.updateSpawnedResourcesForSpawnRegionTransaction;
+
+  const spy_updateSpawnedResourcesForSpawnRegionTransaction = jest
+    .spyOn(QueryResource, "updateSpawnedResourcesForSpawnRegionTransaction")
+    .mockImplementation(async (spawnRegionId: string) => {
+      // We are only interested in 1 spawn region, locate it.
+      const centralSpawnRegion = await prisma.spawnRegion.findUniqueOrThrow({
+        where: {
+          h3Index: "892a3064093ffff",
+        },
+      });
+
+      // We use the special `forcedSpawnedResourceModels` parameter
+      // If it's the Spawn region of interest, pass the models, if not just [] so that
+      // all other spawn regions do not spawn any resources (better for testing)
+      return orig_updateSpawnedResourcesForSpawnRegionTransaction(
+        spawnRegionId,
+        spawnRegionId === centralSpawnRegion.id
+          ? forcedSpawnedResourceModels
+          : [],
+      );
+    });
+
+  // Perform the scan request
+  const s = await authenticatedRequest(server, "POST", "/scan", idToken, {
+    userLocation: scanLocation,
+  });
+  throwIfBadStatus(s);
+
+  // Revert the mocks
+  spy_handleScan.mockRestore();
+  spy_updateSpawnedResourcesForSpawnRegionTransaction.mockRestore();
+
+  return getDataFromTRPCResponse<ScanRequestOutput>(s);
 };
 
 /**

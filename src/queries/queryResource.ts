@@ -6,7 +6,7 @@ import {
 import { Prisma, SpawnRegion, Resource, SpawnedResource } from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
 import isSpawnRegionStale from "../util/isRegionStale";
-import config from "../config";
+import config, { NodeEnvironment } from "../config";
 import {
   generateSpawnedResourceModelsForSpawnRegion,
   pruneSpawnedResourceWithResource,
@@ -15,7 +15,6 @@ import {
   getSpawnRegionWithResources,
   updateSpawnRegion,
 } from "./querySpawnRegion";
-import { getAllSettled } from "../util/getAllSettled";
 
 /**
 - getResource
@@ -220,10 +219,22 @@ export const deleteSpawnedResourcesForSpawnRegion = async (
  */
 export const updateSpawnedResourcesForSpawnRegionTransaction = async (
   spawnRegionId: string,
+  forcedSpawnedResourceModels?: Prisma.SpawnedResourceCreateInput[],
 ) => {
   if (spawnRegionId === null) {
     throw new Error(
-      `Could not update spawned resources for SpawnRegion. Incorrect id (${spawnRegionId}) provided.`,
+      `Could not update spawned resources for SpawnRegion with NULL id`,
+    );
+  }
+
+  // ! DEBUG/TESTING
+  const allowedEnv: NodeEnvironment[] = ["test", "development"];
+  if (
+    forcedSpawnedResourceModels != null &&
+    !allowedEnv.includes(config.node_env)
+  ) {
+    throw new Error(
+      `Cannot use forcedSpawnedResourceModels while in ${config.node_env} environment`,
     );
   }
 
@@ -238,26 +249,36 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
   /* If a SpawnRegion's `reset_date` is stale/overdue, then repopulate a fresh
       set of spawned resources.
       */
-  if (priorResources.length === 0 || isSpawnRegionStale(spawnRegion)) {
+  if (
+    priorResources.length === 0 ||
+    isSpawnRegionStale(spawnRegion) ||
+    forcedSpawnedResourceModels != null
+  ) {
     // We do some things outside of the transaction to limit time in the transaction
     // * i.e. these things may make database queries but don't mutate (nothing to roll back)
 
     // Make some new spawned resource models
     let spawnedResourceModels: Prisma.SpawnedResourceCreateInput[];
-    try {
-      spawnedResourceModels = await generateSpawnedResourceModelsForSpawnRegion(
-        spawnRegion,
-        [
-          config.min_resources_per_spawn_region,
-          config.max_resources_per_spawn_region,
-        ],
-        config.resource_h3_resolution,
-      );
-      if (spawnedResourceModels.length === 0) {
-        throw new Error("Unexpected error, 0 spawnedResourceModels returned");
+
+    if (forcedSpawnedResourceModels != null) {
+      spawnedResourceModels = [...forcedSpawnedResourceModels];
+    } else {
+      try {
+        spawnedResourceModels =
+          await generateSpawnedResourceModelsForSpawnRegion(
+            spawnRegion,
+            [
+              config.min_resources_per_spawn_region,
+              config.max_resources_per_spawn_region,
+            ],
+            config.resource_h3_resolution,
+          );
+        if (spawnedResourceModels.length === 0) {
+          throw new Error("Unexpected error, 0 spawnedResourceModels returned");
+        }
+      } catch (err) {
+        throw err;
       }
-    } catch (err) {
-      throw err;
     }
 
     let trxResult: SpawnRegionWithResourcesPartial;
@@ -281,16 +302,25 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
           throw new Error("Delete spawned resources failed");
         }
 
-        const newSpawnedResources = await getAllSettled<SpawnedResource>(
+        const allSettledResult = await Promise.allSettled(
           spawnedResourceModels.map((model) =>
             createSpawnedResource(model, trx),
           ),
         );
 
-        // safety check
-        if (newSpawnedResources.length !== spawnedResourceModels.length) {
-          throw new Error("Populating spawned resources failed");
+        const rejected = allSettledResult.find(
+          (result) => result.status === "rejected",
+        ) as PromiseRejectedResult;
+
+        if (rejected) {
+          throw new Error(
+            `Problem within createSpawnedResource, reason: ${rejected.reason}`,
+          );
         }
+
+        const newSpawnedResources = allSettledResult.map(
+          (result) => (result as PromiseFulfilledResult<SpawnedResource>).value,
+        );
 
         // Update spawn region's resetDate to be current time + reset interval
         const nextResetDate = new Date();

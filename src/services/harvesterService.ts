@@ -1,6 +1,7 @@
 import { arcaneEnergyResourceMetadataSchema } from "./../schema/index";
 import { getAllSettled } from "./../util/getAllSettled";
 import {
+  HarvestOperation,
   Harvester,
   ItemType,
   Resource,
@@ -23,6 +24,7 @@ import {
   createHarvestOperationsTransaction,
   deleteHarvestOperationsForHarvesterId,
   getHarvestOperationsForHarvesterId,
+  updateHarvestOperationsTransaction,
 } from "../queries/queryHarvestOperation";
 import config from "../config";
 import { getSpawnRegionsAround } from "../util/getSpawnRegionsAround";
@@ -30,8 +32,15 @@ import { getSpawnedResourcesForSpawnRegion } from "../queries/queryResource";
 import { getDistanceBetweenCells } from "../util/getDistanceBetweenCells";
 import { logger } from "../logger/logger";
 import { getResource } from "./resourceService";
-import { addMilliseconds, getTime } from "date-fns";
+import {
+  addMilliseconds,
+  differenceInMilliseconds,
+  getTime,
+  isBefore,
+  min,
+} from "date-fns";
 import { validateWithZod } from "../util/validateWithZod";
+import { getSpawnRegionParentOfSpawnedResource } from "./spawnRegionService";
 
 /**
  * ### Gets a Harvester
@@ -201,6 +210,119 @@ export const handleDeploy = async (
 };
 
 /**
+ * ### Returns the amount of resource harvested by this operation since its startTime
+ * Will throw error if the HarvestOperation does not have an endTime
+ *
+ * This calculation is performed by finding the time elapsed since the startTime and
+ * either the endTime or `asOf` time (which is usually the current time), whichever is earlier.
+ *
+ * I.e., if we are checking _before_ the endTime, we will use the current time instead.
+ * @param harvestOperation
+ * @param asOf
+ * @returns Amount of resource (can be decimal/float)
+ */
+const getAmountHarvestedByHarvestOperation = (
+  harvestOperation: HarvestOperation,
+  asOf = new Date(),
+) => {
+  if (harvestOperation.endTime == null) {
+    throw new Error(
+      `HarvestOperation (id=${harvestOperation.id}) should already have an endTime but is NULL. Cannot getAmountHarvestedByHarvestOperation().`,
+    );
+  }
+  // The left limit is the startTime.
+  // If startTime is null, we set it to `asOf`, which should make the duration 0
+  const leftLimit = harvestOperation.startTime ?? asOf;
+  // The right limit is either the endTime or asOf time (current)
+  const rightLimit = min([asOf, harvestOperation.endTime]);
+  // Calculate time harvested in milliseconds
+  const timeHarvestedMillis = differenceInMilliseconds(rightLimit, leftLimit);
+  if (timeHarvestedMillis < 0) {
+    throw new Error(
+      `Invalid time range: harvested time cannot be negative. (${timeHarvestedMillis})`,
+    );
+  }
+  // TODO: need to add in harvester extraction rate/yield or other bonuses
+  // Convert time to minutes and then apply conversion to get units
+  const amountHarvested =
+    (timeHarvestedMillis / 60000) * config.base_units_per_minute_harvested;
+
+  return amountHarvested;
+};
+
+/**
+ * ### Updates each harvest operation based on a new energyEndTime
+ *
+ * Updating a harvest operation with new energyEndTime will generate a
+ * new startTime and recalculate an endTime and priorPeriodHarvested
+ *
+ * It's like saying here is more energy...Store the amount harvested from the
+ * prior startTime to endTime duration, and now make a new startTime and endTime
+ *
+ * @param harvesterId
+ * @param energyEndTime
+ */
+const updateHarvestOperationsForHarvester = async (
+  harvesterId: string,
+  energyEndTime: Date,
+) => {
+  const harvestOperations = await getHarvestOperationsForHarvesterId(
+    harvesterId,
+  );
+
+  // Loop through the current harvest operations to get their spawn region's reset_date
+  // to compare with the energyEndTime
+  // We create an array of Promises then later await it
+  const newHarvestOperationsPromises = [...harvestOperations].map(
+    async (harvestOperation) => {
+      /* To determine the new endTime, we compare the SpawnedResource's SpawnRegion's
+      `resetDate` and the energyEndTime of the harvester, picking the earlier of the two */
+
+      const spawnRegion = await getSpawnRegionParentOfSpawnedResource(
+        harvestOperation.spawnedResourceId,
+      );
+
+      if (spawnRegion.resetDate == null) {
+        throw new Error(
+          `A harvest operation (id=${harvestOperation.id}) is associated with a SpawnedResource whose SpawnRegion (id=${spawnRegion.id}) has a NULL resetDate!`,
+        );
+      }
+
+      const currentDate = new Date();
+
+      // Calculate the priorPeriodHarvested
+      const amountHarvested = getAmountHarvestedByHarvestOperation(
+        harvestOperation,
+        currentDate,
+      );
+
+      harvestOperation.priorPeriodHarvested += amountHarvested;
+
+      harvestOperation.startTime = currentDate;
+
+      // isBefore() returns a boolean, the first date is before the second date
+      harvestOperation.endTime = isBefore(spawnRegion.resetDate, energyEndTime)
+        ? spawnRegion.resetDate
+        : energyEndTime;
+
+      return harvestOperation;
+    },
+  );
+
+  const newHarvestOperations = await Promise.all(newHarvestOperationsPromises);
+
+  const res = await updateHarvestOperationsTransaction(newHarvestOperations);
+
+  if (res != null) {
+    return res;
+  } else {
+    throw new Error(
+      "Unexpected problem within updateHarvestOperationsForHarvester()",
+    );
+  }
+};
+
+/**
  * ### Gives the amount of energy left in the harvester
  * - If remaining energy calculation would be negative, this will return ZERO
  * #### Example
@@ -364,6 +486,15 @@ export const handleAddEnergy = async (
   });
 
   // TODO: Update each harvest operation with new energyEndTime
+  const updatedHarvestOperations = await updateHarvestOperationsForHarvester(
+    harvester.id,
+    newEnergyEndTime,
+  );
+
+  logger.info(
+    `New energy added to harvester (id=${harvester.id}), amount=${amount}, new initialEnergy=${newInitialEnergy}`,
+  );
+  logger.info(updatedHarvestOperations);
 
   return res;
 };

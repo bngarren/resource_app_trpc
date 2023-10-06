@@ -19,6 +19,12 @@ export const getHarvestOperationsForHarvesterId = async (
   });
 };
 
+/**
+ * ### Creates a new Harvest Operation
+ * @param partialModel
+ * @param prismaClient
+ * @returns
+ */
 export const createHarvestOperation = async (
   partialModel: Prisma.HarvestOperationCreateInput,
   prismaClient: PrismaClientOrTransaction = prisma,
@@ -28,6 +34,9 @@ export const createHarvestOperation = async (
   });
 };
 
+/**
+ * This type is used in the `createHarvestOperationsTransaction()`
+ */
 export type CreateHarvestOperationsTransactionInput = {
   harvesterId: string;
   spawnedResourceIds: string[];
@@ -83,10 +92,55 @@ export const createHarvestOperationsTransaction = async (
   }
 };
 
+export const updateHarvestOperationById = async (
+  harvestOperationId: string,
+  partialModel: Prisma.HarvestOperationUpdateInput,
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  return await prismaClient.harvestOperation.update({
+    where: {
+      id: harvestOperationId,
+    },
+    data: partialModel,
+  });
+};
+
+export const updateHarvestOperationsTransaction = async (
+  models: Prisma.HarvestOperationUpdateInput[],
+) => {
+  let trxResult;
+  try {
+    trxResult = await prisma.$transaction(async (trx) => {
+      // * - - - - - - - START TRANSACTION - - - - - - - -
+      return await Promise.all(
+        models.map((harvestOperation) => {
+          const { id: harvestOperationId, ...partialModel } = harvestOperation;
+
+          if (harvestOperationId == null) {
+            throw new Error("Missing id for harvest operation");
+          }
+
+          return updateHarvestOperationById(
+            harvestOperationId as string,
+            partialModel,
+            trx,
+          );
+        }),
+      );
+    });
+    return trxResult;
+  } catch (error) {
+    logger.error(error, "Error within updateHarvestOperationsTransaction");
+    // Any transaction query above should be automatically rolled-back
+    return null; // Returns null if transaction failed
+  }
+};
+
 export const deleteHarvestOperationsForHarvesterId = async (
   harvesterId: string,
+  prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prisma.harvestOperation.deleteMany({
+  return await prismaClient.harvestOperation.deleteMany({
     where: {
       harvesterId: harvesterId,
     },

@@ -44,7 +44,7 @@ export const handleScan = async (
   // h3Group - all the h3 indices, including the center, that were 'scanned' at a distance of `config.scan_distance`
   // existingSpawnRegions - the spawnRegions that exist in the database associated with the h3 indices in h3Group
   const { h3Group, spawnRegions: existingSpawnRegions } =
-    await getSpawnRegionsAround(h3Index, config.scan_distance);
+    await getSpawnRegionsAround(h3Index, scanDistance);
 
   // Missing regions - not present in the database
   // i.e., An array of h3Indexes that need to be added to db
@@ -76,6 +76,8 @@ export const handleScan = async (
       "Did not match h3 indices with SpawnRegions in the database",
     );
   }
+
+  // logger.info(`SpawnRegions: ${spawnRegions.map(s => s.)}`);
 
   // * - - - - - Update each region - - - - -
   /**
