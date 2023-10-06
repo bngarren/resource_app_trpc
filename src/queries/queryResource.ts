@@ -15,6 +15,7 @@ import {
   getSpawnRegionWithResources,
   updateSpawnRegion,
 } from "./querySpawnRegion";
+import { prefixedError } from "../util/rethrowWith";
 
 /**
 - getResource
@@ -209,11 +210,18 @@ export const deleteSpawnedResourcesForSpawnRegion = async (
 };
 
 /**
- * This function updates the spawned resources for a given spawn region.
+ * This function creates/updates the spawned resources for a given spawn region.
  * It checks whether the SpawnRegion is stale and if so, deletes old/previous
  * SpawnedResources and populates new ones. It also updates spawn region's
  * resetDate to be current time + reset interval and returns the updated SpawnRegion.
+ *
+ * The `forcedSpawnedResourceModels` param is used for testing purposes. It allows an
+ * array of pre-made SpawnedResource models to be passed in and used instead of the
+ * random generation that this function will normally use.
+ * - If it is passed in as empty [], no spawned resources will be created.
+ *
  * @param spawnRegionId
+ * @param forcedSpawnedResourceModels - used for TESTING
  * @returns SpawnRegionWithResourcesPartial (this means the full Resource
  * model is not returned for each resource, only SpawnedResource)
  */
@@ -227,7 +235,7 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
     );
   }
 
-  // ! DEBUG/TESTING
+  // Only allow use of forced spawned resources in test or development env
   const allowedEnv: NodeEnvironment[] = ["test", "development"];
   if (
     forcedSpawnedResourceModels != null &&
@@ -248,6 +256,8 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
 
   /* If a SpawnRegion's `reset_date` is stale/overdue, then repopulate a fresh
       set of spawned resources.
+
+      Or, if forcedSpawnedResourceModels has been passed, continue, using this data
       */
   if (
     priorResources.length === 0 ||
@@ -255,7 +265,7 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
     forcedSpawnedResourceModels != null
   ) {
     // We do some things outside of the transaction to limit time in the transaction
-    // * i.e. these things may make database queries but don't mutate (nothing to roll back)
+    // i.e. these things may make database queries but don't mutate (nothing to roll back)
 
     // Make some new spawned resource models
     let spawnedResourceModels: Prisma.SpawnedResourceCreateInput[];
@@ -302,6 +312,7 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
           throw new Error("Delete spawned resources failed");
         }
 
+        // Use Promise.allSettled so that we throw an error and exit transaction if any one fails
         const allSettledResult = await Promise.allSettled(
           spawnedResourceModels.map((model) =>
             createSpawnedResource(model, trx),
@@ -351,13 +362,11 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
         return updatedSpawnRegion;
       });
     } catch (error) {
-      logger.error(
-        error,
-        "Error within updateSpawnedResourcesForSpawnRegionTransaction",
-      );
-
       // Any transaction query should be automatically rolled-back
-      throw error;
+      throw prefixedError(
+        error,
+        `updateSpawnedResourcesForSpawnRegionTransaction for spawnRegionId ${spawnRegionId}`,
+      );
     }
     return trxResult;
   } else {

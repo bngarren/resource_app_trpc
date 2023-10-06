@@ -3,6 +3,7 @@ import { logger } from "../src/logger/logger";
 import { TestSingleton } from "./TestSingleton";
 import { mockScan, resetPrisma } from "./testHelpers";
 import { prisma } from "../src/prisma";
+import * as h3 from "h3-js";
 
 describe("testHelpers", () => {
   let server: Server;
@@ -33,12 +34,23 @@ describe("testHelpers", () => {
     expect(preScan_spawnedResources).toHaveLength(0);
 
     // perform a scan request with mocked logic
-    await mockScan(server, idToken);
+    const numberOfSpawnedResources = 3;
+    await mockScan(numberOfSpawnedResources, server, idToken);
 
     const postScan_spawnRegions = await prisma.spawnRegion.findMany();
     const postScan_spawnedResources = await prisma.spawnedResource.findMany();
 
     expect(postScan_spawnRegions).toHaveLength(7);
-    expect(postScan_spawnedResources).toHaveLength(3);
+    expect(postScan_spawnedResources).toHaveLength(numberOfSpawnedResources);
+
+    postScan_spawnedResources.forEach((spawnedResource) => {
+      // the spawnedResource's spawnRegion should have the expected h3index
+      expect(
+        prisma.spawnRegion.findUnique({
+          where: { id: spawnedResource.spawnRegionId },
+        }),
+      ).resolves.toMatchObject({ h3Index: "892a3064093ffff" });
+      expect(h3.getResolution(spawnedResource.h3Index)).toBe(11); // resolution 11 for each resource
+    });
   });
 });

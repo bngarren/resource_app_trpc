@@ -10,7 +10,7 @@ import {
 } from "../queries/queryResource";
 import { cellToChildren, getResolution } from "h3-js";
 import { SpawnedResourceWithResource } from "../types";
-import { rethrowWith } from "../util/rethrowWith";
+import { prefixedError } from "../util/rethrowWith";
 
 /**
  * ### Gets a single Resource, by ID
@@ -219,9 +219,9 @@ export const generateSpawnedResourceModelsForSpawnRegion = async (
       );
     }
   } catch (error) {
-    rethrowWith(
+    throw prefixedError(
       error,
-      "Problem within generateSpawnedResourceModelsForSpawnRegion",
+      `Error within generateSpawnedResourceModelsForSpawnRegion for spawnRegionId ${spawnRegion.id}`,
     );
   }
   return spawnedResourceModels;

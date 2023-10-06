@@ -173,21 +173,29 @@ export const scanAndDeployHarvester = async (
  * - The scan will occur at a **consistent location** (Longwood Park, Boston) which is
  * represented by the scanRegion h3 index.
  * - This will use a scanDistance=1 to generate 7 SpawnRegions
- * - It will generate exactly **3 spawned resources** within the central most spawn region
+ * - It will generate exactly **x amount of spawned resources** (0 to 3) within the central most spawn region
  * that will always have the same location (same h3 index, resolution 11)
  * - All 3 spawned resources are within 250 meters
  *
  * ! Note, that if the h3 resolutions for scan, spawn region, resources are changed, we must
  * ! modify the code accordingly!
  *
- * TODO: Add param for number of resources, i.e. 0 to 3
- *
- *
+ * @param numberOfSpawnedResources - How many of the pre-made resources to spawn (min 0, max 3)
  * @param server
  * @param idToken
  * @returns
  */
-export const mockScan = async (server: Server, idToken: string) => {
+export const mockScan = async (
+  numberOfSpawnedResources: number,
+  server: Server,
+  idToken: string,
+) => {
+  if (numberOfSpawnedResources < 0 || numberOfSpawnedResources > 3) {
+    throw new Error(
+      `Number of spawned resources (${numberOfSpawnedResources}) is out of range (0 to 3)`,
+    );
+  }
+
   const scanRegion = "8a2a30640907fff"; // Longwood Park, Boston at h3 resolution 10
   const latLng = h3.cellToLatLng(scanRegion);
   const scanLocation: Coordinate = {
@@ -199,10 +207,10 @@ export const mockScan = async (server: Server, idToken: string) => {
   Scanning at the above scanRegion (resolution 10) at Longwood Park at a scanDistance=1
   will produce 7 SpawnRegions (resolution 9) including the central spawn region (892a3064093ffff)
 
-  Chosen resolution 11 cells near scanRegion (within central spawn region):
-  - 8b2a30640931fff (Basketball court)
-  - 8b2a30640923fff (Baseball/Water)
-  - 8b2a3064092bfff (Lawrence crossing)
+  The pre-identified resolution 11 cells near scanRegion (within central spawn region):
+  1. 8b2a30640931fff (Basketball court)
+  2. 8b2a30640923fff (Baseball/Water)
+  3. 8b2a3064092bfff (Lawrence crossing)
 
   These are all within 250 meters of the scanRegion center.
 
@@ -284,7 +292,7 @@ export const mockScan = async (server: Server, idToken: string) => {
       return orig_updateSpawnedResourcesForSpawnRegionTransaction(
         spawnRegionId,
         spawnRegionId === centralSpawnRegion.id
-          ? forcedSpawnedResourceModels
+          ? forcedSpawnedResourceModels.slice(0, numberOfSpawnedResources) // if 0, get []. if 1, get first element, etc.
           : [],
       );
     });

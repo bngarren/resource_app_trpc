@@ -6,10 +6,10 @@
  * @param error
  * @param message
  */
-export const rethrowWith = (error: unknown, message: string) => {
+export const prefixedError = (error: unknown, message: string) => {
   if (error instanceof Error) {
-    throw new Error(`${message}: ${error.message}`);
+    return new Error(`${message}: ${error.message}`);
   } else {
-    throw new Error(`${message}`);
+    return new Error(`${message}`);
   }
 };
