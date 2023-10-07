@@ -3,6 +3,8 @@ import { TestSingleton } from "./TestSingleton";
 import {
   authenticatedRequest,
   getDataFromTRPCResponse,
+  harvestRegion,
+  mockScan,
   resetPrisma,
   scanAndDeployHarvester,
   throwIfBadStatus,
@@ -60,7 +62,6 @@ describe("/harvester", () => {
   describe("/harvester.deploy", () => {
     let testUser: User;
     let testHarvester: Harvester;
-    const harvestRegion = "8a2a30640907fff"; // Longwood Park, Boston at h3 resolution 10
 
     // Setup testUser and testHarvester
     beforeEach(async () => {
@@ -437,7 +438,6 @@ describe("/harvester", () => {
   describe("/harvester.reclaim", () => {
     let testUser: User;
     let testHarvester: Harvester;
-    const harvestRegion = "8a2a30640907fff"; // Longwood Park, Boston at h3 resolution 10
 
     // Setup testUser and testHarvester
     beforeEach(async () => {
@@ -544,6 +544,8 @@ describe("/harvester", () => {
       );
       throwIfBadStatus(r);
 
+      expect(r.statusCode).toBe(200);
+
       // get current testHarvester
       testHarvester = await prisma.harvester.findFirstOrThrow({
         where: {
@@ -562,8 +564,6 @@ describe("/harvester", () => {
           testUser.id,
         ),
       ).resolves.not.toThrow();
-
-      expect(r.statusCode).toBe(200);
     });
 
     it("should clear/reset energy data for the reclaimed harvester and return remaining energy to user's inventory", async () => {
@@ -652,23 +652,12 @@ describe("/harvester", () => {
       expect(invResource.quantity - k).toBeLessThanOrEqual(0.5);
     });
 
-    /**
-     * If there is a problem with this test, consider that a harvester is being
-     * deployed to a location with 0 nearby spawned resources and thus 0 harvest
-     * operations. May need to consider looping the scan/deploy setup until
-     * at least 1 harvest operation is created
-     */
     it("should remove all harvest operations associated with the harvester", async () => {
       const latLng = h3.cellToLatLng(harvestRegion);
 
       // First, scan the area to generate new spawned resources
-      const s = await authenticatedRequest(server, "POST", "/scan", idToken, {
-        userLocation: {
-          latitude: latLng[0],
-          longitude: latLng[1],
-        },
-      });
-      throwIfBadStatus(s);
+      const numberOfSpawnedResource = 3;
+      await mockScan(numberOfSpawnedResource, server, idToken);
 
       // Then, deploy the testHarvester
       const d = await authenticatedRequest(
@@ -680,11 +669,13 @@ describe("/harvester", () => {
       );
       throwIfBadStatus(d);
 
+      // Since we use mockScan which creates nearby resources, we expect the
+      // same number of harvest operations to be created
       const pre_harvestOperations = await getHarvestOperationsForHarvester(
         testHarvester.id,
       );
 
-      expect(pre_harvestOperations.length).toBeGreaterThan(0);
+      expect(pre_harvestOperations.length).toBe(numberOfSpawnedResource);
 
       // Now reclaim the harvester
       const r = await authenticatedRequest(
@@ -711,7 +702,6 @@ describe("/harvester", () => {
   describe("/harvester.addEnergy", () => {
     let testUser: User;
     let testHarvester: Harvester;
-    const harvestRegion = "8a2a30640907fff"; // Longwood Park, Boston at h3 resolution 10
 
     // Setup testUser and testHarvester
     beforeEach(async () => {
@@ -733,13 +723,8 @@ describe("/harvester", () => {
         testHarvester = testHarvesterResult;
       }
 
-      // Perform a scan and deploy test harvester
-      await scanAndDeployHarvester(
-        harvestRegion,
-        testHarvester.id,
-        server,
-        idToken,
-      );
+      // Perform a mockScan and deploy test harvester
+      await scanAndDeployHarvester(testHarvester.id, server, idToken);
     });
 
     it("should return status code 400 (Bad Request) if harvester id, energySourceId, or amount is missing", async () => {
@@ -1009,8 +994,44 @@ describe("/harvester", () => {
       expect(post2_TestHarvester.initialEnergy - k).toBeLessThanOrEqual(0.01); // equal within 0.01
     });
 
-    it("should accurately store priorPeriodHarvested as energy is added over time", async () => {
-      return false;
+    // TODO: WIP
+    it("should deploy harvester and accurately store priorPeriodHarvested as energy is added over time", async () => {
+      expect(prisma.spawnedResource.findMany()).resolves.toHaveLength(3);
+
+      // verify harvester is deployed and without energy
+      const pre_TestHarvester = await prisma.harvester.findUniqueOrThrow({
+        where: {
+          id: testHarvester.id,
+        },
+      });
+
+      if (
+        !isHarvesterDeployed(pre_TestHarvester) ||
+        pre_TestHarvester.initialEnergy != 0
+      ) {
+        throw new Error(
+          `Problem with seeding harvester for this test (should be deployed and with initialEnergy 0): ${pre_TestHarvester.initialEnergy}`,
+        );
+      }
+
+      // choose the energy resource
+      const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+
+      const requestTime = new Date();
+
+      const amount = 10;
+      const res = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.addEnergy",
+        idToken,
+        {
+          harvesterId: testHarvester.id,
+          energySourceId: arcaneQuanta.id,
+          amount: amount,
+        },
+      );
+      throwIfBadStatus(res);
     });
   });
 });

@@ -122,51 +122,13 @@ export const authenticatedRequest = (
 };
 
 /**
- * ### Performs a /scan then /harvester.deploy to setup environment for further testing
- * - Requires the server (API) and idToken (authenticated user) in order to make
- * these authenticated requests
- * - Will throw error if a bad status returns from either request
- * @param h3Index - Should be the correct h3 resolution for a scanRegion/harvestRegion
- * @param harvesterId
- * @param server
- * @param idToken
+ * The scan/harvest region (h3Index) used for testing.
+ *
+ * The mockScan() helper function is based on scanning at this location. E.g., a test that
+ * begins with mockScan() can then expect consistent results with regard to the spawned
+ * resources.
  */
-export const scanAndDeployHarvester = async (
-  h3Index: string,
-  harvesterId: string,
-  server: Server,
-  idToken: string,
-) => {
-  // Scan at the harvest location first to ensure updated SpawnRegions and SpawnedResources
-  const latLng = h3.cellToLatLng(h3Index);
-  const scanRequest = {
-    userLocation: {
-      latitude: latLng[0],
-      longitude: latLng[1],
-    },
-  };
-  const res1 = await authenticatedRequest(
-    server,
-    "POST",
-    "/scan",
-    idToken,
-    scanRequest,
-  );
-  throwIfBadStatus(res1);
-
-  // Now deploy the testHarvester to the same location we just scanned
-  const res2 = await authenticatedRequest(
-    server,
-    "POST",
-    "/harvester.deploy",
-    idToken,
-    {
-      harvesterId: harvesterId,
-      harvestRegion: h3Index,
-    },
-  );
-  throwIfBadStatus(res2);
-};
+export const harvestRegion = "8a2a30640907fff"; // Longwood Park, Boston at h3 resolution 10
 
 /**
  * ### Performs a \scan request with some mocked logic to ensure consistent result
@@ -196,7 +158,7 @@ export const mockScan = async (
     );
   }
 
-  const scanRegion = "8a2a30640907fff"; // Longwood Park, Boston at h3 resolution 10
+  const scanRegion = harvestRegion; // Longwood Park, Boston at h3 resolution 10
   const latLng = h3.cellToLatLng(scanRegion);
   const scanLocation: Coordinate = {
     latitude: latLng[0],
@@ -308,6 +270,57 @@ export const mockScan = async (
   spy_updateSpawnedResourcesForSpawnRegionTransaction.mockRestore();
 
   return getDataFromTRPCResponse<ScanRequestOutput>(s);
+};
+
+/**
+ * ### Performs a /scan then /harvester.deploy to setup environment for further testing
+ * - **DEFAULTS to a mockScan() if no h3Index param is provided**
+ * - Requires the server (API) and idToken (authenticated user) in order to make
+ * these authenticated requests
+ * - Will throw error if a bad status returns from either request
+ * @param harvesterId
+ * @param server
+ * @param idToken
+ * @param h3Index - Optional. Should be the correct h3 resolution for a scanRegion/harvestRegion. If not provided, a mockScan() is used by default.
+ */
+export const scanAndDeployHarvester = async (
+  harvesterId: string,
+  server: Server,
+  idToken: string,
+  h3Index?: string,
+) => {
+  if (!h3Index) {
+    await mockScan(3, server, idToken);
+  } else {
+    const latLng = h3.cellToLatLng(h3Index);
+    const scanRequest = {
+      userLocation: {
+        latitude: latLng[0],
+        longitude: latLng[1],
+      },
+    };
+    const res1 = await authenticatedRequest(
+      server,
+      "POST",
+      "/scan",
+      idToken,
+      scanRequest,
+    );
+    throwIfBadStatus(res1);
+  }
+
+  // Now deploy the testHarvester to the same location we just scanned
+  const res2 = await authenticatedRequest(
+    server,
+    "POST",
+    "/harvester.deploy",
+    idToken,
+    {
+      harvesterId: harvesterId,
+      harvestRegion: h3Index ?? harvestRegion,
+    },
+  );
+  throwIfBadStatus(res2);
 };
 
 /**
