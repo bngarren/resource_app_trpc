@@ -198,14 +198,18 @@ export const createSpawnedResource = async (
   });
 };
 
-export const deleteSpawnedResourcesForSpawnRegion = async (
-  spawnRegionId: string,
+export const updateSpawnedResources = async (
+  spawnedResourceIds: string[],
+  partialModel: Prisma.SpawnedResourceUpdateManyMutationInput,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.spawnedResource.deleteMany({
+  return await prismaClient.spawnedResource.updateMany({
     where: {
-      spawnRegionId: spawnRegionId,
+      id: {
+        in: spawnedResourceIds,
+      },
     },
+    data: partialModel,
   });
 };
 
@@ -246,7 +250,7 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
     );
   }
 
-  // Get the spawn region and its current (prior) resources
+  // Get the spawn region and its active (prior to function call) resources
   const { resources: _priorResources, ...rest } =
     await getSpawnRegionWithResources(spawnRegionId);
   const priorResources = _priorResources.map((pr) =>
@@ -299,18 +303,25 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
 
         logger.debug(`SpawnRegion ${spawnRegion.id} is stale`);
 
-        /* Delete old/previous SpawnedResources for this SpawnRegion, if present. We
-          do not delete any rows from the Resources table (these are just model resources)
-          */
-        const res_1 = await deleteSpawnedResourcesForSpawnRegion(
-          spawnRegion.id,
+        /* We do not delete stale SpawnedResources (as done previously) as they may still 
+        be used as a foreign key in other tables, e.g. HarvestOperations that have not ended
+        even though the SpawnedResource is stale.
+
+        Instead, we flag the SpawnedResource isActive as false.
+        */
+
+        // Set each spawned resource to isActive=false
+        await updateSpawnedResources(
+          priorResources.map((r) => r.id),
+          { isActive: false },
           trx,
         );
 
-        // safety check
-        if (priorResources.length > 0 && res_1.count === 0) {
-          throw new Error("Delete spawned resources failed");
-        }
+        // !deprecated
+        /* const res_1 = await deleteSpawnedResourcesForSpawnRegion(
+          spawnRegion.id,
+          trx,
+        ); */
 
         // Use Promise.allSettled so that we throw an error and exit transaction if any one fails
         const allSettledResult = await Promise.allSettled(
@@ -379,4 +390,15 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
       resources: priorResources,
     } as SpawnRegionWithResourcesPartial;
   }
+};
+
+export const deleteSpawnedResourcesForSpawnRegion = async (
+  spawnRegionId: string,
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  return await prismaClient.spawnedResource.deleteMany({
+    where: {
+      spawnRegionId: spawnRegionId,
+    },
+  });
 };

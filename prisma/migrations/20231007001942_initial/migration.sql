@@ -57,6 +57,7 @@ CREATE TABLE "SpawnedResource" (
     "spawn_region_id" TEXT NOT NULL,
     "h3_index" TEXT NOT NULL,
     "h3_resolution" INTEGER NOT NULL,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
 
     CONSTRAINT "SpawnedResource_pkey" PRIMARY KEY ("id")
 );

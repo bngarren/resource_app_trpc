@@ -72,6 +72,7 @@ model SpawnedResource {
   spawnRegionId     String             @map("spawn_region_id")
   h3Index           String             @unique @map("h3_index")
   h3Resolution      Int                @map("h3_resolution")
+  isActive          Boolean            @map("is_active") @default(true)
   HarvestOperations HarvestOperation[]
 
   // Each SpawnedResource is uniquely defined by an h3Index and spawnRegionId

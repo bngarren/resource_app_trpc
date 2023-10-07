@@ -29,7 +29,6 @@ import { arcaneEnergyResourceMetadataSchema } from "../src/schema";
 import config from "../src/config";
 import {
   addDays,
-  addMinutes,
   addSeconds,
   hoursToMinutes,
   isSameSecond,
@@ -838,9 +837,10 @@ describe("/harvester", () => {
       );
 
       // Expected energyEndTime calculation
-      const expectedEnergyEndTime = addMinutes(
+      const expectedEnergyEndTime = addSeconds(
         requestTime,
         amount *
+          60.0 *
           metadata.energyEfficiency *
           config.base_minutes_per_arcane_energy_unit,
       );

@@ -5,6 +5,12 @@ import {
   SpawnedResourceWithResource,
 } from "../types";
 
+/**
+ * ### Gets the Spawn Region that owns/owned a SpawnedResource, by id
+ * @param spawnedResourceId
+ * @param prismaClient
+ * @returns
+ */
 export const getSpawnRegionBySpawnedResourceId = async (
   spawnedResourceId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
@@ -93,6 +99,8 @@ export const getSpawnRegion = async (
  * of `SpawnedResourceWithResource`, which includes the SpawnedResource and
  * Resource models.
  *
+ * Defaults to include *only* **active** spawned resources.
+ *
  * #### Destructuring
  * The caller could destructure the result object in order to get a SpawnRegion
  * and SpawnedResourceWithResource[] separately.
@@ -104,11 +112,14 @@ export const getSpawnRegion = async (
  * ---
  *
  * @param id
+ * @param includeInactive - Default is false. If true, will include inactive SpawnedResources that are associated
+ * with this SpawnRegion
  * @param prismaClient
  * @returns SpawnRegionWithResources
  */
 export const getSpawnRegionWithResources = async (
   id: string,
+  includeInactive = false,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<SpawnRegionWithResources> => {
   const spawnRegion = await prismaClient.spawnRegion.findUnique({
@@ -127,7 +138,15 @@ export const getSpawnRegionWithResources = async (
   }
 
   const resources: SpawnedResourceWithResource[] =
-    spawnRegion.SpawnedResources.map((spawnedResource) => {
+    spawnRegion.SpawnedResources.filter((spawnedResource) => {
+      // Filter the SpawnedResources; defaults to including only active ones
+      if (includeInactive) {
+        return true;
+      } else {
+        return spawnedResource.isActive;
+      }
+    }).map((spawnedResource) => {
+      // Add the Resource as a property to the SpawnedResource
       const { resource, ...rest } = spawnedResource;
       return {
         ...rest,
@@ -137,7 +156,7 @@ export const getSpawnRegionWithResources = async (
 
   const { SpawnedResources, ...restSpawnRegion } = spawnRegion;
 
-  // Include resources
+  // Return the SpawnRegion along with SpawnedResourceWithResource[]
   return {
     ...restSpawnRegion,
     resources,

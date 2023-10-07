@@ -35,6 +35,7 @@ export interface SpawnRegionWithResourcesPartial
 }
 
 type test = Expand<SpawnRegionWithResources>;
+type test2 = Expand<SpawnedResourceWithResource>;
 
 export type Coordinate = {
   latitude: number;
