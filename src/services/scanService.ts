@@ -16,6 +16,7 @@ import { v4 as uuid } from "uuid";
 import { logger } from "../logger/logger";
 import { getDistanceBetweenCells } from "../util/getDistanceBetweenCells";
 import { getSpawnRegionsAround } from "../util/getSpawnRegionsAround";
+import { SpawnRegion } from "@prisma/client";
 
 export const handleScan = async (
   fromLocation: Coordinate,
@@ -65,7 +66,10 @@ export const handleScan = async (
       h3Resolution: config.spawn_region_h3_resolution,
     };
   });
-  const newSpawnRegions = await handleCreateSpawnRegions(regionModels);
+  let newSpawnRegions: SpawnRegion[] = [];
+  if (regionModels.length > 0) {
+    newSpawnRegions = await handleCreateSpawnRegions(regionModels);
+  }
 
   const spawnRegions = [...existingSpawnRegions, ...newSpawnRegions];
 

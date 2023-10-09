@@ -24,7 +24,11 @@ import {
 } from "../src/services/userInventoryService";
 import { updateHarvesterById } from "../src/queries/queryHarvester";
 import { ScanRequestOutput } from "../src/types/trpcTypes";
-import { getResourceByUrl } from "../src/queries/queryResource";
+import {
+  getResourceByUrl,
+  getSpawnedResourcesForSpawnRegion,
+  updateSpawnedResources,
+} from "../src/queries/queryResource";
 import { arcaneEnergyResourceMetadataSchema } from "../src/schema";
 import config from "../src/config";
 import {
@@ -34,6 +38,7 @@ import {
   isSameSecond,
   minutesToSeconds,
   subHours,
+  subMinutes,
   subSeconds,
 } from "date-fns";
 import { validateWithZod } from "../src/util/validateWithZod";
@@ -243,10 +248,17 @@ describe("/harvester", () => {
       // should be present before being deployed
       expect(hasTestHarvester(preDeploy_userInventory)).toBe(true);
 
-      await authenticatedRequest(server, "POST", "/harvester.deploy", idToken, {
-        harvesterId: testHarvester.id,
-        harvestRegion: harvestRegion,
-      });
+      const d = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.deploy",
+        idToken,
+        {
+          harvesterId: testHarvester.id,
+          harvestRegion: harvestRegion,
+        },
+      );
+      throwIfBadStatus(d);
 
       const postDeploy_userInventory = await getUserInventoryItems(testUser.id);
 
@@ -313,6 +325,55 @@ describe("/harvester", () => {
       expect(postDeploy_harvestOperations).toHaveLength(
         interactableResources.length,
       );
+    });
+
+    it("should only create harvest operations for active spawned resources", async () => {
+      // mock scan that generates 3 nearby spawned resources
+      const mockScanResult = await mockScan(3, server, idToken);
+      const mockScanRegion = h3.latLngToCell(
+        mockScanResult.metadata.scannedLocation[0],
+        mockScanResult.metadata.scannedLocation[1],
+        config.harvest_h3_resolution,
+      );
+
+      const spawnRegion = await prisma.spawnRegion.findUniqueOrThrow({
+        where: {
+          h3Index: "892a3064093ffff",
+        },
+      });
+
+      const spawnedResources = await getSpawnedResourcesForSpawnRegion(
+        spawnRegion.id,
+      );
+
+      // make the first spawned resource 'inactive'
+      const inactiveSpawnedResource = spawnedResources[0];
+      await updateSpawnedResources([inactiveSpawnedResource.id], {
+        isActive: false,
+      });
+
+      // Now deploy the testHarvester to the mock scan location
+      const res1 = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.deploy",
+        idToken,
+        {
+          harvesterId: testHarvester.id,
+          harvestRegion: mockScanRegion,
+        },
+      );
+      throwIfBadStatus(res1);
+
+      const postDeploy_harvestOperations =
+        await prisma.harvestOperation.findMany({
+          where: {
+            harvesterId: testHarvester.id,
+          },
+        });
+
+      // Should have 2 harvest operations (3 spawned resources - 1 inactive = 2 active)
+      expect(postDeploy_harvestOperations).toHaveLength(2);
     });
   });
 
@@ -996,6 +1057,7 @@ describe("/harvester", () => {
 
     // TODO: WIP
     it("should deploy harvester and accurately store priorPeriodHarvested as energy is added over time", async () => {
+      // Verify that mockScan (from beforeEach()) gave us 3 spawned resources
       expect(prisma.spawnedResource.findMany()).resolves.toHaveLength(3);
 
       // verify harvester is deployed and without energy
@@ -1017,7 +1079,7 @@ describe("/harvester", () => {
       // choose the energy resource
       const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
 
-      const requestTime = new Date();
+      const initialAddEnergyDate = new Date();
 
       const amount = 10;
       const res = await authenticatedRequest(
@@ -1032,6 +1094,20 @@ describe("/harvester", () => {
         },
       );
       throwIfBadStatus(res);
+
+      // Back date the harvester and harvest operations
+
+      // Now we will manually set the energyStartTime to 1 hour ago
+      // ! ???
+      const minutesRunning = 60;
+      await prisma.harvester.update({
+        where: {
+          id: testHarvester.id,
+        },
+        data: {
+          energyStartTime: subMinutes(new Date(), minutesRunning), // pretend it has been at least 60 minutes
+        },
+      });
     });
   });
 });

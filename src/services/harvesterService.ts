@@ -178,7 +178,7 @@ export const handleDeploy = async (
     config.scan_distance,
   );
 
-  // Get spawned resources for each spawn region and filter by user_interact_distance (from config)
+  // Get active spawned resources for each spawn region and filter by user_interact_distance (from config)
   const harvestableSpawnedResources = await getAllSettled<SpawnedResource[]>(
     spawnRegions.map((spawnRegion) => {
       return getSpawnedResourcesForSpawnRegion(spawnRegion.id);

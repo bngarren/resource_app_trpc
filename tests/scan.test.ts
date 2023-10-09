@@ -4,6 +4,7 @@ import { TestSingleton } from "./TestSingleton";
 import {
   authenticatedRequest,
   extractDataFromTRPCResponse,
+  harvestRegion,
   resetPrisma,
   translateLatitude,
 } from "./testHelpers";
@@ -35,9 +36,11 @@ describe("/scan", () => {
     await resetPrisma();
   });
 
+  const latLng = h3.cellToLatLng(harvestRegion); // Longwood Park, Boston, MA
+
   // Setup some test data/constants for this test suite
-  const latitude = 42.339754; // Longwood Park, Boston, MA
-  const longitude = -71.115306;
+  const latitude = latLng[0];
+  const longitude = latLng[1];
 
   const getValidRequestBody = (
     _latitude = latitude,
@@ -59,19 +62,25 @@ describe("/scan", () => {
     );
 
   it("should return status code 400 (Bad Request) if missing/malformed POST body", async () => {
-    const result = await request(server)
-      .post("/scan")
-      .set("Authorization", `Bearer ${idToken}`)
-      .send({});
-    expect(result.statusCode).toBe(400);
+    const res = await authenticatedRequest(
+      server,
+      "POST",
+      "/scan",
+      idToken,
+      {},
+    );
+    expect(res.statusCode).toBe(400);
   });
 
   it("should create the appropriate number of new spawn regions, if none present", async () => {
     // Since the database should be empty, we expect SpawnRegions should be created (and not reused)
-    await request(server)
-      .post("/scan")
-      .set("Authorization", `Bearer ${idToken}`)
-      .send(getValidRequestBody());
+    await authenticatedRequest(
+      server,
+      "POST",
+      "/scan",
+      idToken,
+      getValidRequestBody(),
+    );
 
     // Check database for correct state
     const regions = await prisma.spawnRegion.findMany();
@@ -80,6 +89,12 @@ describe("/scan", () => {
   });
 
   it("should not create new spawn regions if expected are already present", async () => {
+    // mock this function to track when spawn regions are created
+    const spy_handleCreateSpawnRegions = jest.spyOn(
+      SpawnRegionService,
+      "handleCreateSpawnRegions",
+    );
+
     const first_requestBody = getValidRequestBody();
     const first_h3Index = h3.latLngToCell(
       first_requestBody.userLocation.latitude,
@@ -87,10 +102,13 @@ describe("/scan", () => {
       config.spawn_region_h3_resolution,
     );
     // Since the database should be empty, we expect SpawnRegions should be created (and not reused)
-    await request(server)
-      .post("/scan")
-      .set("Authorization", `Bearer ${idToken}`)
-      .send(first_requestBody);
+    await authenticatedRequest(
+      server,
+      "POST",
+      "/scan",
+      idToken,
+      first_requestBody,
+    );
 
     const firstScan_regions = await prisma.spawnRegion.findMany();
 
@@ -112,10 +130,13 @@ describe("/scan", () => {
     // Both locations should be within the same h3 cell though
     expect(first_h3Index).toBe(second_h3Index);
 
-    await request(server)
-      .post("/scan")
-      .set("Authorization", `Bearer ${idToken}`)
-      .send(second_requestBody);
+    await authenticatedRequest(
+      server,
+      "POST",
+      "/scan",
+      idToken,
+      second_requestBody,
+    );
 
     const secondScan_regions = await prisma.spawnRegion.findMany();
 
@@ -130,6 +151,11 @@ describe("/scan", () => {
       .sort();
 
     expect(firstScan_h3Indices).toEqual(secondScan_h3Indices);
+
+    // Another way to verify that spawn region creation was only called 1 time
+    expect(spy_handleCreateSpawnRegions).toHaveBeenCalledTimes(1);
+
+    spy_handleCreateSpawnRegions.mockRestore();
   });
 
   // Test create SpawnRegions failure
@@ -146,10 +172,13 @@ describe("/scan", () => {
     );
 
     // Since the database should be empty, we expect SpawnRegions should be created (and not reused)
-    const response = await request(server)
-      .post("/scan")
-      .set("Authorization", `Bearer ${idToken}`)
-      .send(getValidRequestBody());
+    const response = await authenticatedRequest(
+      server,
+      "POST",
+      "/scan",
+      idToken,
+      getValidRequestBody(),
+    );
 
     // Should send the correct status code
     expect(response.status).toBe(500);
@@ -176,10 +205,13 @@ describe("/scan", () => {
       Promise.reject(new Error("mock - updateSpawnRegion error")),
     );
 
-    const response = await request(server)
-      .post("/scan")
-      .set("Authorization", `Bearer ${idToken}`)
-      .send(getValidRequestBody());
+    const response = await await authenticatedRequest(
+      server,
+      "POST",
+      "/scan",
+      idToken,
+      getValidRequestBody(),
+    );
 
     // Should send the correct status code
     expect(response.status).toBe(500);
@@ -195,7 +227,7 @@ describe("/scan", () => {
     // Each SpawnRegion should still have null reset_date (should not have been updated)
     regions.forEach((r) => expect(r.resetDate).toBeFalsy());
 
-    // Should not have any resources in the database if our updateSpawnRegion's all failed
+    // Should not have any spawned resources in the database if our updateSpawnRegion's all failed
     expect(prisma.spawnedResource.findMany()).resolves.toHaveLength(0);
 
     // Remove the spy

@@ -109,18 +109,22 @@ export const getResourcesByIds = async (
  * ### Gets the resources associated with a given SpawnRegion
  * Each resource is the type `SpawnedResourceWithResource`
  *
+ * **Defaults to only include active SpawnedResources**
+ *
  * Use the helper function from resourceService `pruneSpawnedResourceWithResource`
  * to get only the SpawnedResources, or instead call `getSpawnedResourcesForSpawnRegion()`
  *
  */
 export const getResourcesForSpawnRegion = async (
   spawnRegionId: string,
+  includeInactive = false,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
   const res: SpawnedResourceWithResource[] =
     await prismaClient.spawnedResource.findMany({
       where: {
         spawnRegionId: spawnRegionId,
+        ...(!includeInactive && { isActive: true }), // conditionally filter if includeActive is false (default)
       },
       include: {
         resource: true,
@@ -145,17 +149,21 @@ export const getSpawnedResourceById = async (
 /**
  * ### Gets the SpawnedResources associated with a given SpawnRegion
  *
+ * **Defaults to include only active SpawnedResources**
+ *
  * This only returns `SpawnedResource[]`, not the custom `SpawnedResourceWithResource[]` type.
  * For that, instead use `getResourcesForSpawnRegion()`
  *
  */
 export const getSpawnedResourcesForSpawnRegion = async (
   spawnRegionId: string,
+  includeInactive = false,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
   return await prismaClient.spawnedResource.findMany({
     where: {
       spawnRegionId: spawnRegionId,
+      ...(!includeInactive && { isActive: true }),
     },
   });
 };
@@ -324,6 +332,7 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
         ); */
 
         // Use Promise.allSettled so that we throw an error and exit transaction if any one fails
+
         const allSettledResult = await Promise.allSettled(
           spawnedResourceModels.map((model) =>
             createSpawnedResource(model, trx),

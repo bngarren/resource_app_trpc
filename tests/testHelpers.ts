@@ -135,7 +135,7 @@ export const harvestRegion = "8a2a30640907fff"; // Longwood Park, Boston at h3 r
  * - The scan will occur at a **consistent location** (Longwood Park, Boston) which is
  * represented by the scanRegion h3 index.
  * - This will use a scanDistance=1 to generate 7 SpawnRegions
- * - It will generate exactly **x amount of spawned resources** (0 to 3) within the central most spawn region
+ * - It will generate exactly **x amount of spawned resources** (0 to 3) within the central most spawn region (892a3064093ffff)
  * that will always have the same location (same h3 index, resolution 11)
  * - All 3 spawned resources are within 250 meters
  *

@@ -67,9 +67,19 @@ export const extendSpawnedResource = async (
   };
 };
 
-export const getResourcesInSpawnRegion = async (spawnRegionId: string) => {
+/**
+ * ### Returns the SpawnedResourcesWithResource associated with a SpawnRegion
+ * By default, this will return only those spawned resources that are active.
+ * @param spawnRegionId
+ * @param includeInactive Optional. Defaults to false. Set to true to retrieve ALL resources (inactive and active)
+ * @returns
+ */
+export const getResourcesInSpawnRegion = async (
+  spawnRegionId: string,
+  includeInactive = false,
+) => {
   // queryResource
-  return await getResourcesForSpawnRegion(spawnRegionId);
+  return await getResourcesForSpawnRegion(spawnRegionId, includeInactive);
 };
 
 /**
@@ -125,13 +135,15 @@ export const getRandomResource = async () => {
  * _Requires a spawn region id and an h3 index (for the resource)_
  * @param spawnRegionId
  * @param resourceH3Index
- * @param partialResourceModel
+ * @param resourceId
+ * @param isActive
  * @returns SpawnedResourceModel
  */
 export const createSpawnedResourceModel = (
   spawnRegionId: string,
   resourceH3Index: string,
   resourceId: string,
+  isActive = true,
 ) => {
   // using "connect" is the idiomatic way to associate the new record with an existing record by its unique identifier
   const result: Prisma.SpawnedResourceCreateInput = {
@@ -147,6 +159,7 @@ export const createSpawnedResourceModel = (
     },
     h3Index: resourceH3Index,
     h3Resolution: getResolution(resourceH3Index),
+    isActive: isActive,
   };
 
   return result;
