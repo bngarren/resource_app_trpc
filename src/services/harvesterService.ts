@@ -1,3 +1,4 @@
+import { pdate, pduration } from "../util/getPrettyDate";
 import { arcaneEnergyResourceMetadataSchema } from "./../schema/index";
 import { getAllSettled } from "./../util/getAllSettled";
 import {
@@ -36,6 +37,7 @@ import {
   addMilliseconds,
   differenceInMilliseconds,
   getTime,
+  isAfter,
   isBefore,
   min,
 } from "date-fns";
@@ -235,17 +237,25 @@ const getAmountHarvestedByHarvestOperation = (
   const leftLimit = harvestOperation.startTime ?? asOf;
   // The right limit is either the endTime or asOf time (current)
   const rightLimit = min([asOf, harvestOperation.endTime]);
-  // Calculate time harvested in milliseconds
-  const timeHarvestedMillis = differenceInMilliseconds(rightLimit, leftLimit);
-  if (timeHarvestedMillis < 0) {
-    throw new Error(
-      `Invalid time range: harvested time cannot be negative. (${timeHarvestedMillis})`,
-    );
-  }
+
   // TODO: need to add in harvester extraction rate/yield or other bonuses
-  // Convert time to minutes and then apply conversion to get units
-  const amountHarvested =
-    (timeHarvestedMillis / 60000) * config.base_units_per_minute_harvested;
+
+  const amountHarvested = calculatePeriodHarvested(leftLimit, rightLimit);
+
+  logger.debug(
+    {
+      harvestOperationId: harvestOperation.id,
+      asOf: pdate(asOf),
+      "harvestOperation.endTime": pdate(harvestOperation.endTime),
+      leftLimit: pdate(leftLimit),
+      rightLimit: pdate(rightLimit),
+      periodDuration: pduration(
+        differenceInMilliseconds(rightLimit, leftLimit),
+      ),
+      amountHarvested,
+    },
+    `getAmountHarvestedByHarvestOperation() - complete`,
+  );
 
   return amountHarvested;
 };
@@ -255,17 +265,31 @@ const getAmountHarvestedByHarvestOperation = (
  *
  * Updating a harvest operation with new energyEndTime will generate a
  * new startTime and recalculate an endTime and priorPeriodHarvested
+ * - The new startTime defaults to current time (new Date()), however, if
+ * the energyStartTime parameter is passed, this will be used instead (**USE WITH CAUTION**). This
+ * is useful for back-dating harvest operations for testing purposes
  *
  * It's like saying here is more energy...Store the amount harvested from the
  * prior startTime to endTime duration, and now make a new startTime and endTime
  *
  * @param harvesterId
  * @param energyEndTime
+ * @param energyStartTime
  */
 const updateHarvestOperationsForHarvester = async (
   harvesterId: string,
   energyEndTime: Date,
+  energyStartTime?: Date,
 ) => {
+  logger.debug(
+    {
+      harvesterId,
+      energyEndTime: pdate(energyEndTime),
+      energyStartTime: pdate(energyStartTime),
+    },
+    `updateHarvestOperationsForHarvester() - begin`,
+  );
+
   const harvestOperations = await getHarvestOperationsForHarvesterId(
     harvesterId,
   );
@@ -274,7 +298,7 @@ const updateHarvestOperationsForHarvester = async (
   // to compare with the energyEndTime
   // We create an array of Promises then later await it
   const newHarvestOperationsPromises = [...harvestOperations].map(
-    async (harvestOperation) => {
+    async (harvestOperation, index) => {
       /* To determine the new endTime, we compare the SpawnedResource's SpawnRegion's
       `resetDate` and the energyEndTime of the harvester, picking the earlier of the two */
 
@@ -288,24 +312,56 @@ const updateHarvestOperationsForHarvester = async (
         );
       }
 
-      const currentDate = new Date();
+      logger.debug(
+        { harvestOperation, resetDate: pdate(spawnRegion.resetDate) },
+        `Updating HarvestOperation #${index + 1}...(this is pre):`,
+      );
+
+      let newStartTime: Date = new Date();
+
+      if (energyStartTime != null) {
+        newStartTime = energyStartTime;
+      }
 
       // Calculate the priorPeriodHarvested
       const amountHarvested = getAmountHarvestedByHarvestOperation(
         harvestOperation,
-        currentDate,
+        newStartTime,
       );
 
-      harvestOperation.priorPeriodHarvested += amountHarvested;
+      const updatedHarvestOperation = { ...harvestOperation };
 
-      harvestOperation.startTime = currentDate;
+      updatedHarvestOperation.priorPeriodHarvested += amountHarvested;
+
+      // Update new startTime and endTimes
+      // If newStartTime is AFTER the endTime, it is set to null (we don't start again but it is finished)
 
       // isBefore() returns a boolean, the first date is before the second date
-      harvestOperation.endTime = isBefore(spawnRegion.resetDate, energyEndTime)
-        ? spawnRegion.resetDate
-        : energyEndTime;
+      let isResourceDepleted;
+      if (isBefore(spawnRegion.resetDate, energyEndTime)) {
+        updatedHarvestOperation.endTime = spawnRegion.resetDate;
+        isResourceDepleted = true;
+      } else {
+        updatedHarvestOperation.endTime = energyEndTime;
+        isResourceDepleted = false;
+      }
 
-      return harvestOperation;
+      // isAfter() returns a boolean, the first date is after the second date
+      if (isAfter(newStartTime, updatedHarvestOperation.endTime)) {
+        updatedHarvestOperation.startTime = null;
+        logger.warn(
+          `Cannot give new startTime to harvest operation as the endTime has passed.
+          ${
+            isResourceDepleted
+              ? `The resetDate has passed (resource depleted).`
+              : `The energy is depleted.`
+          }`,
+        );
+      } else {
+        updatedHarvestOperation.startTime = newStartTime;
+      }
+
+      return updatedHarvestOperation;
     },
   );
 
@@ -314,12 +370,30 @@ const updateHarvestOperationsForHarvester = async (
   const res = await updateHarvestOperationsTransaction(newHarvestOperations);
 
   if (res != null) {
+    logger.debug(res, `Updated HarvestOperations:`);
     return res;
   } else {
     throw new Error(
       "Unexpected problem within updateHarvestOperationsForHarvester()",
     );
   }
+};
+
+export const calculatePeriodHarvested = (
+  startTime: Date,
+  endTime: Date,
+  _extractionRate?: number,
+) => {
+  let extractionRate: number;
+  if (_extractionRate == null) {
+    extractionRate = config.base_units_per_minute_harvested;
+  } else {
+    extractionRate = _extractionRate;
+  }
+
+  return (
+    (differenceInMilliseconds(endTime, startTime) / 60000.0) * extractionRate
+  );
 };
 
 /**
@@ -370,6 +444,7 @@ export const handleAddEnergy = async (
   _harvester: string | Harvester,
   amount: number,
   energySourceId: string,
+  energyStartTime?: Date,
 ) => {
   /*
   ! TODO: WIP
@@ -437,11 +512,15 @@ export const handleAddEnergy = async (
     });
   }
 
-  /* New energy start time is now.
+  /* New energy start time is now, or whatever energyStartTime was passed as a param for testing purposes
   - When energy is added to the harvester, we recalculate the initialEnergy and new
   energyStartTime and energyEndTime
   */
-  const newEnergyStartTime = new Date();
+  let newEnergyStartTime = new Date();
+
+  if (energyStartTime != null) {
+    newEnergyStartTime = energyStartTime;
+  }
 
   // If harvester already had energy, calculate the remaining amount
   let remainingEnergy: number;
@@ -472,9 +551,19 @@ export const handleAddEnergy = async (
   const newInitialEnergy = remainingEnergy + amount;
 
   // Calculate the newEnergyEndTime
+
   const newEnergyEndTime = addMilliseconds(
     newEnergyStartTime,
     newInitialEnergy * minutesPerEnergyUnit * 60000.0,
+  );
+
+  logger.debug(
+    `Adding ${amount} unit${amount === 1 ? "" : "s"} of ${
+      energyResource.name
+    } will add ${pduration(amount * minutesPerEnergyUnit * 60000.0)} of energy,
+    giving total energy duration of ${pduration(
+      newInitialEnergy * minutesPerEnergyUnit * 60000.0,
+    )}.`,
   );
 
   // Update the harvester with new energy data
@@ -489,12 +578,17 @@ export const handleAddEnergy = async (
   const updatedHarvestOperations = await updateHarvestOperationsForHarvester(
     harvester.id,
     newEnergyEndTime,
+    energyStartTime,
   );
 
   logger.info(
-    `New energy added to harvester (id=${harvester.id}), amount=${amount}, new initialEnergy=${newInitialEnergy}`,
+    {
+      newInitialEnergy,
+      newEnergyStartTime: pdate(newEnergyStartTime),
+      newEnergyEndTime: pdate(newEnergyEndTime),
+    },
+    `handleAddEnergy() - complete. Updated Harvester:`,
   );
-  logger.info(updatedHarvestOperations);
 
   return res;
 };

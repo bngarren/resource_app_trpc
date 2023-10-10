@@ -2,6 +2,7 @@ import fs from "fs";
 import pino from "pino";
 import config from "../config";
 import path from "path";
+import * as pretty from "pino-pretty";
 
 const devLogger = () =>
   pino({
@@ -31,16 +32,25 @@ const testLogger = () => {
   fs.mkdirSync(logDirectory, { recursive: true });
 
   // Stream where the logs will be written.
-  const stream = fs.createWriteStream(testLogPath, {
+  const writeStream = fs.createWriteStream(testLogPath, {
     flags: "a", // 'a' means appending (old data will be preserved)
+  });
+
+  const prettyStream = pretty.default({
+    destination: testLogPath,
+    translateTime: "SYS:mm/dd HH:MM:ss Z",
+    append: true,
+    colorize: true,
+    colorizeObjects: true,
+    ignore: "hostname,pid",
   });
 
   const logger = pino(
     {
-      level: config.log_level,
+      level: "debug", // previously, config.log_level,
       sync: true,
     },
-    stream,
+    prettyStream,
   );
 
   return logger;
