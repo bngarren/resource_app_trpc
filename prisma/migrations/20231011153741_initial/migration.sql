@@ -97,7 +97,8 @@ CREATE TABLE "HarvestOperation" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "start_time" TIMESTAMP(3),
     "end_time" TIMESTAMP(3),
-    "priorPeriodHarvested" DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    "priorHarvested" DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    "isCompleted" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "HarvestOperation_pkey" PRIMARY KEY ("id")
 );

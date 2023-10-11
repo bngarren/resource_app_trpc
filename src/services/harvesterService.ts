@@ -263,8 +263,8 @@ const getAmountHarvestedByHarvestOperation = (
 /**
  * ### Updates each harvest operation based on a new energyEndTime
  *
- * Updating a harvest operation with new energyEndTime will generate a
- * new startTime and recalculate an endTime and priorPeriodHarvested
+ * Updating a harvest operation with new energyEndTime will attempt to generate a
+ * new startTime and recalculate an endTime and priorHarvested amount.
  * - The new startTime defaults to current time (new Date()), however, if
  * the energyStartTime parameter is passed, this will be used instead (**USE WITH CAUTION**). This
  * is useful for back-dating harvest operations for testing purposes
@@ -323,7 +323,7 @@ const updateHarvestOperationsForHarvester = async (
         newStartTime = energyStartTime;
       }
 
-      // Calculate the priorPeriodHarvested
+      // Calculate the amount harvested for this prior period
       const amountHarvested = getAmountHarvestedByHarvestOperation(
         harvestOperation,
         newStartTime,
@@ -331,7 +331,8 @@ const updateHarvestOperationsForHarvester = async (
 
       const updatedHarvestOperation = { ...harvestOperation };
 
-      updatedHarvestOperation.priorPeriodHarvested += amountHarvested;
+      // Add the prior period amount to the running priorHarvested amount stored in the harvest operation
+      updatedHarvestOperation.priorHarvested += amountHarvested;
 
       // Update new startTime and endTimes
       // If newStartTime is AFTER the endTime, it is set to null (we don't start again but it is finished)
@@ -354,7 +355,7 @@ const updateHarvestOperationsForHarvester = async (
           ${
             isResourceDepleted
               ? `The resetDate has passed (resource depleted).`
-              : `The energy is depleted.`
+              : `The energy is depleted? Ensure this is not an error!`
           }`,
         );
       } else {

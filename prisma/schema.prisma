@@ -122,7 +122,14 @@ model HarvestOperation {
   spawnedResource      SpawnedResource @relation(fields: [spawnedResourceId], references: [id])
   spawnedResourceId    String          @map("spawned_resource_id")
   createdAt            DateTime        @default(now()) @map("created_at")
+  // The current period is marked by a non-null startTime.
   startTime            DateTime?       @map("start_time")
+  // The endTime is either when energy runs out or the resource is inactive (stale)
   endTime              DateTime?       @map("end_time")
-  priorPeriodHarvested Float           @default(0.0) // The amount harvested during the prior startTime to endTime period
+  // The amount harvested during the prior periods. Does not include what has been harvested
+  // during this current startTime period.
+  priorHarvested       Float           @default(0.0) 
+  // Flag is set to true when the resource is stale so that the operation
+  // cannot be restarted, even when new energy is supplied
+  isCompleted          Boolean         @default(false)
 }
