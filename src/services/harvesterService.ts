@@ -261,16 +261,26 @@ const getAmountHarvestedByHarvestOperation = (
 };
 
 /**
- * ### Updates each harvest operation based on a new energyEndTime
+ * ### Updates each harvest operation of a harvester based on given energy start and end times
  *
- * Updating a harvest operation with new energyEndTime will attempt to generate a
- * new startTime and recalculate an endTime and priorHarvested amount.
- * - The new startTime defaults to current time (new Date()), however, if
- * the energyStartTime parameter is passed, this will be used instead (**USE WITH CAUTION**). This
- * is useful for back-dating harvest operations for testing purposes
+ * Updating a harvest operation with new `energyEndTime` will attempt to generate a
+ * new `startTime` and recalculate an `endTime` and `priorHarvested` amount.
  *
  * It's like saying here is more energy...Store the amount harvested from the
- * prior startTime to endTime duration, and now make a new startTime and endTime
+ * prior startTime to endTime duration, and now make a new startTime and endTime if this
+ * harvest operation should continue
+ *
+ * - A new startTime is only created if it will occur BEFORE the new endTime
+ *   - Thus, startTime will be set to null if endTime has already passed, i.e
+ * resetDate is passed or no energy
+ * - The new startTime defaults to current time, i.e. new Date()
+ *   - However, we should pass the `energyStartTime` parameter from the calling function
+ * in order to keep consistency.
+ *   - This parameter is also used (**WITH CAUTION**) for manually dating harvest operations for testing purposes.
+ *
+ * #### Warning
+ * The `harvesterId` can be used if only the string is needed. If the Harvester is retrieved, know
+ * that it is not yet updated with new energy data. Use the passed in energy params instead!
  *
  * @param harvesterId
  * @param energyEndTime
@@ -279,22 +289,25 @@ const getAmountHarvestedByHarvestOperation = (
 const updateHarvestOperationsForHarvester = async (
   harvesterId: string,
   energyEndTime: Date,
-  energyStartTime?: Date,
+  energyStartTime = new Date(),
 ) => {
+  let harvestOperations = await getHarvestOperationsForHarvesterId(harvesterId);
+
+  const totalHarvestOperations = harvestOperations.length;
+
+  harvestOperations = harvestOperations.filter((ho) => !ho.isCompleted);
+
   logger.debug(
     {
       harvesterId,
       energyEndTime: pdate(energyEndTime),
       energyStartTime: pdate(energyStartTime),
     },
-    `updateHarvestOperationsForHarvester() - begin`,
+    `updateHarvestOperationsForHarvester() - begin.
+    Harvest operations = ${harvestOperations.length} incomplete / ${totalHarvestOperations} total`,
   );
 
-  const harvestOperations = await getHarvestOperationsForHarvesterId(
-    harvesterId,
-  );
-
-  // Loop through the current harvest operations to get their spawn region's reset_date
+  // Loop through the incomplete (still had resource) harvest operations to get their spawn region's reset_date
   // to compare with the energyEndTime
   // We create an array of Promises then later await it
   const newHarvestOperationsPromises = [...harvestOperations].map(
@@ -317,16 +330,10 @@ const updateHarvestOperationsForHarvester = async (
         `Updating HarvestOperation #${index + 1}...(this is pre):`,
       );
 
-      let newStartTime: Date = new Date();
-
-      if (energyStartTime != null) {
-        newStartTime = energyStartTime;
-      }
-
       // Calculate the amount harvested for this prior period
       const amountHarvested = getAmountHarvestedByHarvestOperation(
         harvestOperation,
-        newStartTime,
+        energyStartTime,
       );
 
       const updatedHarvestOperation = { ...harvestOperation };
@@ -337,29 +344,36 @@ const updateHarvestOperationsForHarvester = async (
       // Update new startTime and endTimes
       // If newStartTime is AFTER the endTime, it is set to null (we don't start again but it is finished)
 
+      // * Recalculate the endTime for this harvest operation
       // isBefore() returns a boolean, the first date is before the second date
-      let isResourceDepleted;
       if (isBefore(spawnRegion.resetDate, energyEndTime)) {
         updatedHarvestOperation.endTime = spawnRegion.resetDate;
-        isResourceDepleted = true;
       } else {
         updatedHarvestOperation.endTime = energyEndTime;
-        isResourceDepleted = false;
       }
 
+      // * If the endTime has already passed our energyStartTime, then we don't start.
       // isAfter() returns a boolean, the first date is after the second date
-      if (isAfter(newStartTime, updatedHarvestOperation.endTime)) {
+      if (isAfter(energyStartTime, updatedHarvestOperation.endTime)) {
         updatedHarvestOperation.startTime = null;
-        logger.warn(
-          `Cannot give new startTime to harvest operation as the endTime has passed.
-          ${
-            isResourceDepleted
-              ? `The resetDate has passed (resource depleted).`
-              : `The energy is depleted? Ensure this is not an error!`
-          }`,
-        );
+
+        // Is it because our resource is depleted?
+        if (isAfter(energyStartTime, spawnRegion.resetDate)) {
+          updatedHarvestOperation.isCompleted = true;
+          logger.debug(
+            `HarvestOperation isCompleted=true. ${pdate(
+              energyStartTime,
+            )} is AFTER ${pdate(spawnRegion.resetDate)}`,
+          );
+        } else {
+          // Or is it because energy is 0? thus, energyEndTime has passed. But resource remains...
+          logger.warn(
+            `HarvestOperation startTime=null. Is energy zero? Ensure not an error!`,
+          );
+        }
       } else {
-        updatedHarvestOperation.startTime = newStartTime;
+        // Okay to give new startTime since it is BEFORE the endTime (there remains time to harvest)
+        updatedHarvestOperation.startTime = energyStartTime;
       }
 
       return updatedHarvestOperation;
@@ -447,15 +461,6 @@ export const handleAddEnergy = async (
   energySourceId: string,
   energyStartTime?: Date,
 ) => {
-  /*
-  ! TODO: WIP
-  - [X] Based on the energy source type's metadata, calculate how long a unit of energy will last
-  - [X] Calculate the expected energy end time
-  - [X] Update the harvester with the energyStartTime (now), energyEndTime, and initialEnergy (amount)
-  - [X] Also update the harvester with energySourceId (if this is first energy)
-  - [ ] Run updateHarvestOperationsForHarvester(energyEndTime)
-  */
-
   let energyResource: Resource;
   try {
     energyResource = await getResource(energySourceId);
@@ -523,6 +528,11 @@ export const handleAddEnergy = async (
     newEnergyStartTime = energyStartTime;
   }
 
+  logger.debug(
+    { energyStartTime: pdate(newEnergyStartTime) },
+    `handleAddEnergy() - begin`,
+  );
+
   // If harvester already had energy, calculate the remaining amount
   let remainingEnergy: number;
   if (harvester.initialEnergy > 0) {
@@ -533,7 +543,7 @@ export const handleAddEnergy = async (
       // Use milliseconds to get best resolution, e.g., user adds energy very quickly after last energyStartTime
       const minutesLapsed =
         (getTime(newEnergyStartTime) - getTime(harvester.energyStartTime)) /
-          60000 +
+          60000.0 +
         0.000001; // milliseconds to minutes
 
       // Remaining energy is the initialEnergy minus what was used over the period of time
@@ -567,6 +577,19 @@ export const handleAddEnergy = async (
     )}.`,
   );
 
+  // Update each harvest operation with new energy end and start times
+  const updatedHarvestOperations = await updateHarvestOperationsForHarvester(
+    harvester.id,
+    newEnergyEndTime,
+    newEnergyStartTime,
+  );
+
+  if (updatedHarvestOperations.filter((ho) => !ho.isCompleted).length === 0) {
+    logger.warn(
+      `Added energy to a harvester with 0 incompleted (available) harvest operations. All resources are likely depleted.`,
+    );
+  }
+
   // Update the harvester with new energy data
   const res = await updateHarvesterById(harvester.id, {
     initialEnergy: newInitialEnergy,
@@ -574,13 +597,6 @@ export const handleAddEnergy = async (
     energyEndTime: newEnergyEndTime,
     energySourceId: energyResource.id,
   });
-
-  // TODO: Update each harvest operation with new energyEndTime
-  const updatedHarvestOperations = await updateHarvestOperationsForHarvester(
-    harvester.id,
-    newEnergyEndTime,
-    energyStartTime,
-  );
 
   logger.info(
     {

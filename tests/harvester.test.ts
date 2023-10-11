@@ -1080,9 +1080,9 @@ describe("/harvester", () => {
       - INITIAL ENERGY - At time 0 (t_0), add 2 units of energy. This will provide a certain duration of energy. Ideally ~2 hours.
       - ENERGY DEPLETED - At t_plus_3, we add 20 units of energy. During the update harvest operations logic, we want to correctly
       calculate the priorHarvested based on the energy running out at 2 hours. 
-      - ENERGY OKAY - At t_plus_6, we add 10 units of energy. We should have had enough energy to carry us through the last 3 hours,
+      - ENERGY OKAY - At t_plus_6, we add 50 units of energy. We should have had enough energy to carry us through the last 3 hours,
       therefore the calculated priorHarvested should reflect this.
-      - RESOURCE DEPLETED - At t_plus_24, we add 10 units of energy. The resources should have become stale/inactive at T+12,
+      - RESOURCE DEPLETED - At t_plus_24, we add 50 units of energy. The resources should have become stale/inactive at T+12,
       therefore the harvest operations were only able to harvest from T+6 to T+12.
       */
 
@@ -1092,6 +1092,7 @@ describe("/harvester", () => {
       const t_plus_6 = addHours(t_0, 6);
       const t_plus_12 = addHours(t_0, 12);
       const t_plus_24 = addHours(t_0, 24);
+      const t_plus_30 = addHours(t_0, 30);
 
       // TODO: using base extraction rate only. Must FIX this when harvester's have their own extraction rate multiplier
       const extractionRate = config.base_units_per_minute_harvested;
@@ -1216,7 +1217,7 @@ describe("/harvester", () => {
           amount: amount_2,
         },
       );
-      throwIfBadStatus(res1);
+      throwIfBadStatus(res2);
 
       const postAddEnergy2_testHarvester =
         await prisma.harvester.findUniqueOrThrow({
@@ -1270,7 +1271,7 @@ describe("/harvester", () => {
       );
 
       // Add more energy (3rd round)
-      const amount_3 = 10;
+      const amount_3 = 50;
       const res3 = await authenticatedRequest(
         server,
         "POST",
@@ -1282,6 +1283,7 @@ describe("/harvester", () => {
           amount: amount_3,
         },
       );
+      throwIfBadStatus(res3);
 
       const postAddEnergy3_testHarvester =
         await prisma.harvester.findUniqueOrThrow({
@@ -1297,16 +1299,12 @@ describe("/harvester", () => {
           },
         });
 
-      // 20 units of arcane quanta gave us 720 min.
+      // 50 units of arcane quanta gave us plenty of energy
       // *Since this is more than the 3 hour interval, we will use 3 hours
 
       const priorHarvested_2 =
         priorHarvested_1 +
-        calculatePeriodHarvested(
-          t_plus_3,
-          addMinutes(t_plus_3, 180.0),
-          extractionRate,
-        );
+        calculatePeriodHarvested(t_plus_3, t_plus_6, extractionRate);
 
       postAddEnergy3_harvestOperations.forEach((harvestOperation) => {
         expect(harvestOperation.priorHarvested).toBeCloseTo(
@@ -1315,11 +1313,25 @@ describe("/harvester", () => {
         );
       });
 
-      spy_handleAddEnergy.mockRestore();
-      /* const initialAddEnergyDate = new Date();
+      // Next, add energy at T+24
+      spy_handleAddEnergy.mockImplementation(
+        (
+          harvester: string | Harvester,
+          amount: number,
+          energySourceId: string,
+        ) => {
+          return orig_handleAddEnergy(
+            harvester,
+            amount,
+            energySourceId,
+            t_plus_24,
+          );
+        },
+      );
 
-      const amount = 10;
-      const res1 = await authenticatedRequest(
+      // Add more energy (4th round)
+      const amount_4 = 50;
+      const res4 = await authenticatedRequest(
         server,
         "POST",
         "/harvester.addEnergy",
@@ -1327,55 +1339,59 @@ describe("/harvester", () => {
         {
           harvesterId: testHarvester.id,
           energySourceId: arcaneQuanta.id,
-          amount: amount,
+          amount: amount_4,
         },
       );
-      throwIfBadStatus(res1);
+      throwIfBadStatus(res4);
 
-      const postAddEnergy1_testHarvester =
+      const postAddEnergy4_testHarvester =
         await prisma.harvester.findUniqueOrThrow({
           where: {
             id: testHarvester.id,
           },
         });
 
-      const postAddEnergy1_harvestOperations =
+      const postAddEnergy4_harvestOperations =
         await prisma.harvestOperation.findMany({
           where: {
             harvesterId: testHarvester.id,
           },
         });
 
-      const minutesLapsed = 60.0;
-      const backdated_startTime = subMinutes(
-        initialAddEnergyDate,
-        minutesLapsed,
-      );
-      const backdated_endTime = subMinutes(
-        postAddEnergy1_testHarvester.energyEndTime!,
-        minutesLapsed,
-      );
+      // 50 units of arcane quanta gave us plenty of energy
+      // * The resource will have been depleted at T+12 hours
+      // So we calculate T+6 to T+12 only...6 hours
 
-      await prisma.harvester.update({
-        where: {
-          id: testHarvester.id,
-        },
-        data: {
-          energyStartTime: backdated_startTime,
-          energyEndTime: backdated_endTime,
-        },
+      const priorHarvested_3 =
+        priorHarvested_2 +
+        calculatePeriodHarvested(t_plus_6, t_plus_12, extractionRate);
+
+      postAddEnergy4_harvestOperations.forEach((harvestOperation) => {
+        expect(harvestOperation.priorHarvested).toBeCloseTo(
+          priorHarvested_3,
+          1,
+        );
       });
 
-      await Promise.all(
-        postAddEnergy1_harvestOperations.map((harvestOperation) =>
-          updateHarvestOperationById(harvestOperation.id, {
-            startTime: backdated_startTime,
-            endTime: backdated_endTime,
-          }),
-        ),
+      // Last, add energy at T+30
+      spy_handleAddEnergy.mockImplementation(
+        (
+          harvester: string | Harvester,
+          amount: number,
+          energySourceId: string,
+        ) => {
+          return orig_handleAddEnergy(
+            harvester,
+            amount,
+            energySourceId,
+            t_plus_30,
+          );
+        },
       );
 
-      const res2 = await authenticatedRequest(
+      // Add more energy (4th round)
+      const amount_5 = 10;
+      const res5 = await authenticatedRequest(
         server,
         "POST",
         "/harvester.addEnergy",
@@ -1383,30 +1399,37 @@ describe("/harvester", () => {
         {
           harvesterId: testHarvester.id,
           energySourceId: arcaneQuanta.id,
-          amount: amount,
+          amount: amount_5,
         },
       );
-      throwIfBadStatus(res2);
+      throwIfBadStatus(res5);
 
-      const postAddEnergy2_testHarvester =
+      const postAddEnergy5_testHarvester =
         await prisma.harvester.findUniqueOrThrow({
           where: {
             id: testHarvester.id,
           },
         });
 
-      const postAddEnergy2_harvestOperations =
+      const postAddEnergy5_harvestOperations =
         await prisma.harvestOperation.findMany({
           where: {
             harvesterId: testHarvester.id,
           },
         });
 
-      console.log("postAddEnergy2_testHarvester", postAddEnergy2_testHarvester);
-      console.log(
-        "postAddEnergy2_harvestOperations",
-        postAddEnergy2_harvestOperations,
-      ); */
+      // * All resources have been depleted, should not have changed priorHarvested
+
+      const priorHarvested_4 = priorHarvested_3;
+
+      postAddEnergy5_harvestOperations.forEach((harvestOperation) => {
+        expect(harvestOperation.priorHarvested).toBeCloseTo(
+          priorHarvested_4,
+          1,
+        );
+      });
+
+      spy_handleAddEnergy.mockRestore();
     });
   });
 });
