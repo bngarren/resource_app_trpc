@@ -34,6 +34,8 @@ import { arcaneEnergyResourceMetadataSchema } from "../src/schema";
 import config from "../src/config";
 import {
   addDays,
+  addHours,
+  addMinutes,
   addSeconds,
   hoursToMinutes,
   isSameSecond,
@@ -1058,26 +1060,55 @@ describe("/harvester", () => {
 
     // TODO: WIP
     it("should deploy harvester and accurately store priorPeriodHarvested as energy is added over time", async () => {
+      /*
+      The premise of this testing strategy is that we deploy a harvester and mock the handleAddEnergy
+      calls so that we manually control the start times.
+      
+      In other words, we need fine control over the exact energyStartTime of the harvester and each
+      harvest operation so that we can calculate and test endTimes at various intervals in the "future"
+      from the starting point. If we try to deploy a harvester at current/present time, it's hard to
+      "advance time" and test the result.
+      
+      Overall, we want to test specific intervals of time in a chronological fashion
+      (as a harvester operates in real time) and see if the appopriate energy is being used and
+      amount of resource being harvested is correct, depending on if energy is present or
+      runs out and if the resetDate is passed.
+
+      * This below tests depend on certain hard-coded variables, that if changed, must also be adjusted below *
+      The testing schedule:
+      - Deploy harvester and manually "fix"/mock the resetDate of the spawnRegion to T+12 hours
+      - INITIAL ENERGY - At time 0 (t_0), add 2 units of energy. This will provide a certain duration of energy. Ideally ~2 hours.
+      - ENERGY DEPLETED - At t_plus_3, we add 20 units of energy. During the update harvest operations logic, we want to correctly
+      calculate the priorPeriodHarvested based on the energy running out at 2 hours. 
+      - ENERGY OKAY - At t_plus_6, we add 10 units of energy. We should have had enough energy to carry us through the last 3 hours,
+      therefore the calculated priorPeriodHarvested should reflect this.
+      - RESOURCE DEPLETED - At t_plus_24, we add 10 units of energy. The resources should have become stale/inactive at T+12,
+      therefore the harvest operations were only able to harvest from T+6 to T+12.
+      */
+
       // Fake times, for consistency
-      const t_minus_0 = new Date(2022, 8, 16, 6, 0, 0);
-      const t_minus_3 = subHours(t_minus_0, 3);
-      const t_minus_6 = subHours(t_minus_0, 6);
-      const t_minus_12 = subHours(t_minus_0, 12);
-      const t_minus_24 = subHours(t_minus_0, 24);
+      const t_0 = new Date(2022, 8, 16, 6, 0, 0);
+      const t_plus_3 = addHours(t_0, 3);
+      const t_plus_6 = addHours(t_0, 6);
+      const t_plus_12 = addHours(t_0, 12);
+      const t_plus_24 = addHours(t_0, 24);
+
+      // TODO: using base extraction rate only. Must FIX this when harvester's have their own extraction rate multiplier
+      const extractionRate = config.base_units_per_minute_harvested;
 
       // Verify that mockScan (from beforeEach()) gave us 3 spawned resources
       const spawnedResources = await prisma.spawnedResource.findMany();
 
       expect(spawnedResources).toHaveLength(3);
 
-      // "Fix" the spawn region's resetDate to occur at T-6 hours so we can verify how things work
+      // "Fix" the spawn region's resetDate to occur at T+12 hours so we can verify how things work
       // after the spawned resources should be inactive
       await prisma.spawnRegion.updateMany({
         where: {
           id: spawnedResources[0].spawnRegionId,
         },
         data: {
-          resetDate: t_minus_6,
+          resetDate: t_plus_12,
         },
       });
 
@@ -1106,11 +1137,9 @@ describe("/harvester", () => {
         `metadata for arcane_quanta`,
       );
 
-      const initialCurrentTime = new Date();
-
       const orig_handleAddEnergy = HarvesterService.handleAddEnergy;
 
-      // Add energy back-dated to T-24 hours ago
+      // Add initial energy at time T0
       const spy_handleAddEnergy = jest
         .spyOn(HarvesterService, "handleAddEnergy")
         .mockImplementation(
@@ -1119,16 +1148,11 @@ describe("/harvester", () => {
             amount: number,
             energySourceId: string,
           ) => {
-            return orig_handleAddEnergy(
-              harvester,
-              amount,
-              energySourceId,
-              t_minus_24,
-            );
+            return orig_handleAddEnergy(harvester, amount, energySourceId, t_0);
           },
         );
 
-      const amount_1 = 5;
+      const amount_1 = 3;
       const res1 = await authenticatedRequest(
         server,
         "POST",
@@ -1164,12 +1188,12 @@ describe("/harvester", () => {
 
       // Assertions after 1st round of energy add
       expect(postAddEnergy1_testHarvester.initialEnergy).toBe(amount_1);
-
+      // shouldn't have an priodPeriodHarvested after the first add energy
       postAddEnergy1_harvestOperations.forEach((harvestOperation) => {
         expect(harvestOperation.priorPeriodHarvested).toBe(0);
       });
 
-      // Add energy (backdated to T-12 hours)
+      // Add energy at time T+3 hours
       spy_handleAddEnergy.mockImplementation(
         (
           harvester: string | Harvester,
@@ -1180,13 +1204,13 @@ describe("/harvester", () => {
             harvester,
             amount,
             energySourceId,
-            t_minus_12,
+            t_plus_3,
           );
         },
       );
 
       // Add more energy (2nd round)
-      const amount_2 = 1;
+      const amount_2 = 20;
       const res2 = await authenticatedRequest(
         server,
         "POST",
@@ -1214,24 +1238,28 @@ describe("/harvester", () => {
           },
         });
 
-      console.log("postAddEnergy2_testHarvester", postAddEnergy2_testHarvester);
-      console.log(
-        "postAddEnergy2_harvestOperations",
-        postAddEnergy2_harvestOperations,
-      );
+      // 3 units of arcane quanta gave us 108 min.
+      // *Since this is less than the 3 hour interval, we will use the energy duration
+      const energyDurationMinutes_1 =
+        amount_1 *
+        config.base_minutes_per_arcane_energy_unit *
+        metadata.energyEfficiency;
+      // 108 min * 5 units/min = 540 units
 
-      // TODO: using base extraction rate only. Must FIX this when harvester's have their own extraction rate multiplier
-      const extractionRate = config.base_units_per_minute_harvested;
       const priorPeriodHarvested_1 = calculatePeriodHarvested(
-        t_minus_24,
-        t_minus_12,
+        t_0,
+        addMinutes(t_0, energyDurationMinutes_1),
         extractionRate,
       );
 
-      // 12 hours * 60 =  720 min * 5 units/min base extraction = 3600 units
-      expect(priorPeriodHarvested_1).toBeCloseTo(12 * 60.0 * extractionRate, 1);
+      postAddEnergy2_harvestOperations.forEach((harvestOperation) => {
+        expect(harvestOperation.priorPeriodHarvested).toBeCloseTo(
+          priorPeriodHarvested_1,
+          1,
+        );
+      });
 
-      // Back to T-0
+      // Next, add energy at T+6
       spy_handleAddEnergy.mockImplementation(
         (
           harvester: string | Harvester,
@@ -1242,13 +1270,13 @@ describe("/harvester", () => {
             harvester,
             amount,
             energySourceId,
-            t_minus_0,
+            t_plus_6,
           );
         },
       );
 
       // Add more energy (3rd round)
-      const amount_3 = 1;
+      const amount_3 = 10;
       const res3 = await authenticatedRequest(
         server,
         "POST",
@@ -1275,11 +1303,23 @@ describe("/harvester", () => {
           },
         });
 
-      console.log("postAddEnergy3_testHarvester", postAddEnergy3_testHarvester);
-      console.log(
-        "postAddEnergy3_harvestOperations",
-        postAddEnergy3_harvestOperations,
-      );
+      // 20 units of arcane quanta gave us 720 min.
+      // *Since this is more than the 3 hour interval, we will use 3 hours
+
+      const priorPeriodHarvested_2 =
+        priorPeriodHarvested_1 +
+        calculatePeriodHarvested(
+          t_plus_3,
+          addMinutes(t_plus_3, 180.0),
+          extractionRate,
+        );
+
+      postAddEnergy3_harvestOperations.forEach((harvestOperation) => {
+        expect(harvestOperation.priorPeriodHarvested).toBeCloseTo(
+          priorPeriodHarvested_2,
+          1,
+        );
+      });
 
       spy_handleAddEnergy.mockRestore();
       /* const initialAddEnergyDate = new Date();
