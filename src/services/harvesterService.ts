@@ -43,6 +43,7 @@ import {
 } from "date-fns";
 import { validateWithZod } from "../util/validateWithZod";
 import { getSpawnRegionParentOfSpawnedResource } from "./spawnRegionService";
+import { SagaBuilder } from "../util/saga";
 
 /**
  * ### Gets a Harvester
@@ -576,37 +577,58 @@ export const handleAddEnergy = async (
     )}.`,
   );
 
-  // Update each harvest operation with new energy end and start times
-  const updatedHarvestOperations = await updateHarvestOperationsForHarvester(
-    harvester.id,
-    newEnergyEndTime,
-    newEnergyStartTime,
-  );
+  const childLogger = logger.child({ context: "handleAddEnergySaga" });
+  const handleAddEnergySaga = new SagaBuilder()
+    .withLogger(childLogger)
+    // STEP 1
+    .invoke(async () => {
+      const updatedHarvestOperations =
+        await updateHarvestOperationsForHarvester(
+          harvester.id,
+          newEnergyEndTime,
+          newEnergyStartTime,
+        );
 
-  if (updatedHarvestOperations.filter((ho) => !ho.isCompleted).length === 0) {
-    logger.warn(
-      `Added energy to a harvester with 0 incompleted (available) harvest operations. All resources are likely depleted.`,
+      if (
+        updatedHarvestOperations.filter((ho) => !ho.isCompleted).length === 0
+      ) {
+        logger.warn(
+          `Added energy to a harvester with 0 incompleted (available) harvest operations. All resources are likely depleted.`,
+        );
+      }
+
+      return updatedHarvestOperations;
+    }, "updateHarvestOperationsForHarvester")
+    // STEP 2
+    .invoke(async () => {
+      // Update the harvester with new energy data
+      const updatedHarvester = await updateHarvesterById(harvester.id, {
+        initialEnergy: newInitialEnergy,
+        energyStartTime: newEnergyStartTime,
+        energyEndTime: newEnergyEndTime,
+        energySourceId: energyResource.id,
+      });
+      return updatedHarvester;
+    }, "updateHarvesterById")
+    .build();
+
+  try {
+    const sagaResult = await handleAddEnergySaga.execute();
+
+    logger.info(
+      {
+        newInitialEnergy,
+        newEnergyStartTime: pdate(newEnergyStartTime),
+        newEnergyEndTime: pdate(newEnergyEndTime),
+      },
+      `handleAddEnergy() - complete. Updated Harvester:`,
     );
+
+    return sagaResult[1] as Harvester; // output from the second step
+  } catch (error) {
+    // TODO: how should we handle any error thrown from the saga? It may or may not have been rolled back successfully...
+    throw error;
   }
-
-  // Update the harvester with new energy data
-  const res = await updateHarvesterById(harvester.id, {
-    initialEnergy: newInitialEnergy,
-    energyStartTime: newEnergyStartTime,
-    energyEndTime: newEnergyEndTime,
-    energySourceId: energyResource.id,
-  });
-
-  logger.info(
-    {
-      newInitialEnergy,
-      newEnergyStartTime: pdate(newEnergyStartTime),
-      newEnergyEndTime: pdate(newEnergyEndTime),
-    },
-    `handleAddEnergy() - complete. Updated Harvester:`,
-  );
-
-  return res;
 };
 
 /**

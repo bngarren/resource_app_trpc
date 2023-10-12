@@ -1,4 +1,4 @@
-import { Logger } from "pino";
+import { Logger, pino } from "pino";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /*
@@ -140,7 +140,10 @@ class Saga {
     this.sagaLog.log(
       0,
       "",
-      `Starting a new Saga with ${this.steps.length} steps!`,
+      `Starting a new Saga with ${this.steps.length} step${
+        this.steps.length !== 1 ? "s" : ""
+      }`,
+      "info",
     );
 
     for (const [index, step] of this.steps.entries()) {
@@ -148,10 +151,10 @@ class Saga {
       try {
         const data = await step.invoke();
         executedData.push(data);
-        this.sagaLog.log(stepNumber, step.getName(), "Execute success.");
+        this.sagaLog.log(stepNumber, step.getName(), "Executed step");
       } catch (error) {
         const errMsg = "Saga step failed.";
-        this.sagaLog.log(stepNumber, step.getName(), errMsg);
+        this.sagaLog.log(stepNumber, step.getName(), errMsg, "error");
         await this.rollback(executedData, index);
         throw prefixedError(error, `${errMsg} During step ${index + 1}`);
       }
@@ -160,7 +163,7 @@ class Saga {
   }
 
   async rollback(executedData: any[], fromStepIndex: number): Promise<void> {
-    this.sagaLog.log(fromStepIndex + 1, "", "Starting rollback.");
+    this.sagaLog.log(fromStepIndex + 1, "", "Starting rollback.", "warn");
     for (let i = fromStepIndex; i >= 0; i--) {
       const stepNumber = i + 1;
       try {
@@ -169,14 +172,15 @@ class Saga {
           stepNumber,
           this.steps[i].getName(),
           "Compensation successful.",
+          "info",
         );
       } catch (compensationError) {
         const errMsg = "Saga failed to compensate.";
-        this.sagaLog.log(stepNumber, this.steps[i].getName(), errMsg);
+        this.sagaLog.log(stepNumber, this.steps[i].getName(), errMsg, "error");
         throw prefixedError(compensationError, `${errMsg} Step ${i + 1}`);
       }
     }
-    this.sagaLog.log(fromStepIndex + 1, "", "Rollback complete.");
+    this.sagaLog.log(fromStepIndex + 1, "", "Rollback complete.", "info");
   }
 
   getLog() {
@@ -200,7 +204,12 @@ class SagaLog {
 
   private data: SagaLogMessage[] = [];
 
-  log(step: number, name: string, message: string): void {
+  log(
+    step: number,
+    name: string,
+    message: string,
+    logType: pino.Level = "debug",
+  ): void {
     const sagaLogMessage = {
       date: new Date(),
       step,
@@ -210,7 +219,30 @@ class SagaLog {
     this.data.push(sagaLogMessage);
 
     if (this.logger) {
-      this.logger.debug(sagaLogMessage);
+      const logMsg = `- - - - Saga - - - -: ${message} ${
+        name.trim().length !== 0 ? `(${name})` : ""
+      }${step > 0 ? `, step ${step}` : ""}`;
+
+      switch (logType) {
+        case "debug":
+          this.logger.debug(logMsg);
+          break;
+        case "info":
+          this.logger.info(logMsg);
+          break;
+        case "warn":
+          this.logger.warn(logMsg);
+          break;
+        case "error":
+          this.logger.error(logMsg);
+          break;
+        case "fatal":
+          this.logger.fatal(logMsg);
+          break;
+        default:
+          this.logger.info(logMsg);
+          break;
+      }
     }
   }
 
