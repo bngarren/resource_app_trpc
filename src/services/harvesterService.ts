@@ -528,7 +528,7 @@ export const handleAddEnergy = async (
     newEnergyStartTime = energyStartTime;
   }
 
-  logger.debug(
+  logger.info(
     { energyStartTime: pdate(newEnergyStartTime) },
     `handleAddEnergy() - begin`,
   );
@@ -562,7 +562,6 @@ export const handleAddEnergy = async (
   const newInitialEnergy = remainingEnergy + amount;
 
   // Calculate the newEnergyEndTime
-
   const newEnergyEndTime = addMilliseconds(
     newEnergyStartTime,
     newInitialEnergy * minutesPerEnergyUnit * 60000.0,
