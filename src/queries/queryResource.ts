@@ -15,7 +15,7 @@ import {
   getSpawnRegionWithResources,
   updateSpawnRegion,
 } from "./querySpawnRegion";
-import { prefixedError } from "../util/rethrowWith";
+import { prefixedError } from "../util/prefixedError";
 
 /**
 - getResource

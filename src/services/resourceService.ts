@@ -10,7 +10,7 @@ import {
 } from "../queries/queryResource";
 import { cellToChildren, getResolution } from "h3-js";
 import { SpawnedResourceWithResource } from "../types";
-import { prefixedError } from "../util/rethrowWith";
+import { prefixedError } from "../util/prefixedError";
 
 /**
  * ### Gets a single Resource, by ID

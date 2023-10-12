@@ -1,8 +1,10 @@
 /**
- * ### Re-throws the error with a prefixed message
+ * ### Formats error with a prefixed message
  * - If the error is an Error, it will also include the error.message
  * in the new Error.
  * - If the error is unknown, it will just throw the given message.
+ *
+ * **Returns an Error**, does NOT throw.
  * @param error
  * @param message
  */
