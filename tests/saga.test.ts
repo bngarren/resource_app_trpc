@@ -7,6 +7,10 @@ describe("saga", () => {
     logger.info("Starting test suite: saga");
   });
 
+  it("should throw error if build() is called with zero invoke() called", async () => {
+    expect(new SagaBuilder().build).toThrow();
+  });
+
   it("should correctly invoke a saga step", async () => {
     const testFunction1 = jest.fn(async () => Promise.resolve());
 
@@ -102,11 +106,11 @@ describe("saga", () => {
     });
 
     const saga = new SagaBuilder()
-      .invoke(testFunction1)
+      .invoke(testFunction1, "testFunction1")
       .withCompensation(compensationFunction1)
-      .invoke(testFunction2)
+      .invoke(testFunction2, "testFunction2")
       .withCompensation(compensationFunction2)
-      .invoke(testFunction3)
+      .invoke(testFunction3, "testFunction3")
       .withCompensation(compensationFunction3)
       .build();
 
