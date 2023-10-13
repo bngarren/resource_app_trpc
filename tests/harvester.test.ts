@@ -37,6 +37,7 @@ import {
   addHours,
   addMinutes,
   addSeconds,
+  compareAsc,
   hoursToMinutes,
   isSameSecond,
   minutesToSeconds,
@@ -45,6 +46,7 @@ import {
 } from "date-fns";
 import { validateWithZod } from "../src/util/validateWithZod";
 import * as HarvesterService from "../src/services/harvesterService";
+import * as QueryHarvester from "../src/queries/queryHarvester";
 
 describe("/harvester", () => {
   let server: Server;
@@ -590,7 +592,7 @@ describe("/harvester", () => {
       throwIfBadStatus(d);
 
       // Harvester (deployed) should no longer be in the user's inventory
-      expect(
+      await expect(
         getUserInventoryItemWithItemId(
           testHarvester.id,
           "HARVESTER",
@@ -620,7 +622,7 @@ describe("/harvester", () => {
       expect(isHarvesterDeployed(testHarvester)).toBe(false);
 
       // Harvester should once again be in the user's inventory
-      expect(
+      await expect(
         getUserInventoryItemWithItemId(
           testHarvester.id,
           "HARVESTER",
@@ -1430,6 +1432,125 @@ describe("/harvester", () => {
       });
 
       spy_handleAddEnergy.mockRestore();
+    });
+
+    it("should rollback updated harvest operations if update harvester fails (saga)", async () => {
+      // verify harvester is deployed and without energy
+      const pre_TestHarvester = await prisma.harvester.findUniqueOrThrow({
+        where: {
+          id: testHarvester.id,
+        },
+      });
+
+      if (
+        !isHarvesterDeployed(pre_TestHarvester) ||
+        pre_TestHarvester.initialEnergy != 0
+      ) {
+        throw new Error(
+          `Problem with seeding harvester for this test (should be deployed and with initialEnergy 0): ${pre_TestHarvester.initialEnergy}`,
+        );
+      }
+
+      // save the pre_HarvestOperations
+      // these harvest operations should not have startTime and endTime should be the resetDate of the spawnRegion
+      const pre_HarvestOperations = await getHarvestOperationsForHarvester(
+        pre_TestHarvester.id,
+      );
+
+      // Mock the updateHarvesterById function to throw Error
+      const spy_updateHarvesterById = jest
+        .spyOn(QueryHarvester, "updateHarvesterById")
+        .mockRejectedValueOnce(new Error("Mock error - e.g. database problem"));
+
+      // choose the energy resource
+      const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+
+      const amount = 3;
+
+      const res = await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.addEnergy",
+        idToken,
+        {
+          harvesterId: testHarvester.id,
+          energySourceId: arcaneQuanta.id,
+          amount: amount,
+        },
+      );
+
+      try {
+        throwIfBadStatus(res);
+      } catch (error) {
+        expect(error).toBeDefined();
+      }
+
+      const post_HarvestOperations = await getHarvestOperationsForHarvester(
+        pre_TestHarvester.id,
+      );
+
+      // There should have been no net change to harvest operations (i.e. changes were rolled back)
+      expect(post_HarvestOperations).toEqual(pre_HarvestOperations);
+
+      spy_updateHarvesterById.mockRestore();
+    });
+
+    it.skip("test how many prisma queries", async () => {
+      function transformQueryLog(log: any) {
+        // Remove all instances of "public".
+        let transformedQuery = log.query.replace(/"public"\./g, "");
+
+        // Parse the params string to get an array of parameters.
+        const params = JSON.parse(log.params);
+
+        // Replace each placeholder variable with the corresponding parameter.
+        params.forEach((param: any, index: number) => {
+          const placeholder = `$${index + 1}`;
+          transformedQuery = transformedQuery.replace(
+            placeholder,
+            `'${param}'`,
+          );
+        });
+
+        return {
+          query: transformedQuery,
+          timestamp: log.timestamp,
+        };
+      }
+
+      // choose the energy resource
+      const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+
+      const amount = 3;
+
+      const queries: any[] = [];
+      prisma.$on("query", (e) => {
+        queries.push(
+          transformQueryLog({
+            query: e.query,
+            params: e.params,
+            timestamp: e.timestamp,
+          }),
+        );
+      });
+
+      await authenticatedRequest(
+        server,
+        "POST",
+        "/harvester.addEnergy",
+        idToken,
+        {
+          harvesterId: testHarvester.id,
+          energySourceId: arcaneQuanta.id,
+          amount: amount,
+        },
+      );
+
+      // const metrics2 = await prisma.$metrics.json();
+      // console.log(metrics2.counters);
+
+      console.log(queries.sort((a, b) => compareAsc(a, b)));
+      console.log(queries.length);
     });
   });
 });

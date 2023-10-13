@@ -1,4 +1,10 @@
-import { Prisma, SpawnedResource, Resource, ItemType } from "@prisma/client";
+import {
+  Prisma,
+  SpawnedResource,
+  Resource,
+  ItemType,
+  HarvestOperation,
+} from "@prisma/client";
 
 // A dev type that helps me to see to full type structure of my types
 type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
@@ -34,8 +40,15 @@ export interface SpawnRegionWithResourcesPartial
   resources: SpawnedResource[];
 }
 
+/**
+ * A HarvestOperation type that includes the resetDate of the spawned resource's
+ * spawn region
+ */
+export type HarvestOperationWithResetDate = HarvestOperation &
+  Pick<Prisma.SpawnRegionGetPayload<true>, "resetDate">;
+
 type test = Expand<SpawnRegionWithResources>;
-type test2 = Expand<SpawnedResourceWithResource>;
+type test2 = Expand<HarvestOperationWithResetDate>;
 
 export type Coordinate = {
   latitude: number;

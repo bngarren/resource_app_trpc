@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
 import { logger } from "../logger/logger";
 import { getSpawnRegionParentOfSpawnedResource } from "../services/spawnRegionService";
+import { HarvestOperationWithResetDate } from "../types";
 
 /**
  * ### Returns all harvest operations associated with this harvester
@@ -11,12 +12,43 @@ import { getSpawnRegionParentOfSpawnedResource } from "../services/spawnRegionSe
  */
 export const getHarvestOperationsForHarvesterId = async (
   harvesterId: string,
+  prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prisma.harvestOperation.findMany({
+  return await prismaClient.harvestOperation.findMany({
     where: {
       harvesterId: harvesterId,
     },
   });
+};
+
+export const getHarvestOperationsWithResetDateForHarvesterId = async (
+  harvesterId: string,
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  const res = await prismaClient.harvestOperation.findMany({
+    where: {
+      harvesterId: harvesterId,
+    },
+    include: {
+      spawnedResource: {
+        include: {
+          spawnRegion: {
+            select: {
+              resetDate: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  const harvestOperationsWithResetDate = res.map((ho) => {
+    const { spawnedResource, ...harvestOperation } = ho;
+    return {
+      ...harvestOperation,
+      resetDate: ho.spawnedResource?.spawnRegion?.resetDate || null,
+    };
+  });
+  return harvestOperationsWithResetDate as HarvestOperationWithResetDate[];
 };
 
 /**

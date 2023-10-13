@@ -1,3 +1,4 @@
+import { getHarvestOperationsWithResetDateForHarvesterId } from "./../queries/queryHarvestOperation";
 import { pdate, pduration } from "../util/getPrettyDate";
 import { arcaneEnergyResourceMetadataSchema } from "./../schema/index";
 import { getAllSettled } from "./../util/getAllSettled";
@@ -42,7 +43,6 @@ import {
   min,
 } from "date-fns";
 import { validateWithZod } from "../util/validateWithZod";
-import { getSpawnRegionParentOfSpawnedResource } from "./spawnRegionService";
 import { SagaBuilder } from "../util/saga";
 
 /**
@@ -99,6 +99,20 @@ export const isHarvesterDeployed = (harvester: Harvester) => {
  */
 export const getHarvestOperationsForHarvester = async (harvesterId: string) => {
   return await getHarvestOperationsForHarvesterId(harvesterId);
+};
+
+/**
+ * ### Returns all harvest operations for a harvester (special)
+ * **Includes the `resetDate` property** from the associated spawned resource's spawn region.
+ * This is useful for when looping through harvest operations looking for when a
+ * harvested resource could be/would be stale or depleted.
+ * @param harvesterId
+ * @returns
+ */
+export const getHarvestOperationsWithResetDateForHarvester = async (
+  harvesterId: string,
+) => {
+  return await getHarvestOperationsWithResetDateForHarvesterId(harvesterId);
 };
 
 /**
@@ -292,7 +306,13 @@ const updateHarvestOperationsForHarvester = async (
   energyEndTime: Date,
   energyStartTime = new Date(),
 ) => {
-  let harvestOperations = await getHarvestOperationsForHarvesterId(harvesterId);
+  /* Since we know we will need the resetDate for each harvest operation, we eagerly request
+  this along with our database query for each harvest operation
+  */
+  // special HarvestOperationWithResetDate[] type
+  let harvestOperations = await getHarvestOperationsWithResetDateForHarvesterId(
+    harvesterId,
+  );
 
   const totalHarvestOperations = harvestOperations.length;
 
@@ -316,18 +336,18 @@ const updateHarvestOperationsForHarvester = async (
       /* To determine the new endTime, we compare the SpawnedResource's SpawnRegion's
       `resetDate` and the energyEndTime of the harvester, picking the earlier of the two */
 
-      const spawnRegion = await getSpawnRegionParentOfSpawnedResource(
-        harvestOperation.spawnedResourceId,
-      );
+      // Reforming a HarvestOperation from the special HarvestOperationWithResetDate type
+      const { resetDate: spawnRegionResetDate, ...updatedHarvestOperation } =
+        harvestOperation;
 
-      if (spawnRegion.resetDate == null) {
+      if (spawnRegionResetDate == null) {
         throw new Error(
-          `A harvest operation (id=${harvestOperation.id}) is associated with a SpawnedResource whose SpawnRegion (id=${spawnRegion.id}) has a NULL resetDate!`,
+          `A harvest operation (id=${harvestOperation.id}) is associated with a SpawnedResource whose SpawnRegion has a NULL resetDate!`,
         );
       }
 
       logger.debug(
-        { harvestOperation, resetDate: pdate(spawnRegion.resetDate) },
+        { harvestOperation, resetDate: pdate(spawnRegionResetDate) },
         `Updating HarvestOperation #${index + 1}...(this is pre):`,
       );
 
@@ -337,8 +357,6 @@ const updateHarvestOperationsForHarvester = async (
         energyStartTime,
       );
 
-      const updatedHarvestOperation = { ...harvestOperation };
-
       // Add the prior period amount to the running priorHarvested amount stored in the harvest operation
       updatedHarvestOperation.priorHarvested += amountHarvested;
 
@@ -347,8 +365,8 @@ const updateHarvestOperationsForHarvester = async (
 
       // * Recalculate the endTime for this harvest operation
       // isBefore() returns a boolean, the first date is before the second date
-      if (isBefore(spawnRegion.resetDate, energyEndTime)) {
-        updatedHarvestOperation.endTime = spawnRegion.resetDate;
+      if (isBefore(spawnRegionResetDate, energyEndTime)) {
+        updatedHarvestOperation.endTime = spawnRegionResetDate;
       } else {
         updatedHarvestOperation.endTime = energyEndTime;
       }
@@ -359,12 +377,12 @@ const updateHarvestOperationsForHarvester = async (
         updatedHarvestOperation.startTime = null;
 
         // Is it because our resource is depleted?
-        if (isAfter(energyStartTime, spawnRegion.resetDate)) {
+        if (isAfter(energyStartTime, spawnRegionResetDate)) {
           updatedHarvestOperation.isCompleted = true;
           logger.debug(
             `HarvestOperation isCompleted=true. ${pdate(
               energyStartTime,
-            )} is AFTER ${pdate(spawnRegion.resetDate)}`,
+            )} is AFTER ${pdate(spawnRegionResetDate)}`,
           );
         } else {
           // Or is it because energy is 0? thus, energyEndTime has passed. But resource remains...
@@ -377,7 +395,7 @@ const updateHarvestOperationsForHarvester = async (
         updatedHarvestOperation.startTime = energyStartTime;
       }
 
-      return updatedHarvestOperation;
+      return updatedHarvestOperation as HarvestOperation;
     },
   );
 
@@ -523,11 +541,7 @@ export const handleAddEnergy = async (
   - When energy is added to the harvester, we recalculate the initialEnergy and new
   energyStartTime and energyEndTime
   */
-  let newEnergyStartTime = new Date();
-
-  if (energyStartTime != null) {
-    newEnergyStartTime = energyStartTime;
-  }
+  const newEnergyStartTime = energyStartTime || new Date();
 
   logger.info(
     { energyStartTime: pdate(newEnergyStartTime) },
@@ -577,9 +591,12 @@ export const handleAddEnergy = async (
     )}.`,
   );
 
-  const childLogger = logger.child({ context: "handleAddEnergySaga" });
-  const handleAddEnergySaga = new SagaBuilder()
-    .withLogger(childLogger)
+  const orig_harvestOperations = await getHarvestOperationsForHarvester(
+    harvester.id,
+  );
+
+  const handleAddEnergySaga = new SagaBuilder("handleAddEnergySaga")
+    .withLogger()
     // STEP 1
     .invoke(async () => {
       const updatedHarvestOperations =
@@ -599,17 +616,27 @@ export const handleAddEnergy = async (
 
       return updatedHarvestOperations;
     }, "updateHarvestOperationsForHarvester")
+    .withCompensation(async () => {
+      return await updateHarvestOperationsTransaction(orig_harvestOperations);
+    })
     // STEP 2
     .invoke(async () => {
       // Update the harvester with new energy data
-      const updatedHarvester = await updateHarvesterById(harvester.id, {
+      return await updateHarvesterById(harvester.id, {
         initialEnergy: newInitialEnergy,
         energyStartTime: newEnergyStartTime,
         energyEndTime: newEnergyEndTime,
         energySourceId: energyResource.id,
       });
-      return updatedHarvester;
     }, "updateHarvesterById")
+    .withCompensation(async () => {
+      return await updateHarvesterById(harvester.id, {
+        initialEnergy: harvester.initialEnergy,
+        energyStartTime: harvester.energyStartTime,
+        energyEndTime: harvester.energyEndTime,
+        energySourceId: harvester.energySourceId,
+      });
+    })
     .build();
 
   try {
