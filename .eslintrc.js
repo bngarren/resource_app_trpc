@@ -40,4 +40,14 @@ module.exports = {
     // Makes all prettier problems warnings instead of errors
     "prettier/prettier": "warn",
   },
+  // File specific overrides
+  overrides: [
+    // Test files...
+    {
+      files: ["tests/*.test.ts"], // glob pattern for all test files
+      rules: {
+        "@typescript-eslint/no-explicit-any": 0,
+      },
+    },
+  ],
 };

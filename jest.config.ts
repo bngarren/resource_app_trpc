@@ -5,6 +5,14 @@ const jestConfig: JestConfigWithTsJest = {
   testEnvironment: "node",
   roots: ["<rootDir>/tests/"],
   setupFilesAfterEnv: ["<rootDir>/tests/setupTests.ts"],
+  transform: {
+    "^.+\\.[tj]sx?$": [
+      "ts-jest",
+      {
+        tsconfig: "<rootDir>/tsconfig.test.json",
+      },
+    ],
+  },
 };
 
 export default jestConfig;

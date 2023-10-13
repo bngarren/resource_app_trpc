@@ -1495,8 +1495,8 @@ describe("/harvester", () => {
       spy_updateHarvesterById.mockRestore();
     });
 
-    it.skip("test how many prisma queries", async () => {
-      function transformQueryLog(log: any) {
+    it("test how many prisma queries", async () => {
+      function transformQueryLog(log) {
         // Remove all instances of "public".
         let transformedQuery = log.query.replace(/"public"\./g, "");
 
@@ -1504,7 +1504,7 @@ describe("/harvester", () => {
         const params = JSON.parse(log.params);
 
         // Replace each placeholder variable with the corresponding parameter.
-        params.forEach((param: any, index: number) => {
+        params.forEach((param, index) => {
           const placeholder = `$${index + 1}`;
           transformedQuery = transformedQuery.replace(
             placeholder,
