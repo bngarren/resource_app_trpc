@@ -5,6 +5,7 @@ import {
   harvesterDeployRequestSchema,
   harvesterAddEnergyRequestSchema,
   harvesterReclaimRequestSchema,
+  harvesterRemoveEnergyRequestSchema,
 } from "../schema";
 import { protectedProcedure, router } from "../trpc/trpc";
 import { getUserByUid } from "../services/userService";
@@ -162,43 +163,8 @@ export const harvesterRouter = router({
   addEnergy: protectedProcedure
     .input(harvesterAddEnergyRequestSchema)
     .mutation(async ({ input }) => {
-      // Get the harvester with this id
-      let harvester: Harvester;
-      try {
-        harvester = await getHarvester(input.harvesterId);
-      } catch (error) {
-        const errMsg = `harvester: ${input.harvesterId} not found`;
-        logger.error(errMsg);
-        throw new TRPCError({
-          message: errMsg,
-          code: "NOT_FOUND",
-        });
-      }
-
-      // Verify that this harvester is currently deployed.
-      // We can't modify the energy of a harvester that isn't deployed.
-      // This shouldn't even be doable from the client side, but we still check here
-
-      let isDeployed;
-      try {
-        isDeployed = isHarvesterDeployed(harvester);
-
-        if (!isDeployed) {
-          const errMsg = `harvester: ${input.harvesterId} is not deployed`;
-          logger.error(errMsg);
-          throw new TRPCError({
-            message: errMsg,
-            code: "CONFLICT",
-          });
-        }
-      } catch (error) {
-        const errMsg = `harvester: ${input.harvesterId} not found`;
-        logger.error(errMsg);
-        throw new TRPCError({
-          message: errMsg,
-          code: "NOT_FOUND",
-        });
-      }
+      // verify harvester exists and is deployed
+      const harvester = await verifyDeployedHarvester(input.harvesterId);
 
       // Verify that the energy type being added is the same as what is already in the harvester, if present
       if (
@@ -227,4 +193,79 @@ export const harvesterRouter = router({
         });
       }
     }),
+  removeEnergy: protectedProcedure
+    .input(harvesterRemoveEnergyRequestSchema)
+    .mutation(async ({ input }) => {
+      // verify harvester exists and is deployed
+      const harvester = await verifyDeployedHarvester(input.harvesterId);
+
+      // Verify that the energy type being removed is the same as what is already in the harvester, if present
+      if (
+        harvester.energySourceId != null &&
+        harvester.energySourceId !== input.energySourceId
+      ) {
+        const errMsg = `Cannot remove energy of a different type than what is present in this harvester (id=${harvester.id})`;
+        logger.error(errMsg);
+        throw new TRPCError({
+          message: errMsg,
+          code: "CONFLICT",
+        });
+      }
+
+      try {
+        const res = await handleModifyEnergy(
+          harvester,
+          input.amount,
+          input.energySourceId ?? null,
+        );
+
+        return res;
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+        });
+      }
+    }),
 });
+
+async function verifyDeployedHarvester(harvesterId: string) {
+  // Get the harvester with this id
+  let harvester: Harvester;
+  try {
+    harvester = await getHarvester(harvesterId);
+  } catch (error) {
+    const errMsg = `harvester: ${harvesterId} not found`;
+    logger.error(errMsg);
+    throw new TRPCError({
+      message: errMsg,
+      code: "NOT_FOUND",
+    });
+  }
+
+  // Verify that this harvester is currently deployed.
+  // We can't modify the energy of a harvester that isn't deployed.
+  // This shouldn't even be doable from the client side, but we still check here
+
+  let isDeployed;
+  try {
+    isDeployed = isHarvesterDeployed(harvester);
+
+    if (!isDeployed) {
+      const errMsg = `harvester: ${harvesterId} is not deployed`;
+      logger.error(errMsg);
+      throw new TRPCError({
+        message: errMsg,
+        code: "CONFLICT",
+      });
+    }
+  } catch (error) {
+    const errMsg = `harvester: ${harvesterId} not found`;
+    logger.error(errMsg);
+    throw new TRPCError({
+      message: errMsg,
+      code: "NOT_FOUND",
+    });
+  }
+
+  return harvester;
+}

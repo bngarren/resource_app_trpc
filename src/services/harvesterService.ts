@@ -458,9 +458,36 @@ export const calculateRemainingEnergy = (
 };
 
 /**
+ * ### Verifies a resource id represents an actual Arcane Energy resource
+ * **Throws error** if resource does not exist or is not Arcane Energy
+ * @param resourceId
+ * @returns Resource
+ */
+export const verifyArcaneEnergyResource = async (resourceId: string) => {
+  let energyResource: Resource;
+  try {
+    energyResource = await getResource(resourceId);
+  } catch (error) {
+    throw new TRPCError({
+      message: `Couldn't find Resource with id=${resourceId}`,
+      code: "NOT_FOUND",
+    });
+  }
+
+  // Check validity of this Resource (has to be an ARCANE_ENERGY resource type)
+  if (energyResource.resourceType !== ResourceType.ARCANE_ENERGY) {
+    throw new TRPCError({
+      message: `Resource with id=${resourceId} is not an Arcane Energy type`,
+      code: "NOT_FOUND",
+    });
+  }
+  return energyResource;
+};
+
+/**
  * ### Updates the Harvester with additional energy of a specific type
  * This will trigger an update of all the harvester's HarvestOperations based on the new
- * energyEndTime
+ * energyEndTime.
  *
  * It is crucial that we maintain floating point precision in these calculations
  *
@@ -473,6 +500,7 @@ export const calculateRemainingEnergy = (
  * @param _harvester - either pass the harvesterId or the Harvester
  * @param amount
  * @param energySourceId
+ * @param energyStartTime - Optional. Defaults to now.
  */
 export const handleAddEnergy = async (
   _harvester: string | Harvester,
@@ -480,26 +508,10 @@ export const handleAddEnergy = async (
   energySourceId: string,
   energyStartTime?: Date,
 ) => {
-  let energyResource: Resource;
-  try {
-    energyResource = await getResource(energySourceId);
-  } catch (error) {
-    throw new TRPCError({
-      message: `Couldn't find Resource with id=${energySourceId}`,
-      code: "NOT_FOUND",
-    });
-  }
-
-  // Check validity of this Resource (has to be an ARCANE_ENERGY resource type)
-  if (energyResource.resourceType !== ResourceType.ARCANE_ENERGY) {
-    throw new TRPCError({
-      message: `Resource with id=${energySourceId} is not an Arcane Energy type`,
-      code: "NOT_FOUND",
-    });
-  }
+  const energyResource = await verifyArcaneEnergyResource(energySourceId);
 
   // Extract the metadata information from the resource.
-  //   We use Zod schema to verify that the metadata json returned from the database is what we expected
+  // We use Zod schema to verify that the metadata json returned from the database is what we expected
   const metadata = validateWithZod(
     arcaneEnergyResourceMetadataSchema,
     energyResource.metadata,
