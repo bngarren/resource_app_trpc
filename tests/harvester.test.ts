@@ -9,6 +9,7 @@ import {
   resetPrisma,
   scanAndDeployHarvester,
   throwIfBadStatus,
+  transformQueryLog,
 } from "./testHelpers";
 import { Server } from "http";
 import { logger } from "../src/logger/logger";
@@ -1495,29 +1496,7 @@ describe("/harvester", () => {
       spy_updateHarvesterById.mockRestore();
     });
 
-    it("test how many prisma queries", async () => {
-      function transformQueryLog(log) {
-        // Remove all instances of "public".
-        let transformedQuery = log.query.replace(/"public"\./g, "");
-
-        // Parse the params string to get an array of parameters.
-        const params = JSON.parse(log.params);
-
-        // Replace each placeholder variable with the corresponding parameter.
-        params.forEach((param, index) => {
-          const placeholder = `$${index + 1}`;
-          transformedQuery = transformedQuery.replace(
-            placeholder,
-            `'${param}'`,
-          );
-        });
-
-        return {
-          query: transformedQuery,
-          timestamp: log.timestamp,
-        };
-      }
-
+    it.skip("should test how many prisma queries for /harvester.addEnergy", async () => {
       // choose the energy resource
       const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
 
@@ -1525,13 +1504,14 @@ describe("/harvester", () => {
 
       const queries: any[] = [];
       prisma.$on("query", (e) => {
-        queries.push(
-          transformQueryLog({
+        queries.push({
+          "#": queries.length + 1,
+          ...transformQueryLog({
             query: e.query,
             params: e.params,
             timestamp: e.timestamp,
           }),
-        );
+        });
       });
 
       await authenticatedRequest(

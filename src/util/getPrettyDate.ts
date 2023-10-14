@@ -6,9 +6,14 @@ import { format, formatDuration } from "date-fns";
  * @param date
  * @returns
  */
-export const pdate = (date: Date | null | undefined) => {
+export const pdate = (
+  date: Date | null | undefined,
+  includeMilliseconds = false,
+) => {
   if (date) {
-    return format(date, "dd LLL HH:mm:ss");
+    const formatString = `dd LLL HH:mm:ss${includeMilliseconds ? `.SSS` : ""}`;
+
+    return format(date, formatString);
   } else {
     return null;
   }

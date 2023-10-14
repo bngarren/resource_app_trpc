@@ -1,3 +1,4 @@
+import { pdate } from "./../src/util/getPrettyDate";
 import { Response as SuperAgentResponse } from "superagent";
 import { ScanRequestOutput, TRPCResponseData } from "../src/types/trpcTypes";
 import { prisma } from "../src/prisma";
@@ -375,4 +376,49 @@ export const resetPrisma = async () => {
 export const translateLatitude = (origLatitude: number, meters: number) => {
   const coef = meters / 111320.0;
   return origLatitude + coef;
+};
+
+export type QueryLog = {
+  query: string;
+  params: string;
+  timestamp: Date;
+};
+
+/**
+ * ### Accepts log data (from Prisma) and transforms into a prettier object
+ * 
+ * #### Example
+ * ```javascript
+ * const queries: any[] = [];
+      prisma.$on("query", (e) => {
+        queries.push({
+          "#": queries.length + 1,
+          ...transformQueryLog({
+            query: e.query,
+            params: e.params,
+            timestamp: e.timestamp,
+          }),
+        });
+      });
+ * ```
+ * @param log
+ * @returns
+ */
+export const transformQueryLog = (log: QueryLog) => {
+  // Remove all instances of "public".
+  let transformedQuery = log.query.replace(/"public"\./g, "");
+
+  // Parse the params string to get an array of parameters.
+  const params = JSON.parse(log.params);
+
+  // Replace each placeholder variable with the corresponding parameter.
+  params.forEach((param, index) => {
+    const placeholder = `$${index + 1}`;
+    transformedQuery = transformedQuery.replace(placeholder, `'${param}'`);
+  });
+
+  return {
+    query: transformedQuery,
+    timestamp: pdate(log.timestamp, true),
+  };
 };

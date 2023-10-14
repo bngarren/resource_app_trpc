@@ -182,21 +182,21 @@ export const harvesterRouter = router({
       let isDeployed;
       try {
         isDeployed = isHarvesterDeployed(harvester);
+
+        if (!isDeployed) {
+          const errMsg = `harvester: ${input.harvesterId} is not deployed`;
+          logger.error(errMsg);
+          throw new TRPCError({
+            message: errMsg,
+            code: "CONFLICT",
+          });
+        }
       } catch (error) {
         const errMsg = `harvester: ${input.harvesterId} not found`;
         logger.error(errMsg);
         throw new TRPCError({
           message: errMsg,
           code: "NOT_FOUND",
-        });
-      }
-
-      if (!isDeployed) {
-        const errMsg = `harvester: ${input.harvesterId} is not deployed`;
-        logger.error(errMsg);
-        throw new TRPCError({
-          message: errMsg,
-          code: "CONFLICT",
         });
       }
 
@@ -222,8 +222,9 @@ export const harvesterRouter = router({
 
         return res;
       } catch (err) {
-        logger.error(err);
-        throw err;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+        });
       }
     }),
 });
