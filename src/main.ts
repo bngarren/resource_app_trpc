@@ -78,7 +78,12 @@ app.use(
     router: appRouter,
     createContext,
     onError({ error }) {
-      logger.error(error);
+      logger.error(
+        {
+          code: error.code,
+        },
+        error.stack,
+      );
     },
   }),
 );

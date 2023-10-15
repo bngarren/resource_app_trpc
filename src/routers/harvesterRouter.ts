@@ -14,12 +14,13 @@ import {
   getHarvester,
   handleCollect,
   handleDeploy,
-  handleAddEnergy,
   handleReclaim,
   isHarvesterDeployed,
+  handleModifyEnergy,
 } from "../services/harvesterService";
 import config from "../config";
 import { logger } from "../logger/logger";
+import { prefixedError } from "../util/prefixedError";
 
 export const harvesterRouter = router({
   /**
@@ -180,7 +181,7 @@ export const harvesterRouter = router({
       }
 
       try {
-        const res = await handleAddEnergy(
+        const res = await handleModifyEnergy(
           harvester,
           input.amount,
           input.energySourceId ?? null,
@@ -189,6 +190,7 @@ export const harvesterRouter = router({
         return res;
       } catch (err) {
         throw new TRPCError({
+          message: prefixedError(err, "handleModifyEnergy").message,
           code: "INTERNAL_SERVER_ERROR",
         });
       }

@@ -502,7 +502,7 @@ export const verifyArcaneEnergyResource = async (resourceId: string) => {
  * @param energySourceId
  * @param energyStartTime - Optional. Defaults to now.
  */
-export const handleAddEnergy = async (
+export const handleModifyEnergy = async (
   _harvester: string | Harvester,
   amount: number,
   energySourceId: string,
@@ -537,30 +537,30 @@ export const handleAddEnergy = async (
     harvester = _harvester;
   }
 
-  // Verify that the energy type being added is the same as what is already in the harvester, if present
+  // Verify that the energy type being added/removed is the same as what is already in the harvester, if present
   // This step is also checked at the TRPC router level, but good to check here as well
   if (
     harvester.energySourceId != null &&
     harvester.energySourceId !== energyResource.id
   ) {
     throw new TRPCError({
-      message: `Cannot add energy of a different type to this harvester (${harvester.energySourceId} !== ${energyResource.id})`,
+      message: `Cannot add/remove energy of a different type than what already exists in this harvester (${harvester.energySourceId} !== ${energyResource.id})`,
       code: "CONFLICT",
     });
   }
 
   /* New energy start time is now, or whatever energyStartTime was passed as a param for testing purposes
-  - When energy is added to the harvester, we recalculate the initialEnergy and new
+  - When energy is added/removed from the harvester, we recalculate the initialEnergy and new
   energyStartTime and energyEndTime
   */
   const newEnergyStartTime = energyStartTime || new Date();
 
   logger.info(
     { energyStartTime: pdate(newEnergyStartTime) },
-    `handleAddEnergy() - begin`,
+    `handleModifyEnergy() - begin`,
   );
 
-  // If harvester already had energy, calculate the remaining amount
+  // If harvester already had energy prior to this new modify, calculate the remaining amount
   let remainingEnergy: number;
   if (harvester.initialEnergy > 0) {
     remainingEnergy = harvester.initialEnergy;
@@ -586,7 +586,7 @@ export const handleAddEnergy = async (
   }
 
   // Calculate the new initialEnergy (remainingEnergy + addedEnergy)
-  const newInitialEnergy = remainingEnergy + amount;
+  const newInitialEnergy = Math.max(0, remainingEnergy + amount);
 
   // Calculate the newEnergyEndTime
   const newEnergyEndTime = addMilliseconds(
@@ -594,10 +594,15 @@ export const handleAddEnergy = async (
     newInitialEnergy * minutesPerEnergyUnit * 60000.0,
   );
 
+  const gerund = amount >= 0 ? "Adding" : "Removing";
+  const verb = amount >= 0 ? "add" : "remove";
+
   logger.debug(
-    `Adding ${amount} unit${amount === 1 ? "" : "s"} of ${
+    `${gerund} ${amount} unit${amount === 1 ? "" : "s"} of ${
       energyResource.name
-    } will add ${pduration(amount * minutesPerEnergyUnit * 60000.0)} of energy,
+    } will ${verb} ${pduration(
+      amount * minutesPerEnergyUnit * 60000.0,
+    )} of energy,
     giving total energy duration of ${pduration(
       newInitialEnergy * minutesPerEnergyUnit * 60000.0,
     )}.`,
@@ -607,7 +612,7 @@ export const handleAddEnergy = async (
     harvester.id,
   );
 
-  const handleAddEnergySaga = new SagaBuilder("handleAddEnergySaga")
+  const handleModifyEnergySaga = new SagaBuilder("handleModifyEnergySaga")
     .withLogger()
     // STEP 1
     .invoke(async () => {
@@ -622,7 +627,7 @@ export const handleAddEnergy = async (
         updatedHarvestOperations.filter((ho) => !ho.isCompleted).length === 0
       ) {
         logger.warn(
-          `Added energy to a harvester with 0 incompleted (available) harvest operations. All resources are likely depleted.`,
+          `Modified energy (${verb}) in a harvester with 0 incompleted (available) harvest operations. All resources are likely depleted.`,
         );
       }
 
@@ -652,7 +657,7 @@ export const handleAddEnergy = async (
     .build();
 
   try {
-    const sagaResult = await handleAddEnergySaga.execute();
+    const sagaResult = await handleModifyEnergySaga.execute();
 
     logger.info(
       {
@@ -660,7 +665,7 @@ export const handleAddEnergy = async (
         newEnergyStartTime: pdate(newEnergyStartTime),
         newEnergyEndTime: pdate(newEnergyEndTime),
       },
-      `handleAddEnergy() - complete. Updated Harvester:`,
+      `handleModifyEnergy() - complete. Updated Harvester:`,
     );
 
     return sagaResult[1] as Harvester; // output from the second step

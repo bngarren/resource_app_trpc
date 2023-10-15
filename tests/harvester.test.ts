@@ -1141,11 +1141,11 @@ describe("/harvester", () => {
         `metadata for arcane_quanta`,
       );
 
-      const orig_handleAddEnergy = HarvesterService.handleAddEnergy;
+      const orig_handleAddEnergy = HarvesterService.handleModifyEnergy;
 
       // Add initial energy at time T0
       const spy_handleAddEnergy = jest
-        .spyOn(HarvesterService, "handleAddEnergy")
+        .spyOn(HarvesterService, "handleModifyEnergy")
         .mockImplementation(
           (
             harvester: string | Harvester,
