@@ -130,4 +130,82 @@ describe("saga", () => {
       expect(testDatabase).toEqual(orig_testDatabase);
     }
   });
+
+  it("should correctly skip a step that uses a `when()` that is passed a false", async () => {
+    // We run the below tests for each of the elements in this array
+    const predicates = [false, () => false];
+
+    await Promise.all(
+      predicates.map(async (predicate) => {
+        const orig_testDatabase = [
+          {
+            id: "initial",
+          },
+        ];
+
+        let testDatabase = [...orig_testDatabase];
+
+        const testFunction1 = jest.fn(async () =>
+          Promise.resolve(testDatabase.push({ id: "one" })),
+        );
+        const compensationFunction1 = jest.fn(async () => {
+          testDatabase = testDatabase.filter((el) => el.id !== "one");
+          Promise.resolve();
+        });
+        const testFunction2 = jest.fn(async () =>
+          Promise.resolve(testDatabase.push({ id: "two" })),
+        );
+        const compensationFunction2 = jest.fn(async () => {
+          testDatabase = testDatabase.filter((el) => el.id !== "two");
+          Promise.resolve();
+        });
+        const testFunction3 = jest.fn(async () =>
+          Promise.resolve(testDatabase.push({ id: "three" })),
+        );
+        const compensationFunction3 = jest.fn(async () => {
+          testDatabase = testDatabase.filter((el) => el.id !== "three");
+          Promise.resolve();
+        });
+        // Make this testFunction4 fail so that all are rolled back
+        const testFunction4 = jest.fn(async () => Promise.reject());
+        const compensationFunction4 = jest.fn(async () => {
+          testDatabase = testDatabase.filter((el) => el.id !== "four");
+          Promise.resolve();
+        });
+
+        const saga = new SagaBuilder()
+          .invoke(testFunction1, "testFunction1")
+          .withCompensation(compensationFunction1)
+          // Should not add the testFunction2 step invoke() or withCompensation()
+          .when(predicate)
+          .invoke(testFunction2, "testFunction2")
+          .withCompensation(compensationFunction2)
+          // Should add testFunction 3
+          .invoke(testFunction3, "testFunction3")
+          .withCompensation(compensationFunction3)
+          .invoke(testFunction4, "testFunction4")
+          // Should add testFunction 4
+          .withCompensation(compensationFunction4)
+          .build();
+
+        try {
+          await saga.execute();
+        } catch (error) {
+          // Ignore. We expect an error for this test
+        } finally {
+          expect(testFunction1).toBeCalledTimes(1);
+          expect(testFunction2).toBeCalledTimes(0); // should have skipped
+          expect(testFunction3).toBeCalledTimes(1);
+          expect(testFunction4).toBeCalledTimes(1);
+          expect(compensationFunction1).toBeCalledTimes(1);
+          expect(compensationFunction2).toBeCalledTimes(0); // should have skipped
+          expect(compensationFunction3).toBeCalledTimes(1);
+          expect(compensationFunction4).toBeCalledTimes(1);
+
+          // Our simple "database" should look like it did BEFORE the saga started
+          expect(testDatabase).toEqual(orig_testDatabase);
+        }
+      }),
+    );
+  });
 });

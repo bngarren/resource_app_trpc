@@ -78,6 +78,18 @@ class SagaStep<T = any, K = any> {
       // Handle error
     }
  * ```
+ * #### Example with when()
+ * ```javascript
+ * const saga = new SagaBuilder()
+      .invoke(testFunction1)
+      .withCompensation(compensationFunction1)
+      .when(() => false)
+      .invoke(testFunction2) // Does not get added!
+      .withCompensation(compensationFunction2) // Does not get added!
+      .invoke(testFunction3) // Added
+      .withCompensation(compensationFunction3) // Added
+      .build();
+ * ```
  */
 export class SagaBuilder {
   private steps: SagaStep[] = [];
@@ -85,23 +97,63 @@ export class SagaBuilder {
   private context: string | undefined;
   private verbose: boolean;
 
+  /**
+   * Defaults to true.
+   * This flag is used by the `when()` function to determine if the
+   * next `invoke()` should add the step or not.
+   */
+  private shouldAddNextStep = true;
+
+  /**
+   * This flag tracks whether or not a previous step has been skipped due to the `when()` function.
+   * If an `invoke()` was skipped, we also want to skip its associated `withCompsenation()` call.
+   */
+  private lastStepSkipped = false;
+
   constructor(context?: string) {
     this.context = context;
     this.verbose = false;
   }
 
+  /**
+   * The boolean result of the predicate will determine if the following invoke()/withCompensation() pair
+   * is used (**true**) or skipped (**false**).
+   * @param predicate A boolean or function that returns a boolean
+   * @returns
+   */
+  when(predicate: boolean | (() => boolean)): this {
+    if (typeof predicate === "function") {
+      this.shouldAddNextStep = predicate();
+    } else {
+      this.shouldAddNextStep = predicate;
+    }
+    return this;
+  }
+
   invoke<T>(invokeFn: () => Promise<T>, name?: string): this {
-    this.steps.push(
-      new SagaStep<T>(name ?? "", invokeFn, () => Promise.resolve()),
-    );
+    if (this.shouldAddNextStep) {
+      this.steps.push(
+        new SagaStep<T>(name ?? "", invokeFn, () => Promise.resolve()),
+      );
+      this.lastStepSkipped = false;
+    } else {
+      this.lastStepSkipped = true;
+    }
+    // Reset the flag after using it
+    this.shouldAddNextStep = true;
     return this;
   }
 
   withCompensation<T, K>(
     compensationFn: (data: T, ...args: any[]) => Promise<K>,
   ): this {
-    const lastStep = this.steps[this.steps.length - 1] as SagaStep<T, K>;
-    lastStep.setCompensationFn(compensationFn);
+    // Only set the compensation function on the last step if the last step was not skipped
+    if (!this.lastStepSkipped) {
+      const lastStep = this.steps[this.steps.length - 1] as SagaStep<T, K>;
+      lastStep.setCompensationFn(compensationFn);
+    }
+    // Reset the flag after using it
+    this.shouldAddNextStep = true;
     return this;
   }
 
