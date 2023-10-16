@@ -9,6 +9,7 @@ import {
   Resource,
   ResourceType,
   SpawnedResource,
+  UserInventoryItem,
 } from "@prisma/client";
 import {
   getHarvesterById,
@@ -44,6 +45,7 @@ import {
 } from "date-fns";
 import { validateWithZod } from "../util/validateWithZod";
 import { SagaBuilder } from "../util/saga";
+import { getUserInventoryItemByItemId } from "../queries/queryUserInventoryItem";
 
 /**
  * ### Gets a Harvester
@@ -569,9 +571,43 @@ export const handleTransferEnergy = async (
     });
   }
 
+  // Only modify user inventory if NOT null
   const shouldUpdateUserInventory = _activeUserId !== null;
-  const activeUserId =
-    _activeUserId === undefined ? harvester.userId : _activeUserId;
+  // activeUserId defaults to harvester's owner unless specified by _activeUserId
+  const activeUserId = _activeUserId != null ? _activeUserId : harvester.userId;
+
+  // If we are going to use the user's inventory, we must first make some checks about
+  // the user HAVING enough resource to do this, if necessary
+  let orig_energyResourceUserInventoryItem: UserInventoryItem;
+  if (shouldUpdateUserInventory) {
+    try {
+      orig_energyResourceUserInventoryItem = await getUserInventoryItemByItemId(
+        energyResource.id,
+        ItemType.RESOURCE,
+        activeUserId,
+      );
+
+      if (
+        amount > 0 &&
+        orig_energyResourceUserInventoryItem.quantity < amount
+      ) {
+        throw new Error(
+          `Cannot transfer more energy to harvester (${amount}) than amount in user inventory (${orig_energyResourceUserInventoryItem.quantity})!`,
+        );
+      }
+      // TODO: can add if statement here to check for inventory space...
+      // ...
+    } catch (err) {
+      // We failed to find the resource in the user's inventory...
+      if (amount < 0) {
+        // This is okay. We are transfering energy from harvester to user (who isn't currently holding this resource...)
+      } else {
+        throw new Error(
+          `Cannot transfer energy to harvester. Resource not found in user's inventory!`,
+        );
+      }
+    }
+  }
 
   /* New energy start time is now, or whatever energyStartTime was passed as a param for testing purposes
   - When energy is added/removed from the harvester, we recalculate the initialEnergy and new
@@ -687,9 +723,23 @@ export const handleTransferEnergy = async (
       });
     })
     // handleTransferEnergySaga STEP 3
+    .when(shouldUpdateUserInventory)
     .invoke(async () => {
-      return true;
+      return await updateCreateOrRemoveUserInventoryItemWithDeltaQuantity(
+        energyResource.id,
+        ItemType.RESOURCE,
+        activeUserId,
+        amount, // ! Not idempotent
+      );
     }, "update user's inventory")
+    .withCompensation(async () => {
+      return await updateCreateOrRemoveUserInventoryItemWithDeltaQuantity(
+        energyResource.id,
+        ItemType.RESOURCE,
+        activeUserId,
+        -amount, // ! Not idempotent
+      );
+    })
     .build();
 
   try {
