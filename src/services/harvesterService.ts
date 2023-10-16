@@ -485,9 +485,12 @@ export const verifyArcaneEnergyResource = async (resourceId: string) => {
 };
 
 /**
- * ### Updates the Harvester with additional energy of a specific type
- * This will trigger an update of all the harvester's HarvestOperations based on the new
+ * ### Adds or removes energy from Harvester
+ * - This will trigger an update of all the harvester's HarvestOperations based on the new
  * energyEndTime.
+ * - Will update the active user's UserInventory, by default
+ *   - The active user defaults to the owner of the harvester
+ *   - If the `activeUser` param is passed, this user inventory will be used to transfer energy
  *
  * It is crucial that we maintain floating point precision in these calculations
  *
@@ -502,7 +505,7 @@ export const verifyArcaneEnergyResource = async (resourceId: string) => {
  * @param energySourceId
  * @param energyStartTime - Optional. Defaults to now.
  */
-export const handleModifyEnergy = async (
+export const handleTransferEnergy = async (
   _harvester: string | Harvester,
   amount: number,
   energySourceId: string,
@@ -555,9 +558,12 @@ export const handleModifyEnergy = async (
   */
   const newEnergyStartTime = energyStartTime || new Date();
 
+  const gerund = amount >= 0 ? "Adding" : "Removing";
+  const verb = amount >= 0 ? "add" : "remove";
+
   logger.info(
     { energyStartTime: pdate(newEnergyStartTime) },
-    `handleModifyEnergy() - begin`,
+    `handleTransferEnergy() - begin (${verb.toUpperCase()})`,
   );
 
   // If harvester already had energy prior to this new modify, calculate the remaining amount
@@ -586,7 +592,14 @@ export const handleModifyEnergy = async (
   }
 
   // Calculate the new initialEnergy (remainingEnergy + addedEnergy)
-  const newInitialEnergy = Math.max(0, remainingEnergy + amount);
+  const newInitialEnergy = remainingEnergy + amount;
+
+  if (newInitialEnergy < 0) {
+    throw new TRPCError({
+      message: `Resulting newInitialEnergy should not be negative! (${newInitialEnergy})`,
+      code: "CONFLICT",
+    });
+  }
 
   // Calculate the newEnergyEndTime
   const newEnergyEndTime = addMilliseconds(
@@ -594,14 +607,12 @@ export const handleModifyEnergy = async (
     newInitialEnergy * minutesPerEnergyUnit * 60000.0,
   );
 
-  const gerund = amount >= 0 ? "Adding" : "Removing";
-  const verb = amount >= 0 ? "add" : "remove";
-
+  const absAmount = Math.abs(amount);
   logger.debug(
-    `${gerund} ${amount} unit${amount === 1 ? "" : "s"} of ${
+    `${gerund} ${absAmount} unit${absAmount === 1 ? "" : "s"} of ${
       energyResource.name
     } will ${verb} ${pduration(
-      amount * minutesPerEnergyUnit * 60000.0,
+      absAmount * minutesPerEnergyUnit * 60000.0,
     )} of energy,
     giving total energy duration of ${pduration(
       newInitialEnergy * minutesPerEnergyUnit * 60000.0,
@@ -612,7 +623,7 @@ export const handleModifyEnergy = async (
     harvester.id,
   );
 
-  const handleModifyEnergySaga = new SagaBuilder("handleModifyEnergySaga")
+  const handleTransferEnergySaga = new SagaBuilder("handleTransferEnergySaga")
     .withLogger()
     // STEP 1
     .invoke(async () => {
@@ -657,7 +668,7 @@ export const handleModifyEnergy = async (
     .build();
 
   try {
-    const sagaResult = await handleModifyEnergySaga.execute();
+    const sagaResult = await handleTransferEnergySaga.execute();
 
     logger.info(
       {
@@ -665,7 +676,7 @@ export const handleModifyEnergy = async (
         newEnergyStartTime: pdate(newEnergyStartTime),
         newEnergyEndTime: pdate(newEnergyEndTime),
       },
-      `handleModifyEnergy() - complete. Updated Harvester:`,
+      `handleTransferEnergy() - complete (${verb.toUpperCase()}). Updated Harvester:`,
     );
 
     return sagaResult[1] as Harvester; // output from the second step
@@ -738,7 +749,7 @@ export const handleReclaim = async (harvesterId: string) => {
   /**
    * Need to calculate how much remaining energy and which energy item to return to the user
    *
-   * See `handleAddEnergy()` for details on energy calculations, which are mirrored below
+   * See `handleTransferEnergy()` for details on energy calculations, which are mirrored below
    */
   if (harvester.energySourceId != null) {
     const energyResource = await getResource(harvester.energySourceId);

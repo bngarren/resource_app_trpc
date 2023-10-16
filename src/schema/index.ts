@@ -37,21 +37,14 @@ export const harvesterReclaimRequestSchema = z.object({
 });
 
 /**
- * The input schema for the "/harvester.addEnergy" endpoint
+ * The input schema for the "/harvester.transferEnergy" endpoint
+ *
+ * `amount` - positive number when adding energy, negative number when removing energy from harvester
  */
-export const harvesterAddEnergyRequestSchema = z.object({
+export const harvesterTransferEnergyRequestSchema = z.object({
   harvesterId: z.string(),
   energySourceId: z.string(),
-  amount: z.number().int().min(0),
-});
-
-/**
- * The input schema for the "/harvester.removeEnergy" endpoint
- */
-export const harvesterRemoveEnergyRequestSchema = z.object({
-  harvesterId: z.string(),
-  energySourceId: z.string(),
-  amount: z.number().int().min(0),
+  amount: z.number(),
 });
 
 export const arcaneEnergyResourceMetadataSchema = z.object({

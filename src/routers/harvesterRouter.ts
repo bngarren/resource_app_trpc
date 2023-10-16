@@ -3,9 +3,8 @@ import { Harvester, User } from "@prisma/client";
 import {
   harvesterCollectRequestSchema,
   harvesterDeployRequestSchema,
-  harvesterAddEnergyRequestSchema,
+  harvesterTransferEnergyRequestSchema,
   harvesterReclaimRequestSchema,
-  harvesterRemoveEnergyRequestSchema,
 } from "../schema";
 import { protectedProcedure, router } from "../trpc/trpc";
 import { getUserByUid } from "../services/userService";
@@ -16,11 +15,10 @@ import {
   handleDeploy,
   handleReclaim,
   isHarvesterDeployed,
-  handleModifyEnergy,
+  handleTransferEnergy,
 } from "../services/harvesterService";
 import config from "../config";
 import { logger } from "../logger/logger";
-import { prefixedError } from "../util/prefixedError";
 
 export const harvesterRouter = router({
   /**
@@ -161,18 +159,18 @@ export const harvesterRouter = router({
 
       const res = await handleReclaim(harvester.id);
     }),
-  addEnergy: protectedProcedure
-    .input(harvesterAddEnergyRequestSchema)
+  transferEnergy: protectedProcedure
+    .input(harvesterTransferEnergyRequestSchema)
     .mutation(async ({ input }) => {
       // verify harvester exists and is deployed
       const harvester = await verifyDeployedHarvester(input.harvesterId);
 
-      // Verify that the energy type being added is the same as what is already in the harvester, if present
+      // Verify that the energy type being added/removed is the same as what is already in the harvester, if present
       if (
         harvester.energySourceId != null &&
         harvester.energySourceId !== input.energySourceId
       ) {
-        const errMsg = `Cannot add energy of a different type to this harvester (id=${harvester.id})`;
+        const errMsg = `Cannot modify energy of a different type than what is presently in the harvester (id=${harvester.id})`;
         logger.error(errMsg);
         throw new TRPCError({
           message: errMsg,
@@ -180,56 +178,23 @@ export const harvesterRouter = router({
         });
       }
 
-      try {
-        const res = await handleModifyEnergy(
-          harvester,
-          input.amount,
-          input.energySourceId ?? null,
-        );
+      const res = await handleTransferEnergy(
+        harvester,
+        input.amount,
+        input.energySourceId ?? null,
+      );
 
-        return res;
-      } catch (err) {
-        throw new TRPCError({
-          message: prefixedError(err, "handleModifyEnergy").message,
-          code: "INTERNAL_SERVER_ERROR",
-        });
-      }
-    }),
-  removeEnergy: protectedProcedure
-    .input(harvesterRemoveEnergyRequestSchema)
-    .mutation(async ({ input }) => {
-      // verify harvester exists and is deployed
-      const harvester = await verifyDeployedHarvester(input.harvesterId);
-
-      // Verify that the energy type being removed is the same as what is already in the harvester, if present
-      if (
-        harvester.energySourceId != null &&
-        harvester.energySourceId !== input.energySourceId
-      ) {
-        const errMsg = `Cannot remove energy of a different type than what is present in this harvester (id=${harvester.id})`;
-        logger.error(errMsg);
-        throw new TRPCError({
-          message: errMsg,
-          code: "CONFLICT",
-        });
-      }
-
-      try {
-        const res = await handleModifyEnergy(
-          harvester,
-          input.amount,
-          input.energySourceId ?? null,
-        );
-
-        return res;
-      } catch (err) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-        });
-      }
+      return res;
     }),
 });
 
+/**
+ * ### Verify that harvester exists, by id, and is deployed
+ *
+ * See `isHarvesterDeployed()` for logic
+ * @param harvesterId
+ * @returns Harvester, or throws TRPC error
+ */
 async function verifyDeployedHarvester(harvesterId: string) {
   // Get the harvester with this id
   let harvester: Harvester;

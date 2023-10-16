@@ -39,6 +39,7 @@ import {
   addMinutes,
   addSeconds,
   compareAsc,
+  differenceInMilliseconds,
   hoursToMinutes,
   isSameSecond,
   minutesToSeconds,
@@ -661,7 +662,7 @@ describe("/harvester", () => {
       const h = await authenticatedRequest(
         server,
         "POST",
-        "/harvester.addEnergy",
+        "/harvester.transferEnergy",
         idToken,
         {
           harvesterId: testHarvester.id,
@@ -765,7 +766,7 @@ describe("/harvester", () => {
     });
   });
 
-  describe("/harvester.addEnergy", () => {
+  describe("/harvester.transferEnergy", () => {
     let testUser: User;
     let testHarvester: Harvester;
 
@@ -797,7 +798,7 @@ describe("/harvester", () => {
       const res1 = await authenticatedRequest(
         server,
         "POST",
-        "/harvester.addEnergy",
+        "/harvester.transferEnergy",
         idToken,
         { energySourceId: "test", amount: 0 },
       );
@@ -807,7 +808,7 @@ describe("/harvester", () => {
       const res2 = await authenticatedRequest(
         server,
         "POST",
-        "/harvester.addEnergy",
+        "/harvester.transferEnergy",
         idToken,
         { harvesterId: testHarvester.id, amount: 0 },
       );
@@ -817,7 +818,7 @@ describe("/harvester", () => {
       const res3 = await authenticatedRequest(
         server,
         "POST",
-        "/harvester.addEnergy",
+        "/harvester.transferEnergy",
         idToken,
         { harvesterId: testHarvester.id, energySourceId: "test" },
       );
@@ -839,7 +840,7 @@ describe("/harvester", () => {
       const res = await authenticatedRequest(
         server,
         "POST",
-        "/harvester.addEnergy",
+        "/harvester.transferEnergy",
         idToken,
         {
           harvesterId: testHarvester.id,
@@ -851,686 +852,889 @@ describe("/harvester", () => {
       expect(res.statusCode).toBe(409);
     });
 
-    it("should correctly add energy to a harvester without energy", async () => {
-      // verify harvester is deployed and without energy
-      const pre_TestHarvester = await prisma.harvester.findUniqueOrThrow({
-        where: {
-          id: testHarvester.id,
-        },
-      });
+    describe("add energy", () => {
+      it("should correctly add energy to a harvester without energy", async () => {
+        // verify harvester is deployed and without energy
+        const pre_TestHarvester = await prisma.harvester.findUniqueOrThrow({
+          where: {
+            id: testHarvester.id,
+          },
+        });
 
-      if (
-        !isHarvesterDeployed(pre_TestHarvester) ||
-        pre_TestHarvester.initialEnergy != 0
-      ) {
-        throw new Error(
-          `Problem with seeding harvester for this test (should be deployed and with initialEnergy 0): ${pre_TestHarvester.initialEnergy}`,
+        if (
+          !isHarvesterDeployed(pre_TestHarvester) ||
+          pre_TestHarvester.initialEnergy != 0
+        ) {
+          throw new Error(
+            `Problem with seeding harvester for this test (should be deployed and with initialEnergy 0): ${pre_TestHarvester.initialEnergy}`,
+          );
+        }
+
+        // choose the energy resource
+        const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+
+        const requestTime = new Date();
+
+        const amount = 10;
+        const res = await authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.transferEnergy",
+          idToken,
+          {
+            harvesterId: testHarvester.id,
+            energySourceId: arcaneQuanta.id,
+            amount: amount,
+          },
         );
-      }
+        throwIfBadStatus(res);
 
-      // choose the energy resource
-      const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+        const post_TestHarvester = await prisma.harvester.findUniqueOrThrow({
+          where: {
+            id: testHarvester.id,
+          },
+        });
 
-      const requestTime = new Date();
+        expect(post_TestHarvester.initialEnergy).toBe(10);
 
-      const amount = 10;
-      const res = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.addEnergy",
-        idToken,
-        {
-          harvesterId: testHarvester.id,
-          energySourceId: arcaneQuanta.id,
-          amount: amount,
-        },
-      );
-      throwIfBadStatus(res);
-
-      const post_TestHarvester = await prisma.harvester.findUniqueOrThrow({
-        where: {
-          id: testHarvester.id,
-        },
-      });
-
-      expect(post_TestHarvester.initialEnergy).toBe(10);
-
-      // Get the metadata for the energy
-      // Validate and parse the metadata using Zod
-      const metadata = validateWithZod(
-        arcaneEnergyResourceMetadataSchema,
-        arcaneQuanta.metadata,
-        `metadata for arcane_quanta`,
-      );
-
-      // Expected energyEndTime calculation
-      const expectedEnergyEndTime = addSeconds(
-        requestTime,
-        amount *
-          60.0 *
-          metadata.energyEfficiency *
-          config.base_minutes_per_arcane_energy_unit,
-      );
-
-      // Check if the API came up with the same energyEndTime as this test did
-      const check = isSameSecond(
-        expectedEnergyEndTime,
-        post_TestHarvester.energyEndTime ?? 1,
-      );
-      expect(check).toBe(true);
-    });
-
-    it("should correctly add energy to a harvester that already has energy", async () => {
-      // choose the energy resource
-      const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
-
-      // setup our test harvester to already have energy (running)
-      const initialEnergy = 10.0;
-      const hoursRunning = 3;
-      await prisma.harvester.update({
-        where: {
-          id: testHarvester.id,
-        },
-        data: {
-          initialEnergy: initialEnergy,
-          energyStartTime: subHours(new Date(), hoursRunning), // energy added 3 hours ago
-          energyEndTime: addDays(new Date(), 3), // pretend this energy will last for 3 days, not important for this test
-          energySourceId: arcaneQuanta.id,
-        },
-      });
-
-      // verify harvester is deployed and with some initialEnergy
-      const pre_TestHarvester = await prisma.harvester.findUniqueOrThrow({
-        where: {
-          id: testHarvester.id,
-        },
-      });
-
-      if (
-        !isHarvesterDeployed(pre_TestHarvester) ||
-        pre_TestHarvester.initialEnergy !== initialEnergy
-      ) {
-        throw new Error(
-          `Problem with seeding harvester for this test (should be deployed and with initialEnergy=10): ${pre_TestHarvester.initialEnergy}`,
+        // Get the metadata for the energy
+        // Validate and parse the metadata using Zod
+        const metadata = validateWithZod(
+          arcaneEnergyResourceMetadataSchema,
+          arcaneQuanta.metadata,
+          `metadata for arcane_quanta`,
         );
-      }
 
-      let requestTime = new Date();
-
-      // Now add more units of energy to the harvester
-      let amount = 3;
-      const res = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.addEnergy",
-        idToken,
-        {
-          harvesterId: testHarvester.id,
-          energySourceId: arcaneQuanta.id,
-          amount: amount,
-        },
-      );
-      throwIfBadStatus(res);
-
-      const post1_TestHarvester = await prisma.harvester.findUniqueOrThrow({
-        where: {
-          id: testHarvester.id,
-        },
-      });
-
-      // Get the metadata for the energy
-      // Validate and parse the metadata using Zod
-      const metadata = validateWithZod(
-        arcaneEnergyResourceMetadataSchema,
-        arcaneQuanta.metadata,
-        `metadata for arcane_quanta`,
-      );
-
-      // 5 units remaining at the time that
-      // new energy is added. 5 + 3 = 8
-      const r =
-        calculateRemainingEnergy(
-          initialEnergy,
-          hoursToMinutes(hoursRunning),
-          metadata.energyEfficiency,
-        ) + amount;
-
-      expect(post1_TestHarvester.initialEnergy - r).toBeLessThanOrEqual(0.01); // equal within 0.01
-
-      // the new energyEndTime should be based on the new initialEnergy
-      const e = addSeconds(
-        requestTime,
-        minutesToSeconds(
-          r *
-            (config.base_minutes_per_arcane_energy_unit *
-              metadata.energyEfficiency),
-        ),
-      );
-
-      expect(isSameSecond(e, post1_TestHarvester.energyEndTime ?? 1)).toBe(
-        true,
-      ); // the "?? 1" is just avoiding a null check here...
-
-      // * * * * * * * *
-      // Now we will manually set the energyStartTime to 15 seconds ago so that we can test what happens
-      // when we add another unit of energy in a short time frame
-
-      const secondsRunning = 15;
-      await prisma.harvester.update({
-        where: {
-          id: testHarvester.id,
-        },
-        data: {
-          energyStartTime: subSeconds(new Date(), secondsRunning), // pretend it has been at least 15 seconds
-        },
-      });
-
-      requestTime = new Date();
-
-      // Now add 1 more unit of energy to the harvester
-      amount = 1;
-      await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.addEnergy",
-        idToken,
-        {
-          harvesterId: testHarvester.id,
-          energySourceId: arcaneQuanta.id,
-          amount: amount,
-        },
-      );
-
-      const post2_TestHarvester = await prisma.harvester.findUniqueOrThrow({
-        where: {
-          id: testHarvester.id,
-        },
-      });
-
-      // If initialEnergy of 8 units has run for 15 seconds at 0.6 energyEfficiency (Arcane Quanta),
-      // this would leave 8units - 0.25 min/36 min per unit = 7.99 units remaining at the time that
-      // new energy is added. 7.99 + 1 = 8.99
-
-      const k =
-        calculateRemainingEnergy(
-          post1_TestHarvester.initialEnergy,
-          secondsRunning / 60.0,
-          metadata.energyEfficiency,
-        ) + amount;
-
-      expect(post2_TestHarvester.initialEnergy - k).toBeLessThanOrEqual(0.01); // equal within 0.01
-    });
-
-    // TODO: WIP
-    it("should deploy harvester and accurately store priorHarvested as energy is added over time", async () => {
-      /*
-      The premise of this testing strategy is that we deploy a harvester and mock the handleAddEnergy
-      calls so that we manually control the start times.
-      
-      In other words, we need fine control over the exact energyStartTime of the harvester and each
-      harvest operation so that we can calculate and test endTimes at various intervals in the "future"
-      from the starting point. If we try to deploy a harvester at current/present time, it's hard to
-      "advance time" and test the result.
-      
-      Overall, we want to test specific intervals of time in a chronological fashion
-      (as a harvester operates in real time) and see if the appopriate energy is being used and
-      amount of resource being harvested is correct, depending on if energy is present or
-      runs out and if the resetDate is passed.
-
-      * This below tests depend on certain hard-coded variables, that if changed, must also be adjusted below *
-      The testing schedule:
-      - Deploy harvester and manually "fix"/mock the resetDate of the spawnRegion to T+12 hours
-      - INITIAL ENERGY - At time 0 (t_0), add 2 units of energy. This will provide a certain duration of energy. Ideally ~2 hours.
-      - ENERGY DEPLETED - At t_plus_3, we add 20 units of energy. During the update harvest operations logic, we want to correctly
-      calculate the priorHarvested based on the energy running out at 2 hours. 
-      - ENERGY OKAY - At t_plus_6, we add 50 units of energy. We should have had enough energy to carry us through the last 3 hours,
-      therefore the calculated priorHarvested should reflect this.
-      - RESOURCE DEPLETED - At t_plus_24, we add 50 units of energy. The resources should have become stale/inactive at T+12,
-      therefore the harvest operations were only able to harvest from T+6 to T+12.
-      */
-
-      // Fake times, for consistency
-      const t_0 = new Date(2022, 8, 16, 6, 0, 0);
-      const t_plus_3 = addHours(t_0, 3);
-      const t_plus_6 = addHours(t_0, 6);
-      const t_plus_12 = addHours(t_0, 12);
-      const t_plus_24 = addHours(t_0, 24);
-      const t_plus_30 = addHours(t_0, 30);
-
-      // TODO: using base extraction rate only. Must FIX this when harvester's have their own extraction rate multiplier
-      const extractionRate = config.base_units_per_minute_harvested;
-
-      // Verify that mockScan (from beforeEach()) gave us 3 spawned resources
-      const spawnedResources = await prisma.spawnedResource.findMany();
-
-      expect(spawnedResources).toHaveLength(3);
-
-      // "Fix" the spawn region's resetDate to occur at T+12 hours so we can verify how things work
-      // after the spawned resources should be inactive
-      await prisma.spawnRegion.updateMany({
-        where: {
-          id: spawnedResources[0].spawnRegionId,
-        },
-        data: {
-          resetDate: t_plus_12,
-        },
-      });
-
-      // verify harvester is deployed and without energy
-      const pre_TestHarvester = await prisma.harvester.findUniqueOrThrow({
-        where: {
-          id: testHarvester.id,
-        },
-      });
-
-      if (
-        !isHarvesterDeployed(pre_TestHarvester) ||
-        pre_TestHarvester.initialEnergy != 0
-      ) {
-        throw new Error(
-          `Problem with seeding harvester for this test (should be deployed and with initialEnergy 0): ${pre_TestHarvester.initialEnergy}`,
+        // Expected energyEndTime calculation
+        const expectedEnergyEndTime = addSeconds(
+          requestTime,
+          amount *
+            60.0 *
+            metadata.energyEfficiency *
+            config.base_minutes_per_arcane_energy_unit,
         );
-      }
 
-      // choose the energy resource
-      const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+        // Check if the API came up with the same energyEndTime as this test did
+        const check = isSameSecond(
+          expectedEnergyEndTime,
+          post_TestHarvester.energyEndTime ?? 1,
+        );
+        expect(check).toBe(true);
+      });
 
-      const metadata = validateWithZod(
-        arcaneEnergyResourceMetadataSchema,
-        arcaneQuanta.metadata,
-        `metadata for arcane_quanta`,
-      );
+      it("should correctly add energy to a harvester that already has energy", async () => {
+        // choose the energy resource
+        const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
 
-      const orig_handleAddEnergy = HarvesterService.handleModifyEnergy;
+        // setup our test harvester to already have energy (running)
+        const initialEnergy = 10.0;
+        const hoursRunning = 3;
+        await prisma.harvester.update({
+          where: {
+            id: testHarvester.id,
+          },
+          data: {
+            initialEnergy: initialEnergy,
+            energyStartTime: subHours(new Date(), hoursRunning), // energy added 3 hours ago
+            energyEndTime: addDays(new Date(), 3), // pretend this energy will last for 3 days, not important for this test
+            energySourceId: arcaneQuanta.id,
+          },
+        });
 
-      // Add initial energy at time T0
-      const spy_handleAddEnergy = jest
-        .spyOn(HarvesterService, "handleModifyEnergy")
-        .mockImplementation(
+        // verify harvester is deployed and with some initialEnergy
+        const pre_TestHarvester = await prisma.harvester.findUniqueOrThrow({
+          where: {
+            id: testHarvester.id,
+          },
+        });
+
+        if (
+          !isHarvesterDeployed(pre_TestHarvester) ||
+          pre_TestHarvester.initialEnergy !== initialEnergy
+        ) {
+          throw new Error(
+            `Problem with seeding harvester for this test (should be deployed and with initialEnergy=10): ${pre_TestHarvester.initialEnergy}`,
+          );
+        }
+
+        let requestTime = new Date();
+
+        // Now add more units of energy to the harvester
+        let amount = 3;
+        const res = await authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.transferEnergy",
+          idToken,
+          {
+            harvesterId: testHarvester.id,
+            energySourceId: arcaneQuanta.id,
+            amount: amount,
+          },
+        );
+        throwIfBadStatus(res);
+
+        const post1_TestHarvester = await prisma.harvester.findUniqueOrThrow({
+          where: {
+            id: testHarvester.id,
+          },
+        });
+
+        // Get the metadata for the energy
+        // Validate and parse the metadata using Zod
+        const metadata = validateWithZod(
+          arcaneEnergyResourceMetadataSchema,
+          arcaneQuanta.metadata,
+          `metadata for arcane_quanta`,
+        );
+
+        // 5 units remaining at the time that
+        // new energy is added. 5 + 3 = 8
+        const r =
+          calculateRemainingEnergy(
+            initialEnergy,
+            hoursToMinutes(hoursRunning),
+            metadata.energyEfficiency,
+          ) + amount;
+
+        expect(post1_TestHarvester.initialEnergy - r).toBeLessThanOrEqual(0.01); // equal within 0.01
+
+        // the new energyEndTime should be based on the new initialEnergy
+        const e = addSeconds(
+          requestTime,
+          minutesToSeconds(
+            r *
+              (config.base_minutes_per_arcane_energy_unit *
+                metadata.energyEfficiency),
+          ),
+        );
+
+        expect(isSameSecond(e, post1_TestHarvester.energyEndTime ?? 1)).toBe(
+          true,
+        ); // the "?? 1" is just avoiding a null check here...
+
+        // * * * * * * * *
+        // Now we will manually set the energyStartTime to 15 seconds ago so that we can test what happens
+        // when we add another unit of energy in a short time frame
+
+        const secondsRunning = 15;
+        await prisma.harvester.update({
+          where: {
+            id: testHarvester.id,
+          },
+          data: {
+            energyStartTime: subSeconds(new Date(), secondsRunning), // pretend it has been at least 15 seconds
+          },
+        });
+
+        requestTime = new Date();
+
+        // Now add 1 more unit of energy to the harvester
+        amount = 1;
+        await authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.transferEnergy",
+          idToken,
+          {
+            harvesterId: testHarvester.id,
+            energySourceId: arcaneQuanta.id,
+            amount: amount,
+          },
+        );
+
+        const post2_TestHarvester = await prisma.harvester.findUniqueOrThrow({
+          where: {
+            id: testHarvester.id,
+          },
+        });
+
+        // If initialEnergy of 8 units has run for 15 seconds at 0.6 energyEfficiency (Arcane Quanta),
+        // this would leave 8units - 0.25 min/36 min per unit = 7.99 units remaining at the time that
+        // new energy is added. 7.99 + 1 = 8.99
+
+        const k =
+          calculateRemainingEnergy(
+            post1_TestHarvester.initialEnergy,
+            secondsRunning / 60.0,
+            metadata.energyEfficiency,
+          ) + amount;
+
+        expect(post2_TestHarvester.initialEnergy - k).toBeLessThanOrEqual(0.01); // equal within 0.01
+      });
+
+      // TODO: WIP
+      it("should deploy harvester and accurately store priorHarvested as energy is added over time", async () => {
+        /*
+        The premise of this testing strategy is that we deploy a harvester and mock the handleTransferEnergy
+        calls so that we manually control the start times.
+        
+        In other words, we need fine control over the exact energyStartTime of the harvester and each
+        harvest operation so that we can calculate and test endTimes at various intervals in the "future"
+        from the starting point. If we try to deploy a harvester at current/present time, it's hard to
+        "advance time" and test the result.
+        
+        Overall, we want to test specific intervals of time in a chronological fashion
+        (as a harvester operates in real time) and see if the appopriate energy is being used and
+        amount of resource being harvested is correct, depending on if energy is present or
+        runs out and if the resetDate is passed.
+  
+        * This below tests depend on certain hard-coded variables, that if changed, must also be adjusted below *
+        The testing schedule:
+        - Deploy harvester and manually "fix"/mock the resetDate of the spawnRegion to T+12 hours
+        - INITIAL ENERGY - At time 0 (t_0), add 2 units of energy. This will provide a certain duration of energy. Ideally ~2 hours.
+        - ENERGY DEPLETED - At t_plus_3, we add 20 units of energy. During the update harvest operations logic, we want to correctly
+        calculate the priorHarvested based on the energy running out at 2 hours. 
+        - ENERGY OKAY - At t_plus_6, we add 50 units of energy. We should have had enough energy to carry us through the last 3 hours,
+        therefore the calculated priorHarvested should reflect this.
+        - RESOURCE DEPLETED - At t_plus_24, we add 50 units of energy. The resources should have become stale/inactive at T+12,
+        therefore the harvest operations were only able to harvest from T+6 to T+12.
+        */
+
+        // Fake times, for consistency
+        const t_0 = new Date(2022, 8, 16, 6, 0, 0);
+        const t_plus_3 = addHours(t_0, 3);
+        const t_plus_6 = addHours(t_0, 6);
+        const t_plus_12 = addHours(t_0, 12);
+        const t_plus_24 = addHours(t_0, 24);
+        const t_plus_30 = addHours(t_0, 30);
+
+        // TODO: using base extraction rate only. Must FIX this when harvester's have their own extraction rate multiplier
+        const extractionRate = config.base_units_per_minute_harvested;
+
+        // Verify that mockScan (from beforeEach()) gave us 3 spawned resources
+        const spawnedResources = await prisma.spawnedResource.findMany();
+
+        expect(spawnedResources).toHaveLength(3);
+
+        // "Fix" the spawn region's resetDate to occur at T+12 hours so we can verify how things work
+        // after the spawned resources should be inactive
+        await prisma.spawnRegion.updateMany({
+          where: {
+            id: spawnedResources[0].spawnRegionId,
+          },
+          data: {
+            resetDate: t_plus_12,
+          },
+        });
+
+        // verify harvester is deployed and without energy
+        const pre_TestHarvester = await prisma.harvester.findUniqueOrThrow({
+          where: {
+            id: testHarvester.id,
+          },
+        });
+
+        if (
+          !isHarvesterDeployed(pre_TestHarvester) ||
+          pre_TestHarvester.initialEnergy != 0
+        ) {
+          throw new Error(
+            `Problem with seeding harvester for this test (should be deployed and with initialEnergy 0): ${pre_TestHarvester.initialEnergy}`,
+          );
+        }
+
+        // choose the energy resource
+        const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+
+        const metadata = validateWithZod(
+          arcaneEnergyResourceMetadataSchema,
+          arcaneQuanta.metadata,
+          `metadata for arcane_quanta`,
+        );
+
+        const orig_handleTransferEnergy = HarvesterService.handleTransferEnergy;
+
+        // Add initial energy at time T0
+        const spy_handleTransferEnergy = jest
+          .spyOn(HarvesterService, "handleTransferEnergy")
+          .mockImplementation(
+            (
+              harvester: string | Harvester,
+              amount: number,
+              energySourceId: string,
+            ) => {
+              return orig_handleTransferEnergy(
+                harvester,
+                amount,
+                energySourceId,
+                t_0,
+              );
+            },
+          );
+
+        const amount_1 = 3;
+        const res1 = await authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.transferEnergy",
+          idToken,
+          {
+            harvesterId: testHarvester.id,
+            energySourceId: arcaneQuanta.id,
+            amount: amount_1,
+          },
+        );
+        throwIfBadStatus(res1);
+
+        const postAddEnergy1_testHarvester =
+          await prisma.harvester.findUniqueOrThrow({
+            where: {
+              id: testHarvester.id,
+            },
+          });
+
+        const postAddEnergy1_harvestOperations =
+          await prisma.harvestOperation.findMany({
+            where: {
+              harvesterId: testHarvester.id,
+            },
+          });
+
+        // Assertions after 1st round of energy add
+        expect(postAddEnergy1_testHarvester.initialEnergy).toBe(amount_1);
+        // shouldn't have an priorHarvested after the first add energy
+        postAddEnergy1_harvestOperations.forEach((harvestOperation) => {
+          expect(harvestOperation.priorHarvested).toBe(0);
+        });
+
+        // Add energy at time T+3 hours
+        spy_handleTransferEnergy.mockImplementation(
           (
             harvester: string | Harvester,
             amount: number,
             energySourceId: string,
           ) => {
-            return orig_handleAddEnergy(harvester, amount, energySourceId, t_0);
+            return orig_handleTransferEnergy(
+              harvester,
+              amount,
+              energySourceId,
+              t_plus_3,
+            );
           },
         );
 
-      const amount_1 = 3;
-      const res1 = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.addEnergy",
-        idToken,
-        {
-          harvesterId: testHarvester.id,
-          energySourceId: arcaneQuanta.id,
-          amount: amount_1,
-        },
-      );
-      throwIfBadStatus(res1);
-
-      const postAddEnergy1_testHarvester =
-        await prisma.harvester.findUniqueOrThrow({
-          where: {
-            id: testHarvester.id,
-          },
-        });
-
-      const postAddEnergy1_harvestOperations =
-        await prisma.harvestOperation.findMany({
-          where: {
+        // Add more energy (2nd round)
+        const amount_2 = 20;
+        const res2 = await authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.transferEnergy",
+          idToken,
+          {
             harvesterId: testHarvester.id,
+            energySourceId: arcaneQuanta.id,
+            amount: amount_2,
           },
-        });
+        );
+        throwIfBadStatus(res2);
 
-      // Assertions after 1st round of energy add
-      expect(postAddEnergy1_testHarvester.initialEnergy).toBe(amount_1);
-      // shouldn't have an priorHarvested after the first add energy
-      postAddEnergy1_harvestOperations.forEach((harvestOperation) => {
-        expect(harvestOperation.priorHarvested).toBe(0);
-      });
+        const postAddEnergy2_testHarvester =
+          await prisma.harvester.findUniqueOrThrow({
+            where: {
+              id: testHarvester.id,
+            },
+          });
 
-      // Add energy at time T+3 hours
-      spy_handleAddEnergy.mockImplementation(
-        (
-          harvester: string | Harvester,
-          amount: number,
-          energySourceId: string,
-        ) => {
-          return orig_handleAddEnergy(
-            harvester,
-            amount,
-            energySourceId,
-            t_plus_3,
+        const postAddEnergy2_harvestOperations =
+          await prisma.harvestOperation.findMany({
+            where: {
+              harvesterId: testHarvester.id,
+            },
+          });
+
+        // 3 units of arcane quanta gave us 108 min.
+        // *Since this is less than the 3 hour interval, we will use the energy duration
+        const energyDurationMinutes_1 =
+          amount_1 *
+          config.base_minutes_per_arcane_energy_unit *
+          metadata.energyEfficiency;
+        // 108 min * 5 units/min = 540 units
+
+        const priorHarvested_1 = calculatePeriodHarvested(
+          t_0,
+          addMinutes(t_0, energyDurationMinutes_1),
+          extractionRate,
+        );
+
+        postAddEnergy2_harvestOperations.forEach((harvestOperation) => {
+          expect(harvestOperation.priorHarvested).toBeCloseTo(
+            priorHarvested_1,
+            1,
           );
-        },
-      );
-
-      // Add more energy (2nd round)
-      const amount_2 = 20;
-      const res2 = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.addEnergy",
-        idToken,
-        {
-          harvesterId: testHarvester.id,
-          energySourceId: arcaneQuanta.id,
-          amount: amount_2,
-        },
-      );
-      throwIfBadStatus(res2);
-
-      const postAddEnergy2_testHarvester =
-        await prisma.harvester.findUniqueOrThrow({
-          where: {
-            id: testHarvester.id,
-          },
         });
 
-      const postAddEnergy2_harvestOperations =
-        await prisma.harvestOperation.findMany({
-          where: {
-            harvesterId: testHarvester.id,
+        // Next, add energy at T+6
+        spy_handleTransferEnergy.mockImplementation(
+          (
+            harvester: string | Harvester,
+            amount: number,
+            energySourceId: string,
+          ) => {
+            return orig_handleTransferEnergy(
+              harvester,
+              amount,
+              energySourceId,
+              t_plus_6,
+            );
           },
-        });
-
-      // 3 units of arcane quanta gave us 108 min.
-      // *Since this is less than the 3 hour interval, we will use the energy duration
-      const energyDurationMinutes_1 =
-        amount_1 *
-        config.base_minutes_per_arcane_energy_unit *
-        metadata.energyEfficiency;
-      // 108 min * 5 units/min = 540 units
-
-      const priorHarvested_1 = calculatePeriodHarvested(
-        t_0,
-        addMinutes(t_0, energyDurationMinutes_1),
-        extractionRate,
-      );
-
-      postAddEnergy2_harvestOperations.forEach((harvestOperation) => {
-        expect(harvestOperation.priorHarvested).toBeCloseTo(
-          priorHarvested_1,
-          1,
         );
-      });
 
-      // Next, add energy at T+6
-      spy_handleAddEnergy.mockImplementation(
-        (
-          harvester: string | Harvester,
-          amount: number,
-          energySourceId: string,
-        ) => {
-          return orig_handleAddEnergy(
-            harvester,
-            amount,
-            energySourceId,
-            t_plus_6,
+        // Add more energy (3rd round)
+        const amount_3 = 50;
+        const res3 = await authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.transferEnergy",
+          idToken,
+          {
+            harvesterId: testHarvester.id,
+            energySourceId: arcaneQuanta.id,
+            amount: amount_3,
+          },
+        );
+        throwIfBadStatus(res3);
+
+        const postAddEnergy3_testHarvester =
+          await prisma.harvester.findUniqueOrThrow({
+            where: {
+              id: testHarvester.id,
+            },
+          });
+
+        const postAddEnergy3_harvestOperations =
+          await prisma.harvestOperation.findMany({
+            where: {
+              harvesterId: testHarvester.id,
+            },
+          });
+
+        // 50 units of arcane quanta gave us plenty of energy
+        // *Since this is more than the 3 hour interval, we will use 3 hours
+
+        const priorHarvested_2 =
+          priorHarvested_1 +
+          calculatePeriodHarvested(t_plus_3, t_plus_6, extractionRate);
+
+        postAddEnergy3_harvestOperations.forEach((harvestOperation) => {
+          expect(harvestOperation.priorHarvested).toBeCloseTo(
+            priorHarvested_2,
+            1,
           );
-        },
-      );
-
-      // Add more energy (3rd round)
-      const amount_3 = 50;
-      const res3 = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.addEnergy",
-        idToken,
-        {
-          harvesterId: testHarvester.id,
-          energySourceId: arcaneQuanta.id,
-          amount: amount_3,
-        },
-      );
-      throwIfBadStatus(res3);
-
-      const postAddEnergy3_testHarvester =
-        await prisma.harvester.findUniqueOrThrow({
-          where: {
-            id: testHarvester.id,
-          },
         });
 
-      const postAddEnergy3_harvestOperations =
-        await prisma.harvestOperation.findMany({
-          where: {
-            harvesterId: testHarvester.id,
+        // Next, add energy at T+24
+        spy_handleTransferEnergy.mockImplementation(
+          (
+            harvester: string | Harvester,
+            amount: number,
+            energySourceId: string,
+          ) => {
+            return orig_handleTransferEnergy(
+              harvester,
+              amount,
+              energySourceId,
+              t_plus_24,
+            );
           },
-        });
-
-      // 50 units of arcane quanta gave us plenty of energy
-      // *Since this is more than the 3 hour interval, we will use 3 hours
-
-      const priorHarvested_2 =
-        priorHarvested_1 +
-        calculatePeriodHarvested(t_plus_3, t_plus_6, extractionRate);
-
-      postAddEnergy3_harvestOperations.forEach((harvestOperation) => {
-        expect(harvestOperation.priorHarvested).toBeCloseTo(
-          priorHarvested_2,
-          1,
         );
-      });
 
-      // Next, add energy at T+24
-      spy_handleAddEnergy.mockImplementation(
-        (
-          harvester: string | Harvester,
-          amount: number,
-          energySourceId: string,
-        ) => {
-          return orig_handleAddEnergy(
-            harvester,
-            amount,
-            energySourceId,
-            t_plus_24,
+        // Add more energy (4th round)
+        const amount_4 = 50;
+        const res4 = await authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.transferEnergy",
+          idToken,
+          {
+            harvesterId: testHarvester.id,
+            energySourceId: arcaneQuanta.id,
+            amount: amount_4,
+          },
+        );
+        throwIfBadStatus(res4);
+
+        const postAddEnergy4_testHarvester =
+          await prisma.harvester.findUniqueOrThrow({
+            where: {
+              id: testHarvester.id,
+            },
+          });
+
+        const postAddEnergy4_harvestOperations =
+          await prisma.harvestOperation.findMany({
+            where: {
+              harvesterId: testHarvester.id,
+            },
+          });
+
+        // 50 units of arcane quanta gave us plenty of energy
+        // * The resource will have been depleted at T+12 hours
+        // So we calculate T+6 to T+12 only...6 hours
+
+        const priorHarvested_3 =
+          priorHarvested_2 +
+          calculatePeriodHarvested(t_plus_6, t_plus_12, extractionRate);
+
+        postAddEnergy4_harvestOperations.forEach((harvestOperation) => {
+          expect(harvestOperation.priorHarvested).toBeCloseTo(
+            priorHarvested_3,
+            1,
           );
-        },
-      );
-
-      // Add more energy (4th round)
-      const amount_4 = 50;
-      const res4 = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.addEnergy",
-        idToken,
-        {
-          harvesterId: testHarvester.id,
-          energySourceId: arcaneQuanta.id,
-          amount: amount_4,
-        },
-      );
-      throwIfBadStatus(res4);
-
-      const postAddEnergy4_testHarvester =
-        await prisma.harvester.findUniqueOrThrow({
-          where: {
-            id: testHarvester.id,
-          },
         });
 
-      const postAddEnergy4_harvestOperations =
-        await prisma.harvestOperation.findMany({
-          where: {
-            harvesterId: testHarvester.id,
+        // Last, add energy at T+30
+        spy_handleTransferEnergy.mockImplementation(
+          (
+            harvester: string | Harvester,
+            amount: number,
+            energySourceId: string,
+          ) => {
+            return orig_handleTransferEnergy(
+              harvester,
+              amount,
+              energySourceId,
+              t_plus_30,
+            );
           },
-        });
-
-      // 50 units of arcane quanta gave us plenty of energy
-      // * The resource will have been depleted at T+12 hours
-      // So we calculate T+6 to T+12 only...6 hours
-
-      const priorHarvested_3 =
-        priorHarvested_2 +
-        calculatePeriodHarvested(t_plus_6, t_plus_12, extractionRate);
-
-      postAddEnergy4_harvestOperations.forEach((harvestOperation) => {
-        expect(harvestOperation.priorHarvested).toBeCloseTo(
-          priorHarvested_3,
-          1,
         );
-      });
 
-      // Last, add energy at T+30
-      spy_handleAddEnergy.mockImplementation(
-        (
-          harvester: string | Harvester,
-          amount: number,
-          energySourceId: string,
-        ) => {
-          return orig_handleAddEnergy(
-            harvester,
-            amount,
-            energySourceId,
-            t_plus_30,
+        // Add more energy (4th round)
+        const amount_5 = 10;
+        const res5 = await authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.transferEnergy",
+          idToken,
+          {
+            harvesterId: testHarvester.id,
+            energySourceId: arcaneQuanta.id,
+            amount: amount_5,
+          },
+        );
+        throwIfBadStatus(res5);
+
+        const postAddEnergy5_testHarvester =
+          await prisma.harvester.findUniqueOrThrow({
+            where: {
+              id: testHarvester.id,
+            },
+          });
+
+        const postAddEnergy5_harvestOperations =
+          await prisma.harvestOperation.findMany({
+            where: {
+              harvesterId: testHarvester.id,
+            },
+          });
+
+        // * All resources have been depleted, should not have changed priorHarvested
+
+        const priorHarvested_4 = priorHarvested_3;
+
+        postAddEnergy5_harvestOperations.forEach((harvestOperation) => {
+          expect(harvestOperation.priorHarvested).toBeCloseTo(
+            priorHarvested_4,
+            1,
           );
-        },
-      );
+        });
 
-      // Add more energy (4th round)
-      const amount_5 = 10;
-      const res5 = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.addEnergy",
-        idToken,
-        {
-          harvesterId: testHarvester.id,
-          energySourceId: arcaneQuanta.id,
-          amount: amount_5,
-        },
-      );
-      throwIfBadStatus(res5);
+        spy_handleTransferEnergy.mockRestore();
+      });
 
-      const postAddEnergy5_testHarvester =
-        await prisma.harvester.findUniqueOrThrow({
+      it("should rollback updated harvest operations if update harvester fails (saga)", async () => {
+        // verify harvester is deployed and without energy
+        const pre_TestHarvester = await prisma.harvester.findUniqueOrThrow({
           where: {
             id: testHarvester.id,
           },
         });
 
-      const postAddEnergy5_harvestOperations =
-        await prisma.harvestOperation.findMany({
-          where: {
-            harvesterId: testHarvester.id,
-          },
-        });
+        if (
+          !isHarvesterDeployed(pre_TestHarvester) ||
+          pre_TestHarvester.initialEnergy != 0
+        ) {
+          throw new Error(
+            `Problem with seeding harvester for this test (should be deployed and with initialEnergy 0): ${pre_TestHarvester.initialEnergy}`,
+          );
+        }
 
-      // * All resources have been depleted, should not have changed priorHarvested
-
-      const priorHarvested_4 = priorHarvested_3;
-
-      postAddEnergy5_harvestOperations.forEach((harvestOperation) => {
-        expect(harvestOperation.priorHarvested).toBeCloseTo(
-          priorHarvested_4,
-          1,
+        // save the pre_HarvestOperations
+        // these harvest operations should not have startTime and endTime should be the resetDate of the spawnRegion
+        const pre_HarvestOperations = await getHarvestOperationsForHarvester(
+          pre_TestHarvester.id,
         );
+
+        // Mock the updateHarvesterById function to throw Error
+        const spy_updateHarvesterById = jest
+          .spyOn(QueryHarvester, "updateHarvesterById")
+          .mockRejectedValueOnce(
+            new Error("Mock error - e.g. database problem"),
+          );
+
+        // choose the energy resource
+        const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+
+        const amount = 3;
+
+        const res = await authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.transferEnergy",
+          idToken,
+          {
+            harvesterId: testHarvester.id,
+            energySourceId: arcaneQuanta.id,
+            amount: amount,
+          },
+        );
+
+        try {
+          throwIfBadStatus(res);
+        } catch (error) {
+          expect(error).toBeDefined();
+        }
+
+        const post_HarvestOperations = await getHarvestOperationsForHarvester(
+          pre_TestHarvester.id,
+        );
+
+        // There should have been no net change to harvest operations (i.e. changes were rolled back)
+        expect(post_HarvestOperations).toEqual(pre_HarvestOperations);
+
+        spy_updateHarvesterById.mockRestore();
       });
 
-      spy_handleAddEnergy.mockRestore();
+      it.skip("should test how many prisma queries for /harvester.transferEnergy, add energy", async () => {
+        // choose the energy resource
+        const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+
+        const amount = 3;
+
+        const queries: any[] = [];
+        prisma.$on("query", (e) => {
+          queries.push({
+            "#": queries.length + 1,
+            ...transformQueryLog({
+              query: e.query,
+              params: e.params,
+              timestamp: e.timestamp,
+            }),
+          });
+        });
+
+        await authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.transferEnergy",
+          idToken,
+          {
+            harvesterId: testHarvester.id,
+            energySourceId: arcaneQuanta.id,
+            amount: amount,
+          },
+        );
+
+        // const metrics2 = await prisma.$metrics.json();
+        // console.log(metrics2.counters);
+
+        console.log(queries.sort((a, b) => compareAsc(a, b)));
+        console.log(queries.length);
+      });
     });
 
-    it("should rollback updated harvest operations if update harvester fails (saga)", async () => {
-      // verify harvester is deployed and without energy
-      const pre_TestHarvester = await prisma.harvester.findUniqueOrThrow({
-        where: {
-          id: testHarvester.id,
-        },
-      });
-
-      if (
-        !isHarvesterDeployed(pre_TestHarvester) ||
-        pre_TestHarvester.initialEnergy != 0
-      ) {
-        throw new Error(
-          `Problem with seeding harvester for this test (should be deployed and with initialEnergy 0): ${pre_TestHarvester.initialEnergy}`,
+    describe("remove energy", () => {
+      it("should correctly remove energy from a harvester with energy", async () => {
+        /**
+         * Will add energy to harvester at time 0 and then remove energy at some time
+         * later on. The resulting initialEnergy at the new start time later on should reflect
+         * the energy used during that period and the amount removed.
+         */
+        // verify harvester is deployed and without energy
+        const pre_addEnergyHarvester = await prisma.harvester.findUniqueOrThrow(
+          {
+            where: {
+              id: testHarvester.id,
+            },
+          },
         );
-      }
 
-      // save the pre_HarvestOperations
-      // these harvest operations should not have startTime and endTime should be the resetDate of the spawnRegion
-      const pre_HarvestOperations = await getHarvestOperationsForHarvester(
-        pre_TestHarvester.id,
-      );
+        if (
+          !isHarvesterDeployed(pre_addEnergyHarvester) ||
+          pre_addEnergyHarvester.initialEnergy != 0
+        ) {
+          throw new Error(
+            `Problem with seeding harvester for this test (should be deployed and with initialEnergy 0): ${pre_addEnergyHarvester.initialEnergy}`,
+          );
+        }
 
-      // Mock the updateHarvesterById function to throw Error
-      const spy_updateHarvesterById = jest
-        .spyOn(QueryHarvester, "updateHarvesterById")
-        .mockRejectedValueOnce(new Error("Mock error - e.g. database problem"));
+        // choose the energy resource
+        const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
 
-      // choose the energy resource
-      const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+        const orig_handleTransferEnergy = HarvesterService.handleTransferEnergy;
 
-      const amount = 3;
+        const t_0 = new Date(2022, 8, 16, 6, 0, 0);
+        const t_plus_2 = addHours(t_0, 2);
 
-      const res = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.addEnergy",
-        idToken,
-        {
-          harvesterId: testHarvester.id,
-          energySourceId: arcaneQuanta.id,
-          amount: amount,
-        },
-      );
+        // Add initial energy at time T0
+        const spy_handleTransferEnergy = jest
+          .spyOn(HarvesterService, "handleTransferEnergy")
+          .mockImplementation(
+            (
+              harvester: string | Harvester,
+              amount: number,
+              energySourceId: string,
+            ) => {
+              return orig_handleTransferEnergy(
+                harvester,
+                amount,
+                energySourceId,
+                t_0,
+              );
+            },
+          );
 
-      try {
-        throwIfBadStatus(res);
-      } catch (error) {
-        expect(error).toBeDefined();
-      }
+        const amountAdd = 20;
+        const res1 = await authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.transferEnergy",
+          idToken,
+          {
+            harvesterId: testHarvester.id,
+            energySourceId: arcaneQuanta.id,
+            amount: amountAdd,
+          },
+        );
+        throwIfBadStatus(res1);
 
-      const post_HarvestOperations = await getHarvestOperationsForHarvester(
-        pre_TestHarvester.id,
-      );
+        const post_addEnergyHarvester =
+          await prisma.harvester.findUniqueOrThrow({
+            where: {
+              id: testHarvester.id,
+            },
+          });
 
-      // There should have been no net change to harvest operations (i.e. changes were rolled back)
-      expect(post_HarvestOperations).toEqual(pre_HarvestOperations);
+        expect(post_addEnergyHarvester.initialEnergy).toBe(20);
 
-      spy_updateHarvesterById.mockRestore();
-    });
+        // Get the metadata for the energy
+        // Validate and parse the metadata using Zod
+        const metadata = validateWithZod(
+          arcaneEnergyResourceMetadataSchema,
+          arcaneQuanta.metadata,
+          `metadata for arcane_quanta`,
+        );
 
-    it.skip("should test how many prisma queries for /harvester.addEnergy", async () => {
-      // choose the energy resource
-      const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+        const energyRemainingT_plus_2 = calculateRemainingEnergy(
+          amountAdd,
+          differenceInMilliseconds(t_plus_2, t_0) / 60000.0,
+          metadata.energyEfficiency,
+        );
 
-      const amount = 3;
+        // Remove energy at t_plus_2 hours
+        spy_handleTransferEnergy.mockImplementation(
+          (
+            harvester: string | Harvester,
+            amount: number,
+            energySourceId: string,
+          ) => {
+            return orig_handleTransferEnergy(
+              harvester,
+              amount,
+              energySourceId,
+              t_plus_2,
+            );
+          },
+        );
 
-      const queries: any[] = [];
-      prisma.$on("query", (e) => {
-        queries.push({
-          "#": queries.length + 1,
-          ...transformQueryLog({
-            query: e.query,
-            params: e.params,
-            timestamp: e.timestamp,
-          }),
-        });
+        const amountRemove = -5;
+
+        const res2 = await authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.transferEnergy",
+          idToken,
+          {
+            harvesterId: testHarvester.id,
+            energySourceId: arcaneQuanta.id,
+            amount: amountRemove,
+          },
+        );
+        throwIfBadStatus(res2);
+
+        const post_removeEnergyHarvester =
+          await prisma.harvester.findUniqueOrThrow({
+            where: {
+              id: testHarvester.id,
+            },
+          });
+
+        expect(post_removeEnergyHarvester.initialEnergy).toBeCloseTo(
+          energyRemainingT_plus_2 + amountRemove,
+        );
+
+        spy_handleTransferEnergy.mockRestore();
       });
 
-      await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.addEnergy",
-        idToken,
-        {
-          harvesterId: testHarvester.id,
-          energySourceId: arcaneQuanta.id,
-          amount: amount,
-        },
-      );
+      it("should return status 409 (Conflict) if removed energy causes harvester to have negative initialEnergy", async () => {
+        // verify harvester is deployed and without energy
+        const pre_addEnergyHarvester = await prisma.harvester.findUniqueOrThrow(
+          {
+            where: {
+              id: testHarvester.id,
+            },
+          },
+        );
 
-      // const metrics2 = await prisma.$metrics.json();
-      // console.log(metrics2.counters);
+        if (
+          !isHarvesterDeployed(pre_addEnergyHarvester) ||
+          pre_addEnergyHarvester.initialEnergy != 0
+        ) {
+          throw new Error(
+            `Problem with seeding harvester for this test (should be deployed and with initialEnergy 0): ${pre_addEnergyHarvester.initialEnergy}`,
+          );
+        }
 
-      console.log(queries.sort((a, b) => compareAsc(a, b)));
-      console.log(queries.length);
+        // choose the energy resource
+        const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+
+        const amountAdd = 5;
+        const res1 = await authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.transferEnergy",
+          idToken,
+          {
+            harvesterId: testHarvester.id,
+            energySourceId: arcaneQuanta.id,
+            amount: amountAdd,
+          },
+        );
+        throwIfBadStatus(res1);
+
+        const res2 = authenticatedRequest(
+          server,
+          "POST",
+          "/harvester.transferEnergy",
+          idToken,
+          {
+            harvesterId: testHarvester.id,
+            energySourceId: arcaneQuanta.id,
+            amount: amountAdd * -2, // remove twice as much
+          },
+        );
+
+        const post_removeEnergyHarvester =
+          await prisma.harvester.findUniqueOrThrow({
+            where: {
+              id: testHarvester.id,
+            },
+          });
+
+        await res2.expect(409);
+
+        expect(post_removeEnergyHarvester.initialEnergy).toBeCloseTo(amountAdd);
+      });
     });
   });
 });
