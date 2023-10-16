@@ -16,7 +16,7 @@ import {
   updateHarvesterById,
 } from "../queries/queryHarvester";
 import {
-  addOrUpdateUserInventoryItem,
+  updateCreateOrRemoveUserInventoryItemWithDeltaQuantity,
   getInventoryItemFromUserInventoryItem,
   removeUserInventoryItemByItemId,
 } from "./userInventoryService";
@@ -481,16 +481,30 @@ export const verifyArcaneEnergyResource = async (resourceId: string) => {
       code: "NOT_FOUND",
     });
   }
-  return energyResource;
+  return energyResource as Resource & {
+    resourceType: "ARCANE_ENERGY";
+  } as Resource;
 };
 
 /**
  * ### Adds or removes energy from Harvester
- * - This will trigger an update of all the harvester's HarvestOperations based on the new
- * energyEndTime.
- * - Will update the active user's UserInventory, by default
- *   - The active user defaults to the owner of the harvester
- *   - If the `activeUser` param is passed, this user inventory will be used to transfer energy
+ * - This will trigger an update of all the harvester's HarvestOperations based on a fresh
+ * calculation of when they started, what time this is called, and when we expect them to end.
+ *
+ * #### Force a different time?
+ * - If `atTime` is:
+ *   - **null**: we default to using the current time within our logic. I.e., this is the time
+ * at which the last energy period has now ended and the new period will begin. **This forms the basis for
+ * how the HarvestOperations are updated** and harvested resource calculations are made.
+ *   - **Date**: we use this passed date/time as the time to base our calculations. For example, this is
+ * utilized for testing purposes.
+ *
+ * #### Should we use the player inventory?
+ * - If `activeUserId` is:
+ *   - **null**: do not use user inventory for energy transfer (god mode)
+ *   - **undefined**: use the harvester owner's userId for user inventory transfer
+ *   - **string**: use _this_ userId as the activeUserId for inventory transfer, which may be
+ * different than the harvester owner (currently only for testing purposes)
  *
  * It is crucial that we maintain floating point precision in these calculations
  *
@@ -503,13 +517,16 @@ export const verifyArcaneEnergyResource = async (resourceId: string) => {
  * @param _harvester - either pass the harvesterId or the Harvester
  * @param amount
  * @param energySourceId
- * @param energyStartTime - Optional. Defaults to now.
+ * @param atTime - See above _Force a different time?_. Pass **null** to use current time.
+ * @param activeUserId - See above _Should we use the player inventory?_. Pass **null**
+ * specifically to use god mode.
  */
 export const handleTransferEnergy = async (
   _harvester: string | Harvester,
   amount: number,
   energySourceId: string,
-  energyStartTime?: Date,
+  atTime: Date | null,
+  _activeUserId?: string | null,
 ) => {
   const energyResource = await verifyArcaneEnergyResource(energySourceId);
 
@@ -552,11 +569,15 @@ export const handleTransferEnergy = async (
     });
   }
 
+  const shouldUpdateUserInventory = _activeUserId !== null;
+  const activeUserId =
+    _activeUserId === undefined ? harvester.userId : _activeUserId;
+
   /* New energy start time is now, or whatever energyStartTime was passed as a param for testing purposes
   - When energy is added/removed from the harvester, we recalculate the initialEnergy and new
   energyStartTime and energyEndTime
   */
-  const newEnergyStartTime = energyStartTime || new Date();
+  const newEnergyStartTime = atTime || new Date();
 
   const gerund = amount >= 0 ? "Adding" : "Removing";
   const verb = amount >= 0 ? "add" : "remove";
@@ -625,7 +646,7 @@ export const handleTransferEnergy = async (
 
   const handleTransferEnergySaga = new SagaBuilder("handleTransferEnergySaga")
     .withLogger()
-    // STEP 1
+    // handleTransferEnergySaga STEP 1
     .invoke(async () => {
       const updatedHarvestOperations =
         await updateHarvestOperationsForHarvester(
@@ -647,7 +668,7 @@ export const handleTransferEnergy = async (
     .withCompensation(async () => {
       return await updateHarvestOperationsTransaction(orig_harvestOperations);
     })
-    // STEP 2
+    // handleTransferEnergySaga STEP 2
     .invoke(async () => {
       // Update the harvester with new energy data
       return await updateHarvesterById(harvester.id, {
@@ -665,6 +686,10 @@ export const handleTransferEnergy = async (
         energySourceId: harvester.energySourceId,
       });
     })
+    // handleTransferEnergySaga STEP 3
+    .invoke(async () => {
+      return true;
+    }, "update user's inventory")
     .build();
 
   try {
@@ -719,12 +744,13 @@ export const handleCollect = async (userId: string, harvesterId: string) => {
   }
 
   // Perform the user inventory update
-  const resultUserInventoryItem = await addOrUpdateUserInventoryItem(
-    copper.id,
-    "RESOURCE",
-    testUser.id,
-    50,
-  );
+  const resultUserInventoryItem =
+    await updateCreateOrRemoveUserInventoryItemWithDeltaQuantity(
+      copper.id,
+      "RESOURCE",
+      testUser.id,
+      50,
+    );
   // Return a client facing InventoryItem
   // TODO: will need to return an array of InventoryItems for multiple collected resources...
   return await getInventoryItemFromUserInventoryItem(resultUserInventoryItem);
@@ -784,7 +810,7 @@ export const handleReclaim = async (harvesterId: string) => {
 
     // add the energy resource item back to the user's (owner) inventory
     // *We round the remaining energy DOWN to an integer
-    await addOrUpdateUserInventoryItem(
+    await updateCreateOrRemoveUserInventoryItemWithDeltaQuantity(
       energyResource.id,
       ItemType.RESOURCE,
       harvester.userId,
@@ -803,7 +829,7 @@ export const handleReclaim = async (harvesterId: string) => {
   });
 
   // add the harvester item back to the user's (owner) inventory
-  await addOrUpdateUserInventoryItem(
+  await updateCreateOrRemoveUserInventoryItemWithDeltaQuantity(
     harvesterId,
     "HARVESTER",
     harvester.userId,

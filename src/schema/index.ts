@@ -45,6 +45,7 @@ export const harvesterTransferEnergyRequestSchema = z.object({
   harvesterId: z.string(),
   energySourceId: z.string(),
   amount: z.number(),
+  useUserInventory: z.boolean().optional(),
 });
 
 export const arcaneEnergyResourceMetadataSchema = z.object({

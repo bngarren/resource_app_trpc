@@ -64,32 +64,63 @@ export const getUserInventoryItemsByUserId = async (
   });
 };
 
+/**
+ * ### Upserts (updates or creates) a UserInventoryItem with a delta quantity
+ * If deltaQuantity is negative (removing quantity), the UserInventoryItem must already exist!
+ * (An upsert will not be performed, i.e. we don't create a new UserInventoryItem to remove quantity, this is an error!)
+ *
+ * Will **throw** a RecordNotFound error if the UserInventoryItem doesn't exist for a negative deltaQuantity
+ * @param itemId
+ * @param itemType
+ * @param userId
+ * @param deltaQuantity
+ * @param prismaClient
+ * @returns
+ */
 export const upsertUserInventoryItem = async (
   itemId: string,
   itemType: ItemType,
   userId: string,
-  quantity: number,
+  deltaQuantity: number,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.userInventoryItem.upsert({
-    where: {
-      userId_itemId: {
-        userId: userId,
+  // If we are adding quantity, perform normal upsert (update OR create)
+  if (deltaQuantity > 0) {
+    return await prismaClient.userInventoryItem.upsert({
+      where: {
+        userId_itemId: {
+          userId: userId,
+          itemId: itemId,
+        },
+      },
+      update: {
+        quantity: {
+          increment: deltaQuantity, // see https://www.prisma.io/docs/reference/api-reference/prisma-client-reference#operators
+        },
+      },
+      create: {
         itemId: itemId,
+        itemType: itemType,
+        userId: userId,
+        quantity: deltaQuantity,
       },
-    },
-    update: {
-      quantity: {
-        increment: quantity, // see https://www.prisma.io/docs/reference/api-reference/prisma-client-reference#operators
+    });
+  } else {
+    // If we are subtracting quantity, only update, no upsert
+    return await prismaClient.userInventoryItem.update({
+      where: {
+        userId_itemId: {
+          userId: userId,
+          itemId: itemId,
+        },
       },
-    },
-    create: {
-      itemId: itemId,
-      itemType: itemType,
-      userId: userId,
-      quantity: quantity,
-    },
-  });
+      data: {
+        quantity: {
+          decrement: Math.abs(deltaQuantity), // see https://www.prisma.io/docs/reference/api-reference/prisma-client-reference#operators
+        },
+      },
+    });
+  }
 };
 
 /**

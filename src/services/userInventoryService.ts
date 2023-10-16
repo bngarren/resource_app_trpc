@@ -47,9 +47,24 @@ export const getUserInventoryItems = async (userId: string) => {
   return await getUserInventoryItemsByUserId(userId);
 };
 
+export const updateUserInventoryItemByDelta = async (
+  itemId: string,
+  itemType: ItemType,
+  userId: string,
+  quantity = 1,
+) => {
+  return await upsertUserInventoryItem(itemId, itemType, userId, quantity);
+};
+
 /**
- * ### Adds a new or updates an existing user inventory item
- * - If item quantity is 0, this will remove the item from the user's inventory
+ * ### Updates, creates, or removes a UserInventoryItem with change in quantity
+ * - If change in quantity is **positive**, will create a new or update an existing UserInventoryItem with additional quantity
+ * - If change in quantity is **negative**, will update an existing UserInventoryItem with subtracted quantity. If
+ * UserInventoryItem does not exist, **will throw error**. _We should not be attempting to remove quantity
+ * from an item that doesn't exist_.
+ * - If change in quantity is negative and the resulting UserInventoryItem has negative quantity, we will log a warning
+ * message as this should not happen if our business logic is correct. _We should be be attemping to remove more
+ * quantity from an item than is available_.
  *
  * This function requires itemId, itemType, and userId in order to create a new
  * UserInventoryItem, if a new one needs to be created
@@ -57,19 +72,45 @@ export const getUserInventoryItems = async (userId: string) => {
  * @param itemId The resourceId, componentId, or harvesterId
  * @param itemType
  * @param userId
- * @param quantity
- * @returns
+ * @param deltaQuantity - This is the ***change*** in quantity to apply (positive or negative)
+ * @returns UserInventoryItem - updated, created, or the item that was removed
  */
-export const addOrUpdateUserInventoryItem = async (
+export const updateCreateOrRemoveUserInventoryItemWithDeltaQuantity = async (
   itemId: string,
   itemType: ItemType,
   userId: string,
-  quantity = 1,
+  deltaQuantity = 1,
 ) => {
-  if (quantity === 0) {
-    return await removeUserInventoryItemByItemId(itemId, itemType, userId);
+  if (deltaQuantity === 0) {
+    throw new Error(
+      `Cannot call \`updateCreateOrRemoveUserInventoryItemWithDeltaQuantity\` with a deltaQuantity of 0.`,
+    );
+  }
+
+  const res = await upsertUserInventoryItem(
+    itemId,
+    itemType,
+    userId,
+    deltaQuantity,
+  );
+
+  if (res.quantity <= 0) {
+    if (res.quantity === 0) {
+      return await removeUserInventoryItem(res.id);
+    } else {
+      // Why did the quantity end up negative? We shouldn't be removing more quantity than is available...
+      logger.warn(
+        res,
+        `During \`updateCreateOrRemoveUserInventoryItemWithDeltaQuantity\` we subtracted a quantity (${Math.abs(
+          deltaQuantity,
+        )}) that was greater than existing quantity, making the result negative (${
+          res.quantity
+        }). UserInventoryItem has been removed.`,
+      );
+      return await removeUserInventoryItem(res.id);
+    }
   } else {
-    return await upsertUserInventoryItem(itemId, itemType, userId, quantity);
+    return res;
   }
 };
 
