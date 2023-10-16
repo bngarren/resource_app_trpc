@@ -2,7 +2,7 @@ import request from "supertest";
 import h3 from "h3-js";
 import { TestSingleton } from "./TestSingleton";
 import {
-  authenticatedRequest,
+  AuthenticatedRequester,
   extractDataFromTRPCResponse,
   harvestRegion,
   resetPrisma,
@@ -20,12 +20,14 @@ import { logger } from "../src/logger/logger";
 describe("/scan", () => {
   let server: Server;
   let idToken: string;
+  let requester: AuthenticatedRequester;
 
   beforeAll(() => {
     logger.info("Starting test suite: /scan");
 
     server = TestSingleton.getInstance().server;
     idToken = TestSingleton.getInstance().idToken;
+    requester = new AuthenticatedRequester(server, idToken);
   });
 
   afterEach(async () => {
@@ -62,24 +64,17 @@ describe("/scan", () => {
     );
 
   it("should return status code 400 (Bad Request) if missing/malformed POST body", async () => {
-    const res = await authenticatedRequest(
-      server,
-      "POST",
-      "/scan",
-      idToken,
-      {},
-    );
+    const res = await requester.build("POST", "/scan", {});
     expect(res.statusCode).toBe(400);
   });
 
   it("should create the appropriate number of new spawn regions, if none present", async () => {
     // Since the database should be empty, we expect SpawnRegions should be created (and not reused)
-    await authenticatedRequest(
-      server,
+    await requester.build(
       "POST",
       "/scan",
-      idToken,
       getValidRequestBody(),
+      scanRequestSchema,
     );
 
     // Check database for correct state
@@ -102,12 +97,11 @@ describe("/scan", () => {
       config.spawn_region_h3_resolution,
     );
     // Since the database should be empty, we expect SpawnRegions should be created (and not reused)
-    await authenticatedRequest(
-      server,
+    await requester.build(
       "POST",
       "/scan",
-      idToken,
       first_requestBody,
+      scanRequestSchema,
     );
 
     const firstScan_regions = await prisma.spawnRegion.findMany();
@@ -130,12 +124,11 @@ describe("/scan", () => {
     // Both locations should be within the same h3 cell though
     expect(first_h3Index).toBe(second_h3Index);
 
-    await authenticatedRequest(
-      server,
+    await requester.build(
       "POST",
       "/scan",
-      idToken,
       second_requestBody,
+      scanRequestSchema,
     );
 
     const secondScan_regions = await prisma.spawnRegion.findMany();
@@ -172,12 +165,11 @@ describe("/scan", () => {
     );
 
     // Since the database should be empty, we expect SpawnRegions should be created (and not reused)
-    const response = await authenticatedRequest(
-      server,
+    const response = await requester.build(
       "POST",
       "/scan",
-      idToken,
       getValidRequestBody(),
+      scanRequestSchema,
     );
 
     // Should send the correct status code
@@ -205,12 +197,11 @@ describe("/scan", () => {
       Promise.reject(new Error("mock - updateSpawnRegion error")),
     );
 
-    const response = await await authenticatedRequest(
-      server,
+    const response = await await requester.build(
       "POST",
       "/scan",
-      idToken,
       getValidRequestBody(),
+      scanRequestSchema,
     );
 
     // Should send the correct status code
@@ -251,12 +242,11 @@ describe("/scan", () => {
       Promise.reject(new Error("mock - getRandomResource Error")),
     );
 
-    const response = await authenticatedRequest(
-      server,
+    const response = await requester.build(
       "POST",
       "/scan",
-      idToken,
       getValidRequestBody(),
+      scanRequestSchema,
     );
 
     expect(response.statusCode).toBe(500);

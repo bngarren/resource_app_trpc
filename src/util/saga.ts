@@ -228,8 +228,9 @@ class Saga {
         this.sagaLog.log("error", {
           step: stepNumber,
           name: step.getName(),
-          message: errMsg,
+          message: prefixedError(error, errMsg).message,
         });
+
         await this.rollback(executedData, index);
         throw prefixedError(error, `${errMsg} During step ${index + 1}`);
       }

@@ -179,14 +179,21 @@ export const harvesterRouter = router({
       }
 
       /* //* NOTE: 
-      We pass null as the `atTime` parameter to default to current time. Will have to consider
-      whether we should be using a timestamp from the incoming request... */
+      1. We pass null as the `atTime` parameter to default to current time. Will have to consider
+      whether we should be using a timestamp from the incoming request...
+      
+      2. If the useUserInventory param is `false` or `null` we pass the _activeUserId param
+      as NULL to use god mode (no user inventory checks or changes). Otherwise we leave as 
+      undefined here and allow the default.
+      */
       const res = await handleTransferEnergy(
         harvester,
         input.amount,
         input.energySourceId,
         null,
-        input.useUserInventory !== true ? null : undefined,
+        input.useUserInventory === false || input.useUserInventory === null
+          ? null
+          : undefined,
       );
 
       return res;

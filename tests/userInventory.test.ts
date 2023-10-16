@@ -1,7 +1,7 @@
 import { ItemType } from "@prisma/client";
 import { TestSingleton } from "./TestSingleton";
 import {
-  authenticatedRequest,
+  AuthenticatedRequester,
   getDataFromTRPCResponse,
   resetPrisma,
 } from "./testHelpers";
@@ -11,17 +11,20 @@ import { addResourceToUserInventory } from "../src/services/userInventoryService
 import { GetUserInventoryRequestOutput } from "../src/types/trpcTypes";
 import { PlayerInventory } from "../src/types";
 import { logger } from "../src/logger/logger";
+import { getUserInventoryRequestSchema } from "../src/schema";
 
 describe("/userInventory", () => {
   let server: Server;
   let idToken: string;
   let userUid: string;
+  let requester: AuthenticatedRequester;
 
   beforeAll(() => {
     logger.info("Starting test suite: /userInventory");
     server = TestSingleton.getInstance().server;
     idToken = TestSingleton.getInstance().idToken;
     userUid = TestSingleton.getInstance().userId;
+    requester = new AuthenticatedRequester(server, idToken);
   });
 
   afterEach(async () => {
@@ -34,34 +37,30 @@ describe("/userInventory", () => {
 
   describe("/userInventory.getUserInventory", () => {
     it("should return status code 400 (Bad Request) if missing user uid", async () => {
-      const res = await authenticatedRequest(
-        server,
+      const res = await requester.build(
         "GET",
         "/userInventory.getUserInventory",
-        idToken,
         { userUid: null },
       );
 
       expect(res.statusCode).toBe(400);
     });
     it("should return status code 404 (Not Found) if the given user uid is not located in the database", async () => {
-      const res = await authenticatedRequest(
-        server,
+      const res = await requester.build(
         "GET",
         "/userInventory.getUserInventory",
-        idToken,
         { userUid: "some-fake-uid" },
+        getUserInventoryRequestSchema,
       );
       expect(res.statusCode).toBe(404);
     });
 
     it("should return status code 200 (OK) if given user uid is found in the database", async () => {
-      const res = await authenticatedRequest(
-        server,
+      const res = await requester.build(
         "GET",
         "/userInventory.getUserInventory",
-        idToken,
         { userUid: userUid },
+        getUserInventoryRequestSchema,
       );
       expect(res.statusCode).toBe(200);
     });
@@ -80,12 +79,11 @@ describe("/userInventory", () => {
         },
       });
 
-      const res = await authenticatedRequest(
-        server,
+      const res = await requester.build(
         "GET",
         "/userInventory.getUserInventory",
-        idToken,
         { userUid: userUid },
+        getUserInventoryRequestSchema,
       );
 
       const data = getDataFromTRPCResponse<PlayerInventory>(res);
@@ -107,12 +105,11 @@ describe("/userInventory", () => {
         },
       });
 
-      const res = await authenticatedRequest(
-        server,
+      const res = await requester.build(
         "GET",
         "/userInventory.getUserInventory",
-        idToken,
         { userUid: userUid },
+        getUserInventoryRequestSchema,
       );
 
       const data = getDataFromTRPCResponse<PlayerInventory>(res);
@@ -155,12 +152,11 @@ describe("/userInventory", () => {
         },
       });
 
-      const res = await authenticatedRequest(
-        server,
+      const res = await requester.build(
         "GET",
         "/userInventory.getUserInventory",
-        idToken,
         { userUid: userUid },
+        getUserInventoryRequestSchema,
       );
 
       const data = getDataFromTRPCResponse<PlayerInventory>(res);
@@ -174,12 +170,11 @@ describe("/userInventory", () => {
     });
 
     it("should return a correct PlayerInventory", async () => {
-      const res = await authenticatedRequest(
-        server,
+      const res = await requester.build(
         "GET",
         "/userInventory.getUserInventory",
-        idToken,
         { userUid: userUid },
+        getUserInventoryRequestSchema,
       );
 
       const data = getDataFromTRPCResponse<GetUserInventoryRequestOutput>(res);

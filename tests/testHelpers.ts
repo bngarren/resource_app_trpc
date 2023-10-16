@@ -92,12 +92,13 @@ export const throwIfBadStatus = (response: Response) => {
  * @param idToken The authenticated user idToken (i.e. Firebase)
  * @param input Input object that will be passed as query param (GET) or JSON body (POST)
  */
-export const authenticatedRequest = (
+export const authenticatedRequest = <T extends Zod.ZodType<any>>(
   api: Server,
   type: "GET" | "POST",
   endpoint: string,
   idToken: string,
-  input?: Record<string, unknown>,
+  input?: Zod.infer<T>,
+  withSchema?: T,
 ) => {
   let req: Test;
   switch (type) {
@@ -121,6 +122,29 @@ export const authenticatedRequest = (
       return req;
   }
 };
+
+export class AuthenticatedRequester {
+  constructor(
+    private readonly server: Server,
+    private readonly idToken: string,
+  ) {}
+
+  build<T extends Zod.ZodType<any>>(
+    method: "POST" | "GET",
+    endpoint: string,
+    input?: Zod.infer<T>,
+    withSchema?: T,
+  ) {
+    return authenticatedRequest(
+      this.server,
+      method,
+      endpoint,
+      this.idToken,
+      input,
+      withSchema,
+    );
+  }
+}
 
 /**
  * The scan/harvest region (h3Index) used for testing.

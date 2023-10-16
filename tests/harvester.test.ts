@@ -1,8 +1,15 @@
+import {
+  harvesterCollectRequestSchema,
+  harvesterDeployRequestSchema,
+  harvesterReclaimRequestSchema,
+  harvesterTransferEnergyRequestSchema,
+  scanRequestSchema,
+} from "./../src/schema/index";
 import { calculatePeriodHarvested } from "./../src/services/harvesterService";
 import * as h3 from "h3-js";
 import { TestSingleton } from "./TestSingleton";
 import {
-  authenticatedRequest,
+  AuthenticatedRequester,
   getDataFromTRPCResponse,
   harvestRegion,
   mockScan,
@@ -54,12 +61,14 @@ describe("/harvester", () => {
   let server: Server;
   let idToken: string;
   let userUid: string;
+  let requester: AuthenticatedRequester;
 
   beforeAll(() => {
     logger.info("Starting test suite: /harvester");
     server = TestSingleton.getInstance().server;
     idToken = TestSingleton.getInstance().idToken;
     userUid = TestSingleton.getInstance().userId;
+    requester = new AuthenticatedRequester(server, idToken);
   });
 
   afterEach(async () => {
@@ -107,56 +116,42 @@ describe("/harvester", () => {
     });
 
     it("should return status code 400 (Bad Request) if missing harvester id or harvestRegion", async () => {
-      const res1 = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.deploy",
-        idToken,
-        { harvesterId: null, harvestRegion: harvestRegion },
-      );
+      const res1 = await requester.build("POST", "/harvester.deploy", {
+        harvesterId: null,
+        harvestRegion: harvestRegion,
+      });
 
       expect(res1.statusCode).toBe(400);
 
-      const res2 = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.deploy",
-        idToken,
-        { harvesterId: testHarvester.id, harvestRegion: null },
-      );
+      const res2 = await requester.build("POST", "/harvester.deploy", {
+        harvesterId: testHarvester.id,
+        harvestRegion: null,
+      });
 
       expect(res2.statusCode).toBe(400);
     });
 
     it("should return status code 404 (Not Found) for non-existent harvester id or harvestRegion", async () => {
       // fake harvesterId
-      const res1 = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.deploy",
-        idToken,
-        { harvesterId: "some-fake-harvester-id", harvestRegion: harvestRegion },
-      );
+      const res1 = await requester.build("POST", "/harvester.deploy", {
+        harvesterId: "some-fake-harvester-id",
+        harvestRegion: harvestRegion,
+      });
 
       expect(res1.statusCode).toBe(404);
 
       // fake h3 cell
-      const res2 = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.deploy",
-        idToken,
-        { harvesterId: testHarvester.id, harvestRegion: "fake-h3-index" },
-      );
+      const res2 = await requester.build("POST", "/harvester.deploy", {
+        harvesterId: testHarvester.id,
+        harvestRegion: "fake-h3-index",
+      });
 
       expect(res2.statusCode).toBe(404);
 
       // wrong h3 cell resolution
-      const res3 = await authenticatedRequest(
-        server,
+      const res3 = await requester.build(
         "POST",
         "/harvester.deploy",
-        idToken,
         { harvesterId: testHarvester.id, harvestRegion: "81587ffffffffff" }, // resolution=1
       );
 
@@ -175,13 +170,10 @@ describe("/harvester", () => {
         },
       });
 
-      const res = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.deploy",
-        idToken,
-        { harvesterId: testHarvester.id, harvestRegion: harvestRegion },
-      );
+      const res = await requester.build("POST", "/harvester.deploy", {
+        harvesterId: testHarvester.id,
+        harvestRegion: harvestRegion,
+      });
 
       expect(res.statusCode).toBe(409);
     });
@@ -201,12 +193,11 @@ describe("/harvester", () => {
         },
       });
 
-      const res = await authenticatedRequest(
-        server,
+      const res = await requester.build(
         "POST",
         "/harvester.deploy",
-        idToken,
         { harvesterId: testHarvester.id, harvestRegion: harvestRegion },
+        harvesterDeployRequestSchema,
       );
 
       expect(res.statusCode).toBe(409);
@@ -223,12 +214,11 @@ describe("/harvester", () => {
       expect(preDeploy_harvester.deployedDate).toBeNull();
       expect(preDeploy_harvester.h3Index).toBeNull();
 
-      const res = await authenticatedRequest(
-        server,
+      const res = await requester.build(
         "POST",
         "/harvester.deploy",
-        idToken,
         { harvesterId: testHarvester.id, harvestRegion: harvestRegion },
+        harvesterDeployRequestSchema,
       );
 
       expect(res.statusCode).toBe(200);
@@ -255,15 +245,14 @@ describe("/harvester", () => {
       // should be present before being deployed
       expect(hasTestHarvester(preDeploy_userInventory)).toBe(true);
 
-      const d = await authenticatedRequest(
-        server,
+      const d = await requester.build(
         "POST",
         "/harvester.deploy",
-        idToken,
         {
           harvesterId: testHarvester.id,
           harvestRegion: harvestRegion,
         },
+        harvesterDeployRequestSchema,
       );
       throwIfBadStatus(d);
 
@@ -282,12 +271,11 @@ describe("/harvester", () => {
           longitude: latLng[1],
         },
       };
-      const res1 = await authenticatedRequest(
-        server,
+      const res1 = await requester.build(
         "POST",
         "/scan",
-        idToken,
         scanRequest,
+        scanRequestSchema,
       );
       throwIfBadStatus(res1);
 
@@ -309,15 +297,14 @@ describe("/harvester", () => {
       expect(preDeploy_harvestOperations).toHaveLength(0);
 
       // Now deploy the testHarvester to the same location we just scanned
-      const res2 = await authenticatedRequest(
-        server,
+      const res2 = await requester.build(
         "POST",
         "/harvester.deploy",
-        idToken,
         {
           harvesterId: testHarvester.id,
           harvestRegion: harvestRegion,
         },
+        harvesterDeployRequestSchema,
       );
       throwIfBadStatus(res2);
 
@@ -360,15 +347,14 @@ describe("/harvester", () => {
       });
 
       // Now deploy the testHarvester to the mock scan location
-      const res1 = await authenticatedRequest(
-        server,
+      const res1 = await requester.build(
         "POST",
         "/harvester.deploy",
-        idToken,
         {
           harvesterId: testHarvester.id,
           harvestRegion: mockScanRegion,
         },
+        harvesterDeployRequestSchema,
       );
       throwIfBadStatus(res1);
 
@@ -386,23 +372,17 @@ describe("/harvester", () => {
 
   describe("/harvester.collect", () => {
     it("should return status code 400 (Bad Request) if missing user uid or harvester id", async () => {
-      const res1 = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.collect",
-        idToken,
-        { userUid: null, harvesterId: "test" },
-      );
+      const res1 = await requester.build("POST", "/harvester.collect", {
+        userUid: null,
+        harvesterId: "test",
+      });
 
       expect(res1.statusCode).toBe(400);
 
-      const res2 = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.collect",
-        idToken,
-        { userUid: userUid, harvesterId: null },
-      );
+      const res2 = await requester.build("POST", "/harvester.collect", {
+        userUid: userUid,
+        harvesterId: null,
+      });
 
       expect(res2.statusCode).toBe(400);
     });
@@ -413,21 +393,19 @@ describe("/harvester", () => {
         throw Error("Failed test due to seed data problem.");
       }
 
-      const res1 = await authenticatedRequest(
-        server,
+      const res1 = await requester.build(
         "POST",
         "/harvester.collect",
-        idToken,
         { userUid: "some-fake-uid", harvesterId: testHarvester.id },
+        harvesterCollectRequestSchema,
       );
       expect(res1.statusCode).toBe(404);
 
-      const res2 = await authenticatedRequest(
-        server,
+      const res2 = await requester.build(
         "POST",
         "/harvester.collect",
-        idToken,
         { userUid: userUid, harvesterId: "some-fake-harvester-id" },
+        harvesterCollectRequestSchema,
       );
       expect(res2.statusCode).toBe(404);
     });
@@ -462,12 +440,11 @@ describe("/harvester", () => {
       });
 
       // attempt request with wrong user + harvester
-      const res = await authenticatedRequest(
-        server,
+      const res = await requester.build(
         "POST",
         "/harvester.collect",
-        idToken,
         { userUid: anotherUser.firebase_uid, harvesterId: harvester.id },
+        harvesterCollectRequestSchema,
       );
       expect(res.statusCode).toBe(403);
     });
@@ -491,12 +468,11 @@ describe("/harvester", () => {
         },
       });
 
-      const res = await authenticatedRequest(
-        server,
+      const res = await requester.build(
         "POST",
         "/harvester.collect",
-        idToken,
         { userUid: userUid, harvesterId: harvester.id },
+        harvesterCollectRequestSchema,
       );
       expect(res.statusCode).toBe(409);
     });
@@ -539,13 +515,9 @@ describe("/harvester", () => {
     });
 
     it("should return status code 400 (Bad Request) if missing harvester id", async () => {
-      const res = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.reclaim",
-        idToken,
-        { harvesterId: null },
-      );
+      const res = await requester.build("POST", "/harvester.reclaim", {
+        harvesterId: null,
+      });
 
       expect(res.statusCode).toBe(400);
     });
@@ -561,12 +533,11 @@ describe("/harvester", () => {
       // The testHarvester should start off not deployed
       expect(isHarvesterDeployed(testHarvester)).toBe(false);
 
-      const res = await authenticatedRequest(
-        server,
+      const res = await requester.build(
         "POST",
         "/harvester.reclaim",
-        idToken,
         { harvesterId: testHarvester.id },
+        harvesterReclaimRequestSchema,
       );
 
       expect(res.statusCode).toBe(409);
@@ -584,12 +555,11 @@ describe("/harvester", () => {
 
       // First, deploy the testHarvester
 
-      const d = await authenticatedRequest(
-        server,
+      const d = await requester.build(
         "POST",
         "/harvester.deploy",
-        idToken,
         { harvesterId: testHarvester.id, harvestRegion: harvestRegion },
+        harvesterDeployRequestSchema,
       );
       throwIfBadStatus(d);
 
@@ -602,12 +572,11 @@ describe("/harvester", () => {
         ),
       ).rejects.toThrow();
 
-      const r = await authenticatedRequest(
-        server,
+      const r = await requester.build(
         "POST",
         "/harvester.reclaim",
-        idToken,
         { harvesterId: testHarvester.id },
+        harvesterReclaimRequestSchema,
       );
       throwIfBadStatus(r);
 
@@ -635,12 +604,11 @@ describe("/harvester", () => {
 
     it("should clear/reset energy data for the reclaimed harvester and return remaining energy to user's inventory", async () => {
       // First, deploy the testHarvester
-      const d = await authenticatedRequest(
-        server,
+      const d = await requester.build(
         "POST",
         "/harvester.deploy",
-        idToken,
         { harvesterId: testHarvester.id, harvestRegion: harvestRegion },
+        harvesterDeployRequestSchema,
       );
       throwIfBadStatus(d);
 
@@ -659,16 +627,16 @@ describe("/harvester", () => {
 
       const initialEnergy = 10;
 
-      const h = await authenticatedRequest(
-        server,
+      const h = await requester.build(
         "POST",
         "/harvester.transferEnergy",
-        idToken,
         {
           harvesterId: testHarvester.id,
           energySourceId: arcaneFlux.id,
           amount: initialEnergy,
+          useUserInventory: false, // don't try to take this energy from the user
         },
+        harvesterTransferEnergyRequestSchema,
       );
       throwIfBadStatus(h);
 
@@ -677,12 +645,11 @@ describe("/harvester", () => {
         energyStartTime: subHours(new Date(), 1), // mimic 1 hour ago
       });
 
-      const re = await authenticatedRequest(
-        server,
+      const re = await requester.build(
         "POST",
         "/harvester.reclaim",
-        idToken,
         { harvesterId: testHarvester.id },
+        harvesterReclaimRequestSchema,
       );
       throwIfBadStatus(re);
 
@@ -727,12 +694,11 @@ describe("/harvester", () => {
       await mockScan(numberOfSpawnedResource, server, idToken);
 
       // Then, deploy the testHarvester
-      const d = await authenticatedRequest(
-        server,
+      const d = await requester.build(
         "POST",
         "/harvester.deploy",
-        idToken,
         { harvesterId: testHarvester.id, harvestRegion: harvestRegion },
+        harvesterDeployRequestSchema,
       );
       throwIfBadStatus(d);
 
@@ -745,12 +711,11 @@ describe("/harvester", () => {
       expect(pre_harvestOperations.length).toBe(numberOfSpawnedResource);
 
       // Now reclaim the harvester
-      const r = await authenticatedRequest(
-        server,
+      const r = await requester.build(
         "POST",
         "/harvester.reclaim",
-        idToken,
         { harvesterId: testHarvester.id },
+        harvesterReclaimRequestSchema,
       );
       throwIfBadStatus(r);
 
@@ -795,33 +760,24 @@ describe("/harvester", () => {
     });
 
     it("should return status code 400 (Bad Request) if harvester id, energySourceId, or amount is missing", async () => {
-      const res1 = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.transferEnergy",
-        idToken,
-        { energySourceId: "test", amount: 0 },
-      );
+      const res1 = await requester.build("POST", "/harvester.transferEnergy", {
+        energySourceId: "test",
+        amount: 0,
+      });
 
       expect(res1.statusCode).toBe(400);
 
-      const res2 = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.transferEnergy",
-        idToken,
-        { harvesterId: testHarvester.id, amount: 0 },
-      );
+      const res2 = await requester.build("POST", "/harvester.transferEnergy", {
+        harvesterId: testHarvester.id,
+        amount: 0,
+      });
 
       expect(res2.statusCode).toBe(400);
 
-      const res3 = await authenticatedRequest(
-        server,
-        "POST",
-        "/harvester.transferEnergy",
-        idToken,
-        { harvesterId: testHarvester.id, energySourceId: "test" },
-      );
+      const res3 = await requester.build("POST", "/harvester.transferEnergy", {
+        harvesterId: testHarvester.id,
+        energySourceId: "test",
+      });
 
       expect(res3.statusCode).toBe(400);
     });
@@ -837,16 +793,15 @@ describe("/harvester", () => {
         },
       });
 
-      const res = await authenticatedRequest(
-        server,
+      const res = await requester.build(
         "POST",
         "/harvester.transferEnergy",
-        idToken,
         {
           harvesterId: testHarvester.id,
           energySourceId: "another-energy-source-id",
           amount: 10,
         },
+        harvesterTransferEnergyRequestSchema,
       );
 
       expect(res.statusCode).toBe(409);
@@ -876,16 +831,16 @@ describe("/harvester", () => {
         const requestTime = new Date();
 
         const amount = 10;
-        const res = await authenticatedRequest(
-          server,
+        const res = await requester.build(
           "POST",
           "/harvester.transferEnergy",
-          idToken,
           {
             harvesterId: testHarvester.id,
             energySourceId: arcaneQuanta.id,
             amount: amount,
+            useUserInventory: false, // god mode
           },
+          harvesterTransferEnergyRequestSchema,
         );
         throwIfBadStatus(res);
 
@@ -961,16 +916,16 @@ describe("/harvester", () => {
 
         // Now add more units of energy to the harvester
         let amount = 3;
-        const res = await authenticatedRequest(
-          server,
+        const res = await requester.build(
           "POST",
           "/harvester.transferEnergy",
-          idToken,
           {
             harvesterId: testHarvester.id,
             energySourceId: arcaneQuanta.id,
             amount: amount,
+            useUserInventory: false, // god mode
           },
+          harvesterTransferEnergyRequestSchema,
         );
         throwIfBadStatus(res);
 
@@ -1031,16 +986,16 @@ describe("/harvester", () => {
 
         // Now add 1 more unit of energy to the harvester
         amount = 1;
-        await authenticatedRequest(
-          server,
+        await requester.build(
           "POST",
           "/harvester.transferEnergy",
-          idToken,
           {
             harvesterId: testHarvester.id,
             energySourceId: arcaneQuanta.id,
             amount: amount,
+            useUserInventory: false, // god mode
           },
+          harvesterTransferEnergyRequestSchema,
         );
 
         const post2_TestHarvester = await prisma.harvester.findUniqueOrThrow({
@@ -1153,27 +1108,30 @@ describe("/harvester", () => {
               harvester: string | Harvester,
               amount: number,
               energySourceId: string,
+              _atTime: Date | null,
+              _activeUserId: string | null | undefined,
             ) => {
               return orig_handleTransferEnergy(
                 harvester,
                 amount,
                 energySourceId,
                 t_0,
+                _activeUserId,
               );
             },
           );
 
         const amount_1 = 3;
-        const res1 = await authenticatedRequest(
-          server,
+        const res1 = await requester.build(
           "POST",
           "/harvester.transferEnergy",
-          idToken,
           {
             harvesterId: testHarvester.id,
             energySourceId: arcaneQuanta.id,
             amount: amount_1,
+            useUserInventory: false, // god mode
           },
+          harvesterTransferEnergyRequestSchema,
         );
         throwIfBadStatus(res1);
 
@@ -1204,28 +1162,31 @@ describe("/harvester", () => {
             harvester: string | Harvester,
             amount: number,
             energySourceId: string,
+            _atTime: Date | null,
+            _activeUserId: string | null | undefined,
           ) => {
             return orig_handleTransferEnergy(
               harvester,
               amount,
               energySourceId,
               t_plus_3,
+              _activeUserId,
             );
           },
         );
 
         // Add more energy (2nd round)
         const amount_2 = 20;
-        const res2 = await authenticatedRequest(
-          server,
+        const res2 = await requester.build(
           "POST",
           "/harvester.transferEnergy",
-          idToken,
           {
             harvesterId: testHarvester.id,
             energySourceId: arcaneQuanta.id,
             amount: amount_2,
+            useUserInventory: false, // god mode
           },
+          harvesterTransferEnergyRequestSchema,
         );
         throwIfBadStatus(res2);
 
@@ -1270,28 +1231,31 @@ describe("/harvester", () => {
             harvester: string | Harvester,
             amount: number,
             energySourceId: string,
+            _atTime: Date | null,
+            _activeUserId: string | null | undefined,
           ) => {
             return orig_handleTransferEnergy(
               harvester,
               amount,
               energySourceId,
               t_plus_6,
+              _activeUserId,
             );
           },
         );
 
         // Add more energy (3rd round)
         const amount_3 = 50;
-        const res3 = await authenticatedRequest(
-          server,
+        const res3 = await requester.build(
           "POST",
           "/harvester.transferEnergy",
-          idToken,
           {
             harvesterId: testHarvester.id,
             energySourceId: arcaneQuanta.id,
             amount: amount_3,
+            useUserInventory: false, // god mode
           },
+          harvesterTransferEnergyRequestSchema,
         );
         throwIfBadStatus(res3);
 
@@ -1329,28 +1293,31 @@ describe("/harvester", () => {
             harvester: string | Harvester,
             amount: number,
             energySourceId: string,
+            _atTime: Date | null,
+            _activeUserId: string | null | undefined,
           ) => {
             return orig_handleTransferEnergy(
               harvester,
               amount,
               energySourceId,
               t_plus_24,
+              _activeUserId,
             );
           },
         );
 
         // Add more energy (4th round)
         const amount_4 = 50;
-        const res4 = await authenticatedRequest(
-          server,
+        const res4 = await requester.build(
           "POST",
           "/harvester.transferEnergy",
-          idToken,
           {
             harvesterId: testHarvester.id,
             energySourceId: arcaneQuanta.id,
             amount: amount_4,
+            useUserInventory: false, // god mode
           },
+          harvesterTransferEnergyRequestSchema,
         );
         throwIfBadStatus(res4);
 
@@ -1389,28 +1356,31 @@ describe("/harvester", () => {
             harvester: string | Harvester,
             amount: number,
             energySourceId: string,
+            _atTime: Date | null,
+            _activeUserId: string | null | undefined,
           ) => {
             return orig_handleTransferEnergy(
               harvester,
               amount,
               energySourceId,
               t_plus_30,
+              _activeUserId,
             );
           },
         );
 
         // Add more energy (4th round)
         const amount_5 = 10;
-        const res5 = await authenticatedRequest(
-          server,
+        const res5 = await requester.build(
           "POST",
           "/harvester.transferEnergy",
-          idToken,
           {
             harvesterId: testHarvester.id,
             energySourceId: arcaneQuanta.id,
             amount: amount_5,
+            useUserInventory: false, // god mode
           },
+          harvesterTransferEnergyRequestSchema,
         );
         throwIfBadStatus(res5);
 
@@ -1477,16 +1447,16 @@ describe("/harvester", () => {
 
         const amount = 3;
 
-        const res = await authenticatedRequest(
-          server,
+        const res = await requester.build(
           "POST",
           "/harvester.transferEnergy",
-          idToken,
           {
             harvesterId: testHarvester.id,
             energySourceId: arcaneQuanta.id,
             amount: amount,
+            useUserInventory: false, // god mode
           },
+          harvesterTransferEnergyRequestSchema,
         );
 
         try {
@@ -1523,16 +1493,16 @@ describe("/harvester", () => {
           });
         });
 
-        await authenticatedRequest(
-          server,
+        await requester.build(
           "POST",
           "/harvester.transferEnergy",
-          idToken,
           {
             harvesterId: testHarvester.id,
             energySourceId: arcaneQuanta.id,
             amount: amount,
+            useUserInventory: false, // god mode
           },
+          harvesterTransferEnergyRequestSchema,
         );
 
         // const metrics2 = await prisma.$metrics.json();
@@ -1584,27 +1554,30 @@ describe("/harvester", () => {
               harvester: string | Harvester,
               amount: number,
               energySourceId: string,
+              _atTime: Date | null,
+              _activeUserId: string | null | undefined,
             ) => {
               return orig_handleTransferEnergy(
                 harvester,
                 amount,
                 energySourceId,
                 t_0,
+                _activeUserId,
               );
             },
           );
 
         const amountAdd = 20;
-        const res1 = await authenticatedRequest(
-          server,
+        const res1 = await requester.build(
           "POST",
           "/harvester.transferEnergy",
-          idToken,
           {
             harvesterId: testHarvester.id,
             energySourceId: arcaneQuanta.id,
             amount: amountAdd,
+            useUserInventory: false, // god mode
           },
+          harvesterTransferEnergyRequestSchema,
         );
         throwIfBadStatus(res1);
 
@@ -1637,28 +1610,31 @@ describe("/harvester", () => {
             harvester: string | Harvester,
             amount: number,
             energySourceId: string,
+            _atTime: Date | null,
+            _activeUserId: string | null | undefined,
           ) => {
             return orig_handleTransferEnergy(
               harvester,
               amount,
               energySourceId,
               t_plus_2,
+              _activeUserId,
             );
           },
         );
 
         const amountRemove = -5;
 
-        const res2 = await authenticatedRequest(
-          server,
+        const res2 = await requester.build(
           "POST",
           "/harvester.transferEnergy",
-          idToken,
           {
             harvesterId: testHarvester.id,
             energySourceId: arcaneQuanta.id,
             amount: amountRemove,
+            useUserInventory: true, // want to actually return to user's inventory
           },
+          harvesterTransferEnergyRequestSchema,
         );
         throwIfBadStatus(res2);
 
@@ -1699,29 +1675,29 @@ describe("/harvester", () => {
         const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
 
         const amountAdd = 5;
-        const res1 = await authenticatedRequest(
-          server,
+        const res1 = await requester.build(
           "POST",
           "/harvester.transferEnergy",
-          idToken,
           {
             harvesterId: testHarvester.id,
             energySourceId: arcaneQuanta.id,
             amount: amountAdd,
+            useUserInventory: false, // god mode
           },
+          harvesterTransferEnergyRequestSchema,
         );
         throwIfBadStatus(res1);
 
-        const res2 = authenticatedRequest(
-          server,
+        const res2 = requester.build(
           "POST",
           "/harvester.transferEnergy",
-          idToken,
           {
             harvesterId: testHarvester.id,
             energySourceId: arcaneQuanta.id,
             amount: amountAdd * -2, // remove twice as much
+            useUserInventory: false, // god mode
           },
+          harvesterTransferEnergyRequestSchema,
         );
 
         const post_removeEnergyHarvester =

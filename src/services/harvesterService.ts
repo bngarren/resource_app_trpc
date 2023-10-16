@@ -10,6 +10,7 @@ import {
   ResourceType,
   SpawnedResource,
   UserInventoryItem,
+  Prisma,
 } from "@prisma/client";
 import {
   getHarvesterById,
@@ -17,9 +18,10 @@ import {
   updateHarvesterById,
 } from "../queries/queryHarvester";
 import {
-  updateCreateOrRemoveUserInventoryItemWithDeltaQuantity,
+  updateCreateOrRemoveUserInventoryItemWithNewQuantity,
   getInventoryItemFromUserInventoryItem,
   removeUserInventoryItemByItemId,
+  validateUserInventoryItemTransfer,
 } from "./userInventoryService";
 import { prisma } from "../prisma";
 import { TRPCError } from "@trpc/server";
@@ -45,7 +47,7 @@ import {
 } from "date-fns";
 import { validateWithZod } from "../util/validateWithZod";
 import { SagaBuilder } from "../util/saga";
-import { getUserInventoryItemByItemId } from "../queries/queryUserInventoryItem";
+import { prefixedError } from "../util/prefixedError";
 
 /**
  * ### Gets a Harvester
@@ -493,6 +495,21 @@ export const verifyArcaneEnergyResource = async (resourceId: string) => {
  * - This will trigger an update of all the harvester's HarvestOperations based on a fresh
  * calculation of when they started, what time this is called, and when we expect them to end.
  *
+ * ---
+ *
+ * #### Caution with `amount` terminology:
+ * The `amount` param for this function represents how much energy is added to the harvester.
+ * In other words:
+ * - Positive `amount` = energy added to harvester
+ * - Negative `amount` = energy removed from harvester
+ *
+ * This is important, as the `updateCreateOrRemoveUserInventoryItemWithNewQuantity()` that is called
+ * to update the user inventory uses the opposite of this amount to calculate the new inventory item
+ * quantity. Such that, adding energy to a harvester would give a positive `amount` for this function
+ * but use _negative_ of this \`amount\` for calculating the `newQuantity` for `updateCreateOrRemoveUserInventoryItemWithNewQuantity()`.
+ *
+ * ---
+ *
  * #### Force a different time?
  * - If `atTime` is:
  *   - **null**: we default to using the current time within our logic. I.e., this is the time
@@ -517,7 +534,7 @@ export const verifyArcaneEnergyResource = async (resourceId: string) => {
  * - If the energySourceId is different than the pre-existing energy in the harvester - throws CONFLICT
  *
  * @param _harvester - either pass the harvesterId or the Harvester
- * @param amount
+ * @param amount - Positive when adding energy; Negative when removing energy
  * @param energySourceId
  * @param atTime - See above _Force a different time?_. Pass **null** to use current time.
  * @param activeUserId - See above _Should we use the player inventory?_. Pass **null**
@@ -530,6 +547,11 @@ export const handleTransferEnergy = async (
   atTime: Date | null,
   _activeUserId?: string | null,
 ) => {
+  // for logging purposes
+  const gerund = amount >= 0 ? "Adding" : "Removing";
+  const verb = amount >= 0 ? "add" : "remove";
+
+  // - - - - Get RESOURCE info - - - -
   const energyResource = await verifyArcaneEnergyResource(energySourceId);
 
   // Extract the metadata information from the resource.
@@ -544,6 +566,7 @@ export const handleTransferEnergy = async (
   const minutesPerEnergyUnit =
     config.base_minutes_per_arcane_energy_unit * metadata.energyEfficiency;
 
+  // - - - - - Get the Harvester - - - - -
   // Get the harvester (either from passed in Harvester or from harvesterId)
   let harvester: Harvester;
   if (typeof _harvester === "string") {
@@ -571,6 +594,7 @@ export const handleTransferEnergy = async (
     });
   }
 
+  // - - - - - UserInventory logic - - - - -
   // Only modify user inventory if NOT null
   const shouldUpdateUserInventory = _activeUserId !== null;
   // activeUserId defaults to harvester's owner unless specified by _activeUserId
@@ -581,42 +605,36 @@ export const handleTransferEnergy = async (
   let orig_energyResourceUserInventoryItem: UserInventoryItem;
   if (shouldUpdateUserInventory) {
     try {
-      orig_energyResourceUserInventoryItem = await getUserInventoryItemByItemId(
-        energyResource.id,
-        ItemType.RESOURCE,
-        activeUserId,
-      );
-
-      if (
-        amount > 0 &&
-        orig_energyResourceUserInventoryItem.quantity < amount
-      ) {
-        throw new Error(
-          `Cannot transfer more energy to harvester (${amount}) than amount in user inventory (${orig_energyResourceUserInventoryItem.quantity})!`,
+      orig_energyResourceUserInventoryItem =
+        await validateUserInventoryItemTransfer(
+          energyResource.id,
+          "RESOURCE",
+          activeUserId,
+          -amount, // Withdrawal amount is negative (compared to what we intend to place in harvester)
         );
-      }
-      // TODO: can add if statement here to check for inventory space...
       // ...
     } catch (err) {
-      // We failed to find the resource in the user's inventory...
-      if (amount < 0) {
-        // This is okay. We are transfering energy from harvester to user (who isn't currently holding this resource...)
-      } else {
-        throw new Error(
-          `Cannot transfer energy to harvester. Resource not found in user's inventory!`,
-        );
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        // If we failed to find the resource in the user's inventory...
+        // P2025 = NOT FOUND ERROR
+        if (err.code === "P2025" && amount < 0) {
+          // This is okay. We are transfering energy from harvester to user (who isn't currently holding this resource...)
+        } else {
+          throw prefixedError(
+            err,
+            `Failed to validate the user inventory item transfer`,
+          );
+        }
       }
     }
   }
 
+  // - - - - - Energy Calculations - - - - -
   /* New energy start time is now, or whatever energyStartTime was passed as a param for testing purposes
   - When energy is added/removed from the harvester, we recalculate the initialEnergy and new
   energyStartTime and energyEndTime
   */
   const newEnergyStartTime = atTime || new Date();
-
-  const gerund = amount >= 0 ? "Adding" : "Removing";
-  const verb = amount >= 0 ? "add" : "remove";
 
   logger.info(
     { energyStartTime: pdate(newEnergyStartTime) },
@@ -676,6 +694,7 @@ export const handleTransferEnergy = async (
     )}.`,
   );
 
+  // - - - - - Saga setup - - - - -
   const orig_harvestOperations = await getHarvestOperationsForHarvester(
     harvester.id,
   );
@@ -725,23 +744,28 @@ export const handleTransferEnergy = async (
     // handleTransferEnergySaga STEP 3
     .when(shouldUpdateUserInventory)
     .invoke(async () => {
-      return await updateCreateOrRemoveUserInventoryItemWithDeltaQuantity(
+      /* Careful: the "amount" we update the user inventory is the opposite sign of 
+      what is transferred to/from the harvester */
+      return await updateCreateOrRemoveUserInventoryItemWithNewQuantity(
         energyResource.id,
         ItemType.RESOURCE,
         activeUserId,
-        amount, // ! Not idempotent
+        orig_energyResourceUserInventoryItem?.quantity + -amount || -amount,
       );
     }, "update user's inventory")
     .withCompensation(async () => {
-      return await updateCreateOrRemoveUserInventoryItemWithDeltaQuantity(
+      // We either pass the original quantity if the item had existed, or
+      // we pass 0 quantity to remove the item
+      return await updateCreateOrRemoveUserInventoryItemWithNewQuantity(
         energyResource.id,
         ItemType.RESOURCE,
         activeUserId,
-        -amount, // ! Not idempotent
+        orig_energyResourceUserInventoryItem?.quantity || 0,
       );
     })
     .build();
 
+  // - - - - - Execute Saga to make database updates - - - - -
   try {
     const sagaResult = await handleTransferEnergySaga.execute();
 
@@ -754,6 +778,7 @@ export const handleTransferEnergy = async (
       `handleTransferEnergy() - complete (${verb.toUpperCase()}). Updated Harvester:`,
     );
 
+    // - - - - - RETURN - - - - -
     return sagaResult[1] as Harvester; // output from the second step
   } catch (error) {
     // TODO: how should we handle any error thrown from the saga? It may or may not have been rolled back successfully...
@@ -795,7 +820,7 @@ export const handleCollect = async (userId: string, harvesterId: string) => {
 
   // Perform the user inventory update
   const resultUserInventoryItem =
-    await updateCreateOrRemoveUserInventoryItemWithDeltaQuantity(
+    await updateCreateOrRemoveUserInventoryItemWithNewQuantity(
       copper.id,
       "RESOURCE",
       testUser.id,
@@ -860,7 +885,7 @@ export const handleReclaim = async (harvesterId: string) => {
 
     // add the energy resource item back to the user's (owner) inventory
     // *We round the remaining energy DOWN to an integer
-    await updateCreateOrRemoveUserInventoryItemWithDeltaQuantity(
+    await updateCreateOrRemoveUserInventoryItemWithNewQuantity(
       energyResource.id,
       ItemType.RESOURCE,
       harvester.userId,
@@ -879,7 +904,7 @@ export const handleReclaim = async (harvesterId: string) => {
   });
 
   // add the harvester item back to the user's (owner) inventory
-  await updateCreateOrRemoveUserInventoryItemWithDeltaQuantity(
+  await updateCreateOrRemoveUserInventoryItemWithNewQuantity(
     harvesterId,
     "HARVESTER",
     harvester.userId,

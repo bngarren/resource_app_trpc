@@ -57,14 +57,10 @@ export const updateUserInventoryItemByDelta = async (
 };
 
 /**
- * ### Updates, creates, or removes a UserInventoryItem with change in quantity
- * - If change in quantity is **positive**, will create a new or update an existing UserInventoryItem with additional quantity
- * - If change in quantity is **negative**, will update an existing UserInventoryItem with subtracted quantity. If
- * UserInventoryItem does not exist, **will throw error**. _We should not be attempting to remove quantity
- * from an item that doesn't exist_.
- * - If change in quantity is negative and the resulting UserInventoryItem has negative quantity, we will log a warning
- * message as this should not happen if our business logic is correct. _We should be be attemping to remove more
- * quantity from an item than is available_.
+ * ### Updates, creates, or removes a UserInventoryItem with a new quantity
+ * This function is **idempotent**.
+ *
+ * If `newQuantity` is 0, the user inventory item **is removed**.
  *
  * This function requires itemId, itemType, and userId in order to create a new
  * UserInventoryItem, if a new one needs to be created
@@ -72,46 +68,34 @@ export const updateUserInventoryItemByDelta = async (
  * @param itemId The resourceId, componentId, or harvesterId
  * @param itemType
  * @param userId
- * @param deltaQuantity - This is the ***change*** in quantity to apply (positive or negative)
+ * @param newQuantity
  * @returns UserInventoryItem - updated, created, or the item that was removed
  */
-export const updateCreateOrRemoveUserInventoryItemWithDeltaQuantity = async (
+export const updateCreateOrRemoveUserInventoryItemWithNewQuantity = async (
   itemId: string,
   itemType: ItemType,
   userId: string,
-  deltaQuantity = 1,
+  newQuantity = 1,
 ) => {
-  if (deltaQuantity === 0) {
+  // Cannot have negative quantity
+  if (newQuantity < 0) {
     throw new Error(
-      `Cannot call \`updateCreateOrRemoveUserInventoryItemWithDeltaQuantity\` with a deltaQuantity of 0.`,
+      `Cannot update user inventory item with itemId (${itemId}) to a negative quantity (${newQuantity})`,
     );
   }
 
-  const res = await upsertUserInventoryItem(
-    itemId,
-    itemType,
-    userId,
-    deltaQuantity,
-  );
-
-  if (res.quantity <= 0) {
-    if (res.quantity === 0) {
-      return await removeUserInventoryItem(res.id);
-    } else {
-      // Why did the quantity end up negative? We shouldn't be removing more quantity than is available...
-      logger.warn(
-        res,
-        `During \`updateCreateOrRemoveUserInventoryItemWithDeltaQuantity\` we subtracted a quantity (${Math.abs(
-          deltaQuantity,
-        )}) that was greater than existing quantity, making the result negative (${
-          res.quantity
-        }). UserInventoryItem has been removed.`,
-      );
-      return await removeUserInventoryItem(res.id);
-    }
-  } else {
-    return res;
+  // Remove inventory item if quantity is set to 0
+  if (newQuantity === 0) {
+    const removed = removeUserInventoryItemByItemId(itemId, itemType, userId);
+    logger.debug(
+      removed,
+      `User inventory item removed due to quantity=0 after update`,
+    );
+    return removed;
   }
+
+  // Otherwise, upsert (update or create) the inventory item with this new quantity
+  return await upsertUserInventoryItem(itemId, itemType, userId, newQuantity);
 };
 
 /**
@@ -297,4 +281,35 @@ export const getPlayerInventoryFromUserInventoryItems = async (
     timestamp: new Date().toISOString(),
     items,
   } as PlayerInventory;
+};
+
+/**
+ * ### Ensures that an update to a user inventory item should be permitted
+ * - When withdrawing an item, checks that the amount does not exceed the current quantity
+ *
+ * @param amount Positive = going INTO inventory; Negative = going OUT of inventory
+ * @returns If successful, returns the UserInventoryItem. Otherwise, should throw error.
+ */
+export const validateUserInventoryItemTransfer = async (
+  itemId: string,
+  itemType: ItemType,
+  userId: string,
+  amount: number,
+) => {
+  const itemToValidate = await getUserInventoryItemByItemId(
+    itemId,
+    itemType,
+    userId,
+  );
+
+  // Withdrawal from inventory
+  if (amount < 0 && itemToValidate.quantity < Math.abs(amount)) {
+    throw new Error(
+      `Cannot transfer ${amount} unit(s) of itemId (${itemId}), itemType (${itemType}) out of user's (userId=${userId}) inventory that only contains ${itemToValidate.quantity} unit(s)!`,
+    );
+  }
+
+  // TODO: Perform other checks here, e.g. is there enough inventory space?
+
+  return itemToValidate;
 };

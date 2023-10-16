@@ -65,15 +65,12 @@ export const getUserInventoryItemsByUserId = async (
 };
 
 /**
- * ### Upserts (updates or creates) a UserInventoryItem with a delta quantity
- * If deltaQuantity is negative (removing quantity), the UserInventoryItem must already exist!
- * (An upsert will not be performed, i.e. we don't create a new UserInventoryItem to remove quantity, this is an error!)
+ * ### Upserts (updates or creates) a UserInventoryItem with new quantity
  *
- * Will **throw** a RecordNotFound error if the UserInventoryItem doesn't exist for a negative deltaQuantity
  * @param itemId
  * @param itemType
  * @param userId
- * @param deltaQuantity
+ * @param newQuantity
  * @param prismaClient
  * @returns
  */
@@ -81,46 +78,26 @@ export const upsertUserInventoryItem = async (
   itemId: string,
   itemType: ItemType,
   userId: string,
-  deltaQuantity: number,
+  newQuantity: number,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  // If we are adding quantity, perform normal upsert (update OR create)
-  if (deltaQuantity > 0) {
-    return await prismaClient.userInventoryItem.upsert({
-      where: {
-        userId_itemId: {
-          userId: userId,
-          itemId: itemId,
-        },
-      },
-      update: {
-        quantity: {
-          increment: deltaQuantity, // see https://www.prisma.io/docs/reference/api-reference/prisma-client-reference#operators
-        },
-      },
-      create: {
-        itemId: itemId,
-        itemType: itemType,
+  return await prismaClient.userInventoryItem.upsert({
+    where: {
+      userId_itemId: {
         userId: userId,
-        quantity: deltaQuantity,
+        itemId: itemId,
       },
-    });
-  } else {
-    // If we are subtracting quantity, only update, no upsert
-    return await prismaClient.userInventoryItem.update({
-      where: {
-        userId_itemId: {
-          userId: userId,
-          itemId: itemId,
-        },
-      },
-      data: {
-        quantity: {
-          decrement: Math.abs(deltaQuantity), // see https://www.prisma.io/docs/reference/api-reference/prisma-client-reference#operators
-        },
-      },
-    });
-  }
+    },
+    update: {
+      quantity: newQuantity,
+    },
+    create: {
+      itemId: itemId,
+      itemType: itemType,
+      userId: userId,
+      quantity: newQuantity,
+    },
+  });
 };
 
 /**
