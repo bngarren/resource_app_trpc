@@ -12,7 +12,7 @@ import { arcaneEnergyResourceMetadataSchema } from "../src/schema";
  * @param _prisma
  */
 export const setupBaseSeed = async (_prisma: PrismaClient) => {
-  // Create our test User
+  // - - - - - Create test user - - - - -
   const testUser = await _prisma.user.create({
     data: {
       email: "testUser@gmail.com",
@@ -25,7 +25,7 @@ export const setupBaseSeed = async (_prisma: PrismaClient) => {
     data: resourceRaritySeed,
   });
 
-  // Create some Resources
+  // - - - - - Create Resources - - - - -
 
   // first, verify the metadata schema
   resourcesSeed.forEach((r) => {
@@ -49,9 +49,9 @@ export const setupBaseSeed = async (_prisma: PrismaClient) => {
     data: resourcesSeed,
   });
 
-  // Create a user inventory item
+  // - - - - - Create User inventory items - - - - -
 
-  // first, get one of our resources to be our item
+  // Create gold
   const gold = await _prisma.resource.findUniqueOrThrow({
     where: {
       url: "gold",
@@ -72,6 +72,28 @@ export const setupBaseSeed = async (_prisma: PrismaClient) => {
     },
   });
 
+  // Create arcane quanta (energy)
+  const arcaneQuanta = await _prisma.resource.findUniqueOrThrow({
+    where: {
+      url: "arcane_quanta",
+    },
+  });
+
+  // now create the UserInventoryItem
+  await _prisma.userInventoryItem.create({
+    data: {
+      user: {
+        connect: {
+          id: testUser.id,
+        },
+      },
+      itemId: arcaneQuanta.id,
+      itemType: "RESOURCE",
+      quantity: 100,
+    },
+  });
+
+  // - - - - - Create Harvester - - - - -
   // Create a new Harvester associated with our test user
   const { id: harvesterId } = await _prisma.harvester.create({
     data: {

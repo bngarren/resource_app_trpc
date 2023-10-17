@@ -7,11 +7,15 @@ import {
 } from "./testHelpers";
 import { Server } from "http";
 import { prisma } from "../src/prisma";
-import { addResourceToUserInventory } from "../src/services/userInventoryService";
+import {
+  addResourceToUserInventory,
+  getUserInventoryItemWithResourceUrl,
+} from "../src/services/userInventoryService";
 import { GetUserInventoryRequestOutput } from "../src/types/trpcTypes";
 import { PlayerInventory } from "../src/types";
 import { logger } from "../src/logger/logger";
 import { getUserInventoryRequestSchema } from "../src/schema";
+import { getResourceById } from "../src/queries/queryResource";
 
 describe("/userInventory", () => {
   let server: Server;
@@ -37,7 +41,7 @@ describe("/userInventory", () => {
 
   describe("/userInventory.getUserInventory", () => {
     it("should return status code 400 (Bad Request) if missing user uid", async () => {
-      const res = await requester.build(
+      const res = await requester.send(
         "GET",
         "/userInventory.getUserInventory",
         { userUid: null },
@@ -46,7 +50,7 @@ describe("/userInventory", () => {
       expect(res.statusCode).toBe(400);
     });
     it("should return status code 404 (Not Found) if the given user uid is not located in the database", async () => {
-      const res = await requester.build(
+      const res = await requester.send(
         "GET",
         "/userInventory.getUserInventory",
         { userUid: "some-fake-uid" },
@@ -56,7 +60,7 @@ describe("/userInventory", () => {
     });
 
     it("should return status code 200 (OK) if given user uid is found in the database", async () => {
-      const res = await requester.build(
+      const res = await requester.send(
         "GET",
         "/userInventory.getUserInventory",
         { userUid: userUid },
@@ -79,7 +83,7 @@ describe("/userInventory", () => {
         },
       });
 
-      const res = await requester.build(
+      const res = await requester.send(
         "GET",
         "/userInventory.getUserInventory",
         { userUid: userUid },
@@ -105,7 +109,7 @@ describe("/userInventory", () => {
         },
       });
 
-      const res = await requester.build(
+      const res = await requester.send(
         "GET",
         "/userInventory.getUserInventory",
         { userUid: userUid },
@@ -152,7 +156,7 @@ describe("/userInventory", () => {
         },
       });
 
-      const res = await requester.build(
+      const res = await requester.send(
         "GET",
         "/userInventory.getUserInventory",
         { userUid: userUid },
@@ -170,7 +174,7 @@ describe("/userInventory", () => {
     });
 
     it("should return a correct PlayerInventory", async () => {
-      const res = await requester.build(
+      const res = await requester.send(
         "GET",
         "/userInventory.getUserInventory",
         { userUid: userUid },
@@ -199,5 +203,26 @@ describe("/userInventory", () => {
         expect(Object.values(ItemType)).toContain(item.type);
       });
     });
+  });
+  it("should correctly return a user inventory id by resource url", async () => {
+    const testUser = await prisma.user.findUniqueOrThrow({
+      where: {
+        email: "testUser@gmail.com",
+      },
+    });
+
+    try {
+      const res = await getUserInventoryItemWithResourceUrl(
+        "arcane_quanta",
+        testUser.id,
+      );
+
+      const resource = await getResourceById(res.itemId);
+
+      expect(resource.url).toBe("arcane_quanta");
+    } catch (err) {
+      console.log(err);
+      expect(err).not.toBeDefined();
+    }
   });
 });

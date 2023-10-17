@@ -1,5 +1,6 @@
 import { ItemType } from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
+import { prefixedError } from "../util/prefixedError";
 
 /**
  * ### Gets a UserInventoryItem, by id
@@ -45,6 +46,32 @@ export const getUserInventoryItemByItemId = async (
       itemType: itemType,
     },
   });
+};
+
+export const getUserInventoryItemByResourceUrl = async (
+  resourceUrl: string,
+  userId: string,
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  try {
+    const resource = await prismaClient.resource.findUniqueOrThrow({
+      where: {
+        url: resourceUrl,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return await prismaClient.userInventoryItem.findFirstOrThrow({
+      where: {
+        userId: userId,
+        itemId: resource.id,
+      },
+    });
+  } catch (err) {
+    throw prefixedError(err, `getUserInventoryItemByResourceUrl()`);
+  }
 };
 
 /**

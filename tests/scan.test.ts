@@ -64,13 +64,13 @@ describe("/scan", () => {
     );
 
   it("should return status code 400 (Bad Request) if missing/malformed POST body", async () => {
-    const res = await requester.build("POST", "/scan", {});
+    const res = await requester.send("POST", "/scan", {});
     expect(res.statusCode).toBe(400);
   });
 
   it("should create the appropriate number of new spawn regions, if none present", async () => {
     // Since the database should be empty, we expect SpawnRegions should be created (and not reused)
-    await requester.build(
+    await requester.send(
       "POST",
       "/scan",
       getValidRequestBody(),
@@ -97,12 +97,7 @@ describe("/scan", () => {
       config.spawn_region_h3_resolution,
     );
     // Since the database should be empty, we expect SpawnRegions should be created (and not reused)
-    await requester.build(
-      "POST",
-      "/scan",
-      first_requestBody,
-      scanRequestSchema,
-    );
+    await requester.send("POST", "/scan", first_requestBody, scanRequestSchema);
 
     const firstScan_regions = await prisma.spawnRegion.findMany();
 
@@ -124,7 +119,7 @@ describe("/scan", () => {
     // Both locations should be within the same h3 cell though
     expect(first_h3Index).toBe(second_h3Index);
 
-    await requester.build(
+    await requester.send(
       "POST",
       "/scan",
       second_requestBody,
@@ -165,7 +160,7 @@ describe("/scan", () => {
     );
 
     // Since the database should be empty, we expect SpawnRegions should be created (and not reused)
-    const response = await requester.build(
+    const response = await requester.send(
       "POST",
       "/scan",
       getValidRequestBody(),
@@ -197,7 +192,7 @@ describe("/scan", () => {
       Promise.reject(new Error("mock - updateSpawnRegion error")),
     );
 
-    const response = await await requester.build(
+    const response = await await requester.send(
       "POST",
       "/scan",
       getValidRequestBody(),
@@ -242,7 +237,7 @@ describe("/scan", () => {
       Promise.reject(new Error("mock - getRandomResource Error")),
     );
 
-    const response = await requester.build(
+    const response = await requester.send(
       "POST",
       "/scan",
       getValidRequestBody(),

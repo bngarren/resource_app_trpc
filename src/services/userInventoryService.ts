@@ -7,6 +7,7 @@ import {
 import {
   deleteUserInventoryItem,
   getUserInventoryItemByItemId,
+  getUserInventoryItemByResourceUrl,
   getUserInventoryItemsByUserId,
   upsertUserInventoryItem,
 } from "../queries/queryUserInventoryItem";
@@ -36,6 +37,13 @@ export const getUserInventoryItemWithItemId = async (
   userId: string,
 ) => {
   return await getUserInventoryItemByItemId(itemId, itemType, userId);
+};
+
+export const getUserInventoryItemWithResourceUrl = async (
+  itemUrl: string,
+  userId: string,
+) => {
+  return await getUserInventoryItemByResourceUrl(itemUrl, userId);
 };
 
 /**

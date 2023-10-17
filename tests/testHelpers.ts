@@ -129,7 +129,7 @@ export class AuthenticatedRequester {
     private readonly idToken: string,
   ) {}
 
-  build<T extends Zod.ZodType<any>>(
+  send<T extends Zod.ZodType<any>>(
     method: "POST" | "GET",
     endpoint: string,
     input?: Zod.infer<T>,
