@@ -1,4 +1,4 @@
-import { getUserInventoryItemWithResourceUrl } from "./../src/services/userInventoryService";
+import { getResourceUserInventoryItemByUrl } from "./../src/services/userInventoryService";
 import {
   harvesterCollectRequestSchema,
   harvesterDeployRequestSchema,
@@ -6,7 +6,10 @@ import {
   harvesterTransferEnergyRequestSchema,
   scanRequestSchema,
 } from "./../src/schema/index";
-import { calculatePeriodHarvested } from "./../src/services/harvesterService";
+import {
+  calculatePeriodHarvested,
+  verifyArcaneEnergyResource,
+} from "./../src/services/harvesterService";
 import * as h3 from "h3-js";
 import { TestSingleton } from "./TestSingleton";
 import {
@@ -22,7 +25,7 @@ import {
 import { Server } from "http";
 import { logger } from "../src/logger/logger";
 import { prisma } from "../src/prisma";
-import { Harvester, User, UserInventoryItem } from "@prisma/client";
+import { Harvester, HarvesterUserInventoryItem, User } from "@prisma/client";
 import {
   calculateRemainingEnergy,
   getHarvestOperationsForHarvester,
@@ -39,7 +42,6 @@ import {
   getSpawnedResourcesForSpawnRegion,
   updateSpawnedResources,
 } from "../src/queries/queryResource";
-import { arcaneEnergyResourceMetadataSchema } from "../src/schema";
 import config from "../src/config";
 import {
   addDays,
@@ -54,7 +56,6 @@ import {
   subHours,
   subSeconds,
 } from "date-fns";
-import { validateWithZod } from "../src/util/validateWithZod";
 import * as HarvesterService from "../src/services/harvesterService";
 import * as QueryHarvester from "../src/queries/queryHarvester";
 
@@ -239,12 +240,12 @@ describe("/harvester", () => {
       const preDeploy_userInventory = await getUserInventoryItems(testUser.id);
 
       // func that checks if user inventory items contain the test harvester
-      const hasTestHarvester = (items: UserInventoryItem[]) => {
-        return items.some((item) => item.itemId === testHarvester.id);
+      const hasTestHarvester = (items: HarvesterUserInventoryItem[]) => {
+        return items.some((item) => item.harvesterId === testHarvester.id);
       };
 
       // should be present before being deployed
-      expect(hasTestHarvester(preDeploy_userInventory)).toBe(true);
+      expect(hasTestHarvester(preDeploy_userInventory.harvesters)).toBe(true);
 
       const d = await requester.send(
         "POST",
@@ -260,7 +261,7 @@ describe("/harvester", () => {
       const postDeploy_userInventory = await getUserInventoryItems(testUser.id);
 
       // should be gone after it has been deployed
-      expect(hasTestHarvester(postDeploy_userInventory)).toBe(false);
+      expect(hasTestHarvester(postDeploy_userInventory.harvesters)).toBe(false);
     });
 
     it("should create new HarvestOperations for each nearby SpawnedResource", async () => {
@@ -614,17 +615,13 @@ describe("/harvester", () => {
       throwIfBadStatus(d);
 
       // Now add energy to harvester
-      const arcaneFlux = await prisma.resource.findUniqueOrThrow({
+      const _arcaneFlux = await prisma.resource.findUniqueOrThrow({
         where: {
           url: "arcane_flux",
         },
       });
 
-      const metadata = validateWithZod(
-        arcaneEnergyResourceMetadataSchema,
-        arcaneFlux.metadata,
-        `metadata for arcane_flux`,
-      );
+      const arcaneFlux = await verifyArcaneEnergyResource(_arcaneFlux.id);
 
       const initialEnergy = 10;
 
@@ -672,7 +669,9 @@ describe("/harvester", () => {
       // const playerInv = await getPlayerInventoryFromUserInventoryItems(inv);
       // console.log(playerInv);
 
-      const invResource = inv.find((i) => i.itemId === arcaneFlux.id);
+      const invResource = inv.resources.find(
+        (i) => i.resourceId === arcaneFlux.id,
+      );
 
       if (invResource == null) throw new Error("Failed to reclaim energy");
 
@@ -680,7 +679,7 @@ describe("/harvester", () => {
       const k = calculateRemainingEnergy(
         initialEnergy,
         60.0,
-        metadata.energyEfficiency,
+        arcaneFlux.energyEfficiency,
       );
 
       // Expect the difference between our calculation and the server to be small
@@ -828,8 +827,14 @@ describe("/harvester", () => {
 
         // Get energy from testUser's inventory
         // TODO: Need to actually implement getUserInventoryItemWithItem
-        const arcaneQuanta = await getUserInventoryItemWithResourceUrl(
+        const _arcaneQuanta = await getResourceUserInventoryItemByUrl(
           "arcane_quanta",
+          testUser.id,
+        );
+
+        // careful, use the item.id here, not the userinventoryitem id
+        const arcaneQuanta = await verifyArcaneEnergyResource(
+          _arcaneQuanta.item.id,
         );
 
         const requestTime = new Date();
@@ -856,20 +861,12 @@ describe("/harvester", () => {
 
         expect(post_TestHarvester.initialEnergy).toBe(10);
 
-        // Get the metadata for the energy
-        // Validate and parse the metadata using Zod
-        const metadata = validateWithZod(
-          arcaneEnergyResourceMetadataSchema,
-          arcaneQuanta.metadata,
-          `metadata for arcane_quanta`,
-        );
-
         // Expected energyEndTime calculation
         const expectedEnergyEndTime = addSeconds(
           requestTime,
           amount *
             60.0 *
-            metadata.energyEfficiency *
+            arcaneQuanta.energyEfficiency *
             config.base_minutes_per_arcane_energy_unit,
         );
 
@@ -883,7 +880,9 @@ describe("/harvester", () => {
 
       it("should correctly add energy to a harvester that already has energy", async () => {
         // choose the energy resource
-        const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+        const _arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+
+        const arcaneQuanta = await verifyArcaneEnergyResource(_arcaneQuanta.id);
 
         // setup our test harvester to already have energy (running)
         const initialEnergy = 10.0;
@@ -939,21 +938,13 @@ describe("/harvester", () => {
           },
         });
 
-        // Get the metadata for the energy
-        // Validate and parse the metadata using Zod
-        const metadata = validateWithZod(
-          arcaneEnergyResourceMetadataSchema,
-          arcaneQuanta.metadata,
-          `metadata for arcane_quanta`,
-        );
-
         // 5 units remaining at the time that
         // new energy is added. 5 + 3 = 8
         const r =
           calculateRemainingEnergy(
             initialEnergy,
             hoursToMinutes(hoursRunning),
-            metadata.energyEfficiency,
+            arcaneQuanta.energyEfficiency,
           ) + amount;
 
         expect(post1_TestHarvester.initialEnergy - r).toBeLessThanOrEqual(0.01); // equal within 0.01
@@ -964,7 +955,7 @@ describe("/harvester", () => {
           minutesToSeconds(
             r *
               (config.base_minutes_per_arcane_energy_unit *
-                metadata.energyEfficiency),
+                arcaneQuanta.energyEfficiency),
           ),
         );
 
@@ -1016,7 +1007,7 @@ describe("/harvester", () => {
           calculateRemainingEnergy(
             post1_TestHarvester.initialEnergy,
             secondsRunning / 60.0,
-            metadata.energyEfficiency,
+            arcaneQuanta.energyEfficiency,
           ) + amount;
 
         expect(post2_TestHarvester.initialEnergy - k).toBeLessThanOrEqual(0.01); // equal within 0.01
@@ -1094,13 +1085,9 @@ describe("/harvester", () => {
         }
 
         // choose the energy resource
-        const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+        const _arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
 
-        const metadata = validateWithZod(
-          arcaneEnergyResourceMetadataSchema,
-          arcaneQuanta.metadata,
-          `metadata for arcane_quanta`,
-        );
+        const arcaneQuanta = await verifyArcaneEnergyResource(_arcaneQuanta.id);
 
         const orig_handleTransferEnergy = HarvesterService.handleTransferEnergy;
 
@@ -1213,7 +1200,7 @@ describe("/harvester", () => {
         const energyDurationMinutes_1 =
           amount_1 *
           config.base_minutes_per_arcane_energy_unit *
-          metadata.energyEfficiency;
+          arcaneQuanta.energyEfficiency;
         // 108 min * 5 units/min = 540 units
 
         const priorHarvested_1 = calculatePeriodHarvested(
@@ -1543,7 +1530,9 @@ describe("/harvester", () => {
         }
 
         // choose the energy resource
-        const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+        const _arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+
+        const arcaneQuanta = await verifyArcaneEnergyResource(_arcaneQuanta.id);
 
         const orig_handleTransferEnergy = HarvesterService.handleTransferEnergy;
 
@@ -1594,18 +1583,10 @@ describe("/harvester", () => {
 
         expect(post_addEnergyHarvester.initialEnergy).toBe(20);
 
-        // Get the metadata for the energy
-        // Validate and parse the metadata using Zod
-        const metadata = validateWithZod(
-          arcaneEnergyResourceMetadataSchema,
-          arcaneQuanta.metadata,
-          `metadata for arcane_quanta`,
-        );
-
         const energyRemainingT_plus_2 = calculateRemainingEnergy(
           amountAdd,
           differenceInMilliseconds(t_plus_2, t_0) / 60000.0,
-          metadata.energyEfficiency,
+          arcaneQuanta.energyEfficiency,
         );
 
         // Remove energy at t_plus_2 hours

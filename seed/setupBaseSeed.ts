@@ -1,7 +1,6 @@
 import { PrismaClient, ResourceType } from "@prisma/client";
 import { resourcesSeed } from "./resourcesSeed";
 import { resourceRaritySeed } from "./resourceRaritySeed";
-import { arcaneEnergyResourceMetadataSchema } from "../src/schema";
 
 /**
  * ### Seeds the database (via the given Prisma client)
@@ -27,17 +26,12 @@ export const setupBaseSeed = async (_prisma: PrismaClient) => {
 
   // - - - - - Create Resources - - - - -
 
-  // first, verify the metadata schema
+  // first, verify the energy Efficiency property
   resourcesSeed.forEach((r) => {
     switch (r.resourceType) {
       case ResourceType.ARCANE_ENERGY:
-        const validationResult = arcaneEnergyResourceMetadataSchema.safeParse(
-          r.metadata,
-        );
-        if (!validationResult.success) {
-          throw new Error(
-            `Incorrect metadata for ${r.url} ${validationResult.error}`,
-          );
+        if (r.energyEfficiency == null) {
+          throw new Error(`Missing energyEfficiency for ${r.url}`);
         }
         break;
       default:
@@ -59,14 +53,18 @@ export const setupBaseSeed = async (_prisma: PrismaClient) => {
   });
 
   // now create the UserInventoryItem
-  await _prisma.userInventoryItem.create({
+  await _prisma.resourceUserInventoryItem.create({
     data: {
       user: {
         connect: {
           id: testUser.id,
         },
       },
-      itemId: gold.id,
+      item: {
+        connect: {
+          id: gold.id,
+        },
+      },
       itemType: "RESOURCE",
       quantity: 10,
     },
@@ -80,14 +78,18 @@ export const setupBaseSeed = async (_prisma: PrismaClient) => {
   });
 
   // now create the UserInventoryItem
-  await _prisma.userInventoryItem.create({
+  await _prisma.resourceUserInventoryItem.create({
     data: {
       user: {
         connect: {
           id: testUser.id,
         },
       },
-      itemId: arcaneQuanta.id,
+      item: {
+        connect: {
+          id: arcaneQuanta.id,
+        },
+      },
       itemType: "RESOURCE",
       quantity: 100,
     },
@@ -112,14 +114,18 @@ export const setupBaseSeed = async (_prisma: PrismaClient) => {
   });
 
   // now create the UserInventoryItem for the harvester
-  await _prisma.userInventoryItem.create({
+  await _prisma.harvesterUserInventoryItem.create({
     data: {
       user: {
         connect: {
           id: testUser.id,
         },
       },
-      itemId: harvesterId,
+      item: {
+        connect: {
+          id: harvesterId,
+        },
+      },
       itemType: "HARVESTER",
       quantity: 1,
     },

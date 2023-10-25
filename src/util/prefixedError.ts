@@ -6,12 +6,19 @@
  *
  * **Returns an Error**, does NOT throw.
  * @param error
- * @param message
+ * @param prefix
  */
-export const prefixedError = (error: unknown, message: string) => {
+export const prefixedError = (error: unknown, _prefix: string) => {
+  let newError: Error;
+
+  const prefix = _prefix.length !== 0 ? `${_prefix}: ` : "";
+
   if (error instanceof Error) {
-    return new Error(`${message}: ${error.message}`);
+    newError = new Error(`${prefix}${error.message}`);
+    newError.stack = error.stack;
   } else {
-    return new Error(`${message}`);
+    newError = new Error(`${prefix}`);
   }
+
+  return newError;
 };

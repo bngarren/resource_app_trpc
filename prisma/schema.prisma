@@ -13,12 +13,13 @@ datasource db {
 }
 
 model User {
-  id                 String              @id @default(uuid())
-  firebase_uid       String              @unique
-  email              String              @unique
-  username           String?
-  UserInventoryItems UserInventoryItem[]
-  Harvesters         Harvester[]
+  id                         String                       @id @default(uuid())
+  firebase_uid               String                       @unique
+  email                      String                       @unique
+  username                   String?
+  Harvesters                 Harvester[]
+  ResourceUserInventoryItem  ResourceUserInventoryItem[]
+  HarvesterUserInventoryItem HarvesterUserInventoryItem[]
 }
 
 model SpawnRegion {
@@ -54,14 +55,15 @@ model ResourceRarity {
 }
 
 model Resource {
-  id                  String              @id @default(uuid())
-  url                 String              @unique
-  name                String
-  metadata            Json                @default("{}")
-  resourceType        ResourceType        @map("resource_type")
-  resourceRarity      ResourceRarity      @relation(fields: [resourceRarityLevel], references: [level])
-  resourceRarityLevel ResourceRarityLevel
-  SpawnedResources    SpawnedResource[]
+  id                        String                      @id @default(uuid())
+  url                       String                      @unique
+  name                      String
+  resourceType              ResourceType                @map("resource_type")
+  resourceRarity            ResourceRarity              @relation(fields: [resourceRarityLevel], references: [level])
+  resourceRarityLevel       ResourceRarityLevel
+  energyEfficiency          Float?                      @map("energy_efficiency") // Only for Arcane Energy
+  SpawnedResources          SpawnedResource[]
+  ResourceUserInventoryItem ResourceUserInventoryItem[]
 }
 
 model SpawnedResource {
@@ -72,7 +74,7 @@ model SpawnedResource {
   spawnRegionId     String             @map("spawn_region_id")
   h3Index           String             @unique @map("h3_index")
   h3Resolution      Int                @map("h3_resolution")
-  isActive          Boolean            @map("is_active") @default(true)
+  isActive          Boolean            @default(true) @map("is_active")
   HarvestOperations HarvestOperation[]
 
   // Each SpawnedResource is uniquely defined by an h3Index and spawnRegionId
@@ -80,56 +82,71 @@ model SpawnedResource {
   @@unique([h3Index, spawnRegionId])
 }
 
-enum ItemType {
-  RESOURCE
-  COMPONENT
-  HARVESTER
-}
-
-model UserInventoryItem {
-  id       String   @id @default(cuid())
-  user     User     @relation(fields: [userId], references: [id])
-  userId   String   @map("user_id")
-  itemId   String   @map("item_id")
-  itemType ItemType @map("item_type")
-  quantity Int
-  // i.e., a user should not have 2 records in UserInventoryItem table for the same item
-
-  @@unique([userId, itemId]) // only 1 UserInventoryItem for a given user and itemId combo
-}
-
 model Harvester {
-  id                String             @id @default(uuid())
-  name              String
-  user              User               @relation(fields: [userId], references: [id])
-  userId            String             @map("user_id") // owner
-  deployedDate      DateTime?          @map("deployed_date") // the time the harvester was deployed to a harvestRegion
-  metadata          Json               @default("{}") // includes energy efficiency, extraction rate, inventory max size, etc.
-  h3Index           String?            @map("h3_index") // deployment location. Should be size/resolution of harvest region. If null, not deployed
-  initialEnergy     Float              @map("initial_energy") @default(0.0) // starting energy level
-  energyStartTime   DateTime?          @map("energy_start_time") // start time of initial energy usage
-  energyEndTime     DateTime?          @map("energy_end_time") // expected end time for energy
-  energySourceId    String?            @map("energy_source_id") // references a Resource id for the Arcane Energy source input
-  HarvestOperations HarvestOperation[]
+  id                         String                       @id @default(uuid())
+  name                       String
+  user                       User                         @relation(fields: [userId], references: [id])
+  userId                     String                       @map("user_id") // owner
+  deployedDate               DateTime?                    @map("deployed_date") // the time the harvester was deployed to a harvestRegion
+  metadata                   Json                         @default("{}") // includes energy efficiency, extraction rate, inventory max size, etc.
+  h3Index                    String?                      @map("h3_index") // deployment location. Should be size/resolution of harvest region. If null, not deployed
+  initialEnergy              Float                        @default(0.0) @map("initial_energy") // starting energy level
+  energyStartTime            DateTime?                    @map("energy_start_time") // start time of initial energy usage
+  energyEndTime              DateTime?                    @map("energy_end_time") // expected end time for energy
+  energySourceId             String?                      @map("energy_source_id") // references a Resource id for the Arcane Energy source input
+  HarvestOperations          HarvestOperation[]
+  HarvesterUserInventoryItem HarvesterUserInventoryItem[]
 
   @@unique([id, userId]) // only 1 user per harvester
 }
 
 model HarvestOperation {
-  id                   String          @id @default(uuid())
-  harvester            Harvester       @relation(fields: [harvesterId], references: [id])
-  harvesterId          String          @map("harvester_id")
-  spawnedResource      SpawnedResource @relation(fields: [spawnedResourceId], references: [id])
-  spawnedResourceId    String          @map("spawned_resource_id")
-  createdAt            DateTime        @default(now()) @map("created_at")
+  id                String          @id @default(uuid())
+  harvester         Harvester       @relation(fields: [harvesterId], references: [id])
+  harvesterId       String          @map("harvester_id")
+  spawnedResource   SpawnedResource @relation(fields: [spawnedResourceId], references: [id])
+  spawnedResourceId String          @map("spawned_resource_id")
+  createdAt         DateTime        @default(now()) @map("created_at")
   // The current period is marked by a non-null startTime.
-  startTime            DateTime?       @map("start_time")
+  startTime         DateTime?       @map("start_time")
   // The endTime is either when energy runs out or the resource is inactive (stale)
-  endTime              DateTime?       @map("end_time")
+  endTime           DateTime?       @map("end_time")
   // The amount harvested during the prior periods. Does not include what has been harvested
   // during this current startTime period.
-  priorHarvested       Float           @default(0.0) 
+  priorHarvested    Float           @default(0.0)
   // Flag is set to true when the resource is stale so that the operation
   // cannot be restarted, even when new energy is supplied
-  isCompleted          Boolean         @default(false)
+  isCompleted       Boolean         @default(false)
+}
+
+enum ItemType {
+  RESOURCE
+  // COMPONENT
+  HARVESTER
+}
+
+model ResourceUserInventoryItem {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String   @map("user_id")
+  item       Resource @relation(fields: [resourceId], references: [id])
+  resourceId String   @map("resource_id")
+  itemType   ItemType @map("item_type")
+  quantity   Int
+  // i.e., a user should not have 2 records in ResourceUserInventoryItem table for the same item
+
+  @@unique([userId, resourceId]) // only 1 ResourceUserInventoryItem for a given user and resourceId combo
+}
+
+model HarvesterUserInventoryItem {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String    @map("user_id")
+  item        Harvester @relation(fields: [harvesterId], references: [id])
+  harvesterId String    @map("harvester_id")
+  itemType    ItemType  @map("item_type")
+  quantity    Int
+  // i.e., a user should not have 2 records in HarvesterUserInventoryItem table for the same item
+
+  @@unique([userId, harvesterId]) // only 1 HarvesterUserInventoryItem for a given user and harvesterId combo
 }
