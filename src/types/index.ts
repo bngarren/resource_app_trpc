@@ -4,6 +4,9 @@ import {
   Resource,
   ItemType,
   HarvestOperation,
+  ResourceUserInventoryItem,
+  HarvesterUserInventoryItem,
+  Harvester,
 } from "@prisma/client";
 
 // A dev type that helps me to see to full type structure of my types
@@ -47,8 +50,59 @@ export interface SpawnRegionWithResourcesPartial
 export type HarvestOperationWithResetDate = HarvestOperation &
   Pick<Prisma.SpawnRegionGetPayload<true>, "resetDate">;
 
+export type ArcaneEnergyResource = Resource & {
+  resourceType: "ARCANE_ENERGY";
+  energyEfficiency: number;
+};
+
+// - - - - - Inventory Items - - - - -
+
+/**
+ * A UserInventoryItem represents a row in one of the tables:
+ * - ResourceUserInventoryItem
+ * - HarvesterUserInventoryItem
+ * - ~ComponentUserInventoryItem~ (TBD)
+ *
+ * It does **NOT** include the item's data only a reference id, e.g. resourceId, harvesterId
+ *
+ * Use the type `UserInventoryItemWithItem` to include the item details
+ */
+export type UserInventoryItem =
+  | ResourceUserInventoryItem
+  | HarvesterUserInventoryItem;
+
+/**
+ * A extended type of `UserInventoryItem` that includes item details:
+ * - e.g. resource, harvester, ~component~
+ *
+ * #### Example
+ * ```typescript
+ * ResourceUserInventoryItem & { resource: Resource }
+ * ```
+ */
+export type UserInventoryItemWithItem<T extends ItemType> = T extends "RESOURCE"
+  ? ResourceUserInventoryItem & { item: Resource }
+  : T extends "HARVESTER"
+  ? HarvesterUserInventoryItem & { item: Harvester }
+  : never;
+
+export type UserInventoryItemWithAnyItem = UserInventoryItemWithItem<
+  "RESOURCE" | "HARVESTER"
+>;
+
+/**
+ * This dictionary is used to pass around a user's inventory items, categorized and typed by
+ * `itemType` (e.g. Resource, Harvester, etc.)
+ */
+export type UserInventoryDict = {
+  resources: UserInventoryItemWithItem<"RESOURCE">[];
+  harvesters: UserInventoryItemWithItem<"HARVESTER">[];
+};
+
 type test = Expand<SpawnRegionWithResources>;
-type test2 = Expand<HarvestOperationWithResetDate>;
+type test2 = Expand<UserInventoryItem>;
+type test3 = Expand<UserInventoryItemWithItem<"HARVESTER">>;
+type test4 = Expand<UserInventoryDict>;
 
 export type Coordinate = {
   latitude: number;
@@ -138,7 +192,6 @@ export type InventoryItem = {
   name: string;
   type: ItemType;
   quantity: number;
-  metadata: Record<string, unknown>;
 };
 
 export type PlayerInventory = {

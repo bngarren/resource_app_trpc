@@ -47,7 +47,3 @@ export const harvesterTransferEnergyRequestSchema = z.object({
   amount: z.number(),
   useUserInventory: z.boolean().optional(),
 });
-
-export const arcaneEnergyResourceMetadataSchema = z.object({
-  energyEfficiency: z.number().min(0).max(1),
-});

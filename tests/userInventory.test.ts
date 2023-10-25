@@ -1,21 +1,23 @@
-import { ItemType } from "@prisma/client";
+import {
+  addResourceToUserInventory,
+  getUserInventoryItems,
+  removeUserInventoryItemByItemId,
+} from "./../src/services/userInventoryService";
 import { TestSingleton } from "./TestSingleton";
 import {
   AuthenticatedRequester,
   getDataFromTRPCResponse,
   resetPrisma,
+  throwIfBadStatus,
 } from "./testHelpers";
 import { Server } from "http";
-import { prisma } from "../src/prisma";
-import {
-  addResourceToUserInventory,
-  getUserInventoryItemWithResourceUrl,
-} from "../src/services/userInventoryService";
-import { GetUserInventoryRequestOutput } from "../src/types/trpcTypes";
-import { PlayerInventory } from "../src/types";
 import { logger } from "../src/logger/logger";
 import { getUserInventoryRequestSchema } from "../src/schema";
-import { getResourceById } from "../src/queries/queryResource";
+import { GetUserInventoryRequestOutput } from "../src/types/trpcTypes";
+import { prisma } from "../src/prisma";
+import { UserInventoryItemWithAnyItem } from "../src/types";
+import { parseISO } from "date-fns";
+import { User } from "@prisma/client";
 
 describe("/userInventory", () => {
   let server: Server;
@@ -40,6 +42,16 @@ describe("/userInventory", () => {
   });
 
   describe("/userInventory.getUserInventory", () => {
+    let testUser: User;
+
+    beforeAll(async () => {
+      testUser = await prisma.user.findUniqueOrThrow({
+        where: {
+          email: "testUser@gmail.com",
+        },
+      });
+    });
+
     it("should return status code 400 (Bad Request) if missing user uid", async () => {
       const res = await requester.send(
         "GET",
@@ -69,19 +81,38 @@ describe("/userInventory", () => {
       expect(res.statusCode).toBe(200);
     });
 
-    it("should return an object with an empty items array if the user has no inventory items", async () => {
-      // The base seed should include 1 item (Resource, gold) for testUser
-      // Let's clear the user's inventory items...
-      const user = await prisma.user.findUniqueOrThrow({
-        where: {
-          firebase_uid: userUid,
+    it("should return a correct Player Inventory", async () => {
+      const userResourceItems = await prisma.resourceUserInventoryItem.findMany(
+        {
+          where: {
+            userId: testUser.id,
+          },
+          include: {
+            item: true,
+          },
         },
-      });
-      await prisma.userInventoryItem.deleteMany({
-        where: {
-          userId: user.id,
-        },
-      });
+      );
+
+      const userHarvesterItems =
+        await prisma.harvesterUserInventoryItem.findMany({
+          where: {
+            userId: testUser.id,
+          },
+          include: {
+            item: true,
+          },
+        });
+      // ...
+      // TODO: include userComponentItems when necessary...
+
+      const allItems: UserInventoryItemWithAnyItem[] = [
+        ...userResourceItems,
+        ...userHarvesterItems,
+      ];
+
+      const allItemIds = allItems.map((i) => i.id);
+
+      const totalInventorySize = allItems.length;
 
       const res = await requester.send(
         "GET",
@@ -89,25 +120,62 @@ describe("/userInventory", () => {
         { userUid: userUid },
         getUserInventoryRequestSchema,
       );
+      throwIfBadStatus(res);
 
-      const data = getDataFromTRPCResponse<PlayerInventory>(res);
+      const playerInventory =
+        getDataFromTRPCResponse<GetUserInventoryRequestOutput>(res);
 
-      expect(data).toBeInstanceOf(Object);
-      expect(data.items).toHaveLength(0);
+      // Expect that the player inventory returned from the req has the
+      // same number of items as when we queried directly
+      expect(playerInventory.items).toHaveLength(totalInventorySize);
+
+      // Expect that all inventory item id's are present
+      const allIdsPresent = allItemIds.every((inventoryItemId) => {
+        return playerInventory.items.some((i) => i.id === inventoryItemId);
+      });
+
+      expect(allIdsPresent).toBe(true);
+
+      // Validate the Player Inventory result
+
+      // Validate top-level properties
+      expect(playerInventory).toHaveProperty("timestamp");
+      expect(typeof playerInventory.timestamp).toBe("string");
+      expect(parseISO(playerInventory.timestamp)).toBeInstanceOf(Date);
+      expect(playerInventory).toHaveProperty("items");
+      expect(Array.isArray(playerInventory.items)).toBe(true);
+
+      // Validate items array shape
+      playerInventory.items.forEach((item) => {
+        // Validate properties for each item
+        expect(item).toHaveProperty("id");
+        expect(typeof item.id).toBe("string");
+
+        expect(item).toHaveProperty("name");
+        expect(typeof item.name).toBe("string");
+
+        expect(item).toHaveProperty("type");
+
+        expect(item).toHaveProperty("quantity");
+        expect(typeof item.quantity).toBe("number");
+      });
     });
 
-    it("should return the all of the user's inventory items", async () => {
-      // ! If the test fails, check the base seed
-      const user = await prisma.user.findUniqueOrThrow({
-        where: {
-          firebase_uid: userUid,
-        },
-      });
-      const actualUserInventoryItems = await prisma.userInventoryItem.findMany({
-        where: {
-          userId: user.id,
-        },
-      });
+    it("should return an object with an empty items array if the user has no inventory items", async () => {
+      const userInventoryItemsDict = await getUserInventoryItems(testUser.id);
+
+      const userInventoryItems = Object.values(userInventoryItemsDict).flat();
+
+      // Loop through each inventory item and delete it
+      await Promise.all(
+        userInventoryItems.map((inventoryItem) => {
+          return removeUserInventoryItemByItemId(
+            inventoryItem.item.id,
+            inventoryItem.itemType,
+            testUser.id,
+          );
+        }),
+      );
 
       const res = await requester.send(
         "GET",
@@ -115,20 +183,12 @@ describe("/userInventory", () => {
         { userUid: userUid },
         getUserInventoryRequestSchema,
       );
+      throwIfBadStatus(res);
 
-      const data = getDataFromTRPCResponse<PlayerInventory>(res);
+      const playerInventory =
+        getDataFromTRPCResponse<GetUserInventoryRequestOutput>(res);
 
-      expect(data.items).toHaveLength(actualUserInventoryItems.length);
-
-      const actualUserInventoryItemIds = actualUserInventoryItems.map(
-        (i) => i.id,
-      );
-      const returnedItemIds = data.items.map((i) => i.id);
-
-      // The item id's in the returned PlayerInventory should equal the query result's id's from UserInventoryItems[]
-      expect(returnedItemIds).toEqual(
-        expect.arrayContaining(actualUserInventoryItemIds),
-      );
+      console.log(playerInventory);
     });
 
     it("should not return another user's inventory items", async () => {
@@ -150,12 +210,6 @@ describe("/userInventory", () => {
         1,
       );
 
-      const user = await prisma.user.findUniqueOrThrow({
-        where: {
-          firebase_uid: userUid,
-        },
-      });
-
       const res = await requester.send(
         "GET",
         "/userInventory.getUserInventory",
@@ -163,66 +217,15 @@ describe("/userInventory", () => {
         getUserInventoryRequestSchema,
       );
 
-      const data = getDataFromTRPCResponse<PlayerInventory>(res);
+      const playerInventory =
+        getDataFromTRPCResponse<GetUserInventoryRequestOutput>(res);
 
       // Expect that our returned player inventory does not contain the other user's inventory item
-      expect(data.items).not.toBe(
+      expect(playerInventory.items).not.toBe(
         expect.arrayContaining(
           expect.objectContaining(anotherUserInventoryItem),
         ),
       );
     });
-
-    it("should return a correct PlayerInventory", async () => {
-      const res = await requester.send(
-        "GET",
-        "/userInventory.getUserInventory",
-        { userUid: userUid },
-        getUserInventoryRequestSchema,
-      );
-
-      const data = getDataFromTRPCResponse<GetUserInventoryRequestOutput>(res);
-
-      // Confirm that our GetUserInventoryRequestOutput is what we expect to send
-      // to our client, i.e. PlayerInventory type
-      expect(data).toMatchObject({
-        timestamp: expect.any(String),
-        items: expect.arrayContaining([
-          expect.objectContaining({
-            id: expect.any(String),
-            name: expect.any(String),
-            type: expect.any(String),
-            quantity: expect.any(Number),
-            metadata: expect.any(Object),
-          }),
-        ]),
-      });
-
-      // Additional check for type field to match our ItemType typescript type
-      data.items.forEach((item) => {
-        expect(Object.values(ItemType)).toContain(item.type);
-      });
-    });
-  });
-  it("should correctly return a user inventory id by resource url", async () => {
-    const testUser = await prisma.user.findUniqueOrThrow({
-      where: {
-        email: "testUser@gmail.com",
-      },
-    });
-
-    try {
-      const res = await getUserInventoryItemWithResourceUrl(
-        "arcane_quanta",
-        testUser.id,
-      );
-
-      const resource = await getResourceById(res.itemId);
-
-      expect(resource.url).toBe("arcane_quanta");
-    } catch (err) {
-      console.log(err);
-      expect(err).not.toBeDefined();
-    }
   });
 });

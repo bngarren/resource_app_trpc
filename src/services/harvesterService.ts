@@ -1,6 +1,5 @@
 import { getHarvestOperationsWithResetDateForHarvesterId } from "./../queries/queryHarvestOperation";
 import { pdate, pduration } from "../util/getPrettyDate";
-import { arcaneEnergyResourceMetadataSchema } from "./../schema/index";
 import { getAllSettled } from "./../util/getAllSettled";
 import {
   HarvestOperation,
@@ -9,7 +8,6 @@ import {
   Resource,
   ResourceType,
   SpawnedResource,
-  UserInventoryItem,
   Prisma,
 } from "@prisma/client";
 import {
@@ -19,9 +17,9 @@ import {
 } from "../queries/queryHarvester";
 import {
   updateCreateOrRemoveUserInventoryItemWithNewQuantity,
-  getInventoryItemFromUserInventoryItem,
-  removeUserInventoryItemByItemId,
   validateUserInventoryItemTransfer,
+  removeUserInventoryItemByItemId,
+  getPlayerInventoryItemFromUserInventoryItem,
 } from "./userInventoryService";
 import { prisma } from "../prisma";
 import { TRPCError } from "@trpc/server";
@@ -45,9 +43,9 @@ import {
   isBefore,
   min,
 } from "date-fns";
-import { validateWithZod } from "../util/validateWithZod";
 import { SagaBuilder } from "../util/saga";
 import { prefixedError } from "../util/prefixedError";
+import { ArcaneEnergyResource, UserInventoryItemWithItem } from "../types";
 
 /**
  * ### Gets a Harvester
@@ -442,7 +440,7 @@ export const calculatePeriodHarvested = (
  * this would leave 10units - 180 min/36 min per unit = 5 units remaining.
  * @param initialEnergy - the amount of energy in the harvest at the start time
  * @param minutesLapsed - time since the start time, in minutes (keep floating point precision)
- * @param energyEfficiency - the energy efficiency (from the metadata)
+ * @param energyEfficiency - the energy efficiency
  * @returns amount of energy (units), float
  */
 export const calculateRemainingEnergy = (
@@ -468,28 +466,25 @@ export const calculateRemainingEnergy = (
  * @returns Resource
  */
 export const verifyArcaneEnergyResource = async (resourceId: string) => {
-  let energyResource: Resource;
+  let resource: Resource;
   try {
-    energyResource = await getResource(resourceId);
+    resource = await getResource(resourceId);
   } catch (error) {
     throw new TRPCError({
-      message: `Couldn't find Resource with id=${resourceId}`,
+      message: `Couldn't find Resource with id=${resourceId}.`,
       code: "NOT_FOUND",
     });
   }
 
   // Check validity of this Resource (has to be an ARCANE_ENERGY resource type)
-  if (energyResource.resourceType !== ResourceType.ARCANE_ENERGY) {
+  if (resource.resourceType !== ResourceType.ARCANE_ENERGY) {
     throw new TRPCError({
       message: `Resource with id=${resourceId} is not an Arcane Energy type`,
       code: "NOT_FOUND",
     });
   }
-  return energyResource as Resource & {
-    resourceType: "ARCANE_ENERGY";
-  } as Resource;
+  return resource as ArcaneEnergyResource;
 };
-
 /**
  * ### Adds or removes energy from Harvester
  * - This will trigger an update of all the harvester's HarvestOperations based on a fresh
@@ -530,7 +525,6 @@ export const verifyArcaneEnergyResource = async (resourceId: string) => {
  * #### Throws errors:
  * - If energySourceId doesn't locate a Resource in the database, by id - throws NOT_FOUND
  * - If energySourceId doesn't represent an Arcane Energy Resource, by id - throws NOT_FOUND
- * - If the resource metadata isn't valid with regards to our Zod schema, will throw generic Error
  * - If the energySourceId is different than the pre-existing energy in the harvester - throws CONFLICT
  *
  * @param _harvester - either pass the harvesterId or the Harvester
@@ -554,17 +548,10 @@ export const handleTransferEnergy = async (
   // - - - - Get RESOURCE info - - - -
   const energyResource = await verifyArcaneEnergyResource(energySourceId);
 
-  // Extract the metadata information from the resource.
-  // We use Zod schema to verify that the metadata json returned from the database is what we expected
-  const metadata = validateWithZod(
-    arcaneEnergyResourceMetadataSchema,
-    energyResource.metadata,
-    `metadata for ${energyResource.url}`,
-  );
-
   // Calculate minutesPerEnergyUnit
   const minutesPerEnergyUnit =
-    config.base_minutes_per_arcane_energy_unit * metadata.energyEfficiency;
+    config.base_minutes_per_arcane_energy_unit *
+    energyResource.energyEfficiency;
 
   // - - - - - Get the Harvester - - - - -
   // Get the harvester (either from passed in Harvester or from harvesterId)
@@ -602,7 +589,7 @@ export const handleTransferEnergy = async (
 
   // If we are going to use the user's inventory, we must first make some checks about
   // the user HAVING enough resource to do this, if necessary
-  let orig_energyResourceUserInventoryItem: UserInventoryItem;
+  let orig_energyResourceUserInventoryItem: UserInventoryItemWithItem<"RESOURCE">;
   if (shouldUpdateUserInventory) {
     try {
       orig_energyResourceUserInventoryItem =
@@ -659,7 +646,7 @@ export const handleTransferEnergy = async (
       remainingEnergy = calculateRemainingEnergy(
         harvester.initialEnergy,
         minutesLapsed,
-        metadata.energyEfficiency,
+        energyResource.energyEfficiency,
       );
     }
   } else {
@@ -828,7 +815,9 @@ export const handleCollect = async (userId: string, harvesterId: string) => {
     );
   // Return a client facing InventoryItem
   // TODO: will need to return an array of InventoryItems for multiple collected resources...
-  return await getInventoryItemFromUserInventoryItem(resultUserInventoryItem);
+  return await getPlayerInventoryItemFromUserInventoryItem(
+    resultUserInventoryItem,
+  );
 };
 
 /**
@@ -853,12 +842,8 @@ export const handleReclaim = async (harvesterId: string) => {
    * See `handleTransferEnergy()` for details on energy calculations, which are mirrored below
    */
   if (harvester.energySourceId != null) {
-    const energyResource = await getResource(harvester.energySourceId);
-
-    const metadata = validateWithZod(
-      arcaneEnergyResourceMetadataSchema,
-      energyResource.metadata,
-      `metadata for ${energyResource.url}`,
+    const energyResource = await verifyArcaneEnergyResource(
+      harvester.energySourceId,
     );
 
     // If harvester already had energy, calculate the remaining amount
@@ -878,7 +863,7 @@ export const handleReclaim = async (harvesterId: string) => {
         remainingEnergy = calculateRemainingEnergy(
           harvester.initialEnergy,
           minutesLapsed,
-          metadata.energyEfficiency,
+          energyResource.energyEfficiency,
         );
       }
     }

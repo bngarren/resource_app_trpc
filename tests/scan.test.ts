@@ -225,6 +225,7 @@ describe("/scan", () => {
   // -------------------------------------------------
   it("should handle a database error (bad state/migration), i.e missing Resources and return status code 500", async () => {
     // Let's setup this test by clearing the Resources table (which should have been seeded already)
+    await prisma.resourceUserInventoryItem.deleteMany(); // first delete these to avoid a foreign key error
     await prisma.resource.deleteMany();
 
     // Create a spy on getRandomResource and mock it to throw an error
