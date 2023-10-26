@@ -113,9 +113,9 @@ if (!config.shouldCreateHTTPSServer) {
   server = https.createServer(credentials, app);
 }
 
-async function main() {
-  logger.info(message);
+logger.info(message);
 
+async function main() {
   // We can turn protected routes off for API testing, debugging, etc.
   if (!config.use_protected_routes) {
     logger.warn(

@@ -44,10 +44,10 @@ describe("/userInventory", () => {
   describe("/userInventory.getUserInventory", () => {
     let testUser: User;
 
-    beforeAll(async () => {
+    beforeEach(async () => {
       testUser = await prisma.user.findUniqueOrThrow({
         where: {
-          email: "testUser@gmail.com",
+          firebase_uid: userUid,
         },
       });
     });
@@ -81,7 +81,7 @@ describe("/userInventory", () => {
       expect(res.statusCode).toBe(200);
     });
 
-    it("should return a correct Player Inventory", async () => {
+    it("should return a correct Player Inventory$", async () => {
       const userResourceItems = await prisma.resourceUserInventoryItem.findMany(
         {
           where: {
@@ -161,21 +161,28 @@ describe("/userInventory", () => {
       });
     });
 
-    it("should return an object with an empty items array if the user has no inventory items", async () => {
+    it("should return an object with an empty items array if the user has no inventory items$", async () => {
       const userInventoryItemsDict = await getUserInventoryItems(testUser.id);
 
       const userInventoryItems = Object.values(userInventoryItemsDict).flat();
 
-      // Loop through each inventory item and delete it
-      await Promise.all(
-        userInventoryItems.map((inventoryItem) => {
-          return removeUserInventoryItemByItemId(
-            inventoryItem.item.id,
-            inventoryItem.itemType,
-            testUser.id,
-          );
-        }),
-      );
+      try {
+        // Loop through each inventory item and delete it
+        await Promise.all(
+          userInventoryItems.map((inventoryItem) => {
+            return removeUserInventoryItemByItemId(
+              inventoryItem.item.id,
+              inventoryItem.itemType,
+              testUser.id,
+            );
+          }),
+        );
+      } catch (err) {
+        console.error(
+          "Unexpected error when removing user inventory items",
+          err,
+        );
+      }
 
       const res = await requester.send(
         "GET",
@@ -188,7 +195,7 @@ describe("/userInventory", () => {
       const playerInventory =
         getDataFromTRPCResponse<GetUserInventoryRequestOutput>(res);
 
-      console.log(playerInventory);
+      expect(playerInventory.items).toHaveLength(0);
     });
 
     it("should not return another user's inventory items", async () => {

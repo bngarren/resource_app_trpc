@@ -144,7 +144,7 @@ export const upsertUserInventoryItem = async (
   };
 
   switch (data.itemType) {
-    case ItemType.HARVESTER:
+    case ItemType.RESOURCE:
       if (isResourceInput(data)) {
         return await prisma_upsertResourceUserInventoryItem({
           ...data,
@@ -177,20 +177,26 @@ export const removeUserInventoryItemByItemId = async <T extends ItemType>(
   itemType: T,
   userId: string,
 ) => {
+  let removedUserInventoryItem: UserInventoryItemWithItem<T>;
+
   switch (itemType) {
-    case "RESOURCE":
-      return (await prisma_deleteResourceUserInventoryItem(
+    case ItemType.RESOURCE:
+      removedUserInventoryItem = (await prisma_deleteResourceUserInventoryItem(
         itemId,
         userId,
       )) as UserInventoryItemWithItem<T>;
-    case "HARVESTER":
-      return (await prisma_deleteHarvesterUserInventoryItem(
+      break;
+    case ItemType.HARVESTER:
+      removedUserInventoryItem = (await prisma_deleteHarvesterUserInventoryItem(
         itemId,
         userId,
       )) as UserInventoryItemWithItem<T>;
+      break;
     default:
       throw new Error(`Invalid itemType (${itemType})s`);
   }
+  logger.debug(removedUserInventoryItem, `Removed inventory item`);
+  return removedUserInventoryItem;
 };
 
 /**
