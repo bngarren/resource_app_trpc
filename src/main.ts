@@ -114,6 +114,7 @@ if (!config.shouldCreateHTTPSServer) {
 }
 
 logger.info(message);
+console.info(message);
 
 async function main() {
   // We can turn protected routes off for API testing, debugging, etc.
@@ -134,7 +135,12 @@ async function main() {
   // Usually HTTPS traffic is on 443
   server.listen(config.server_port, () => {
     logger.info(
-      `Server start: ${startTime.toLocaleDateString()} at ${startTime.toLocaleTimeString()}`,
+      `Server start: ${startTime.toLocaleDateString()} at ${startTime.toLocaleTimeString(
+        "en-US",
+        {
+          timeZone: "America/New_York",
+        },
+      )}`,
     );
   });
 }
