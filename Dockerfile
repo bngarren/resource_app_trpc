@@ -80,8 +80,8 @@ COPY .env.common .env.test ./
 # Run prisma generate 
 RUN dotenv -e .env.test npx prisma generate
 
-COPY entrypoint.testing.docker.sh ./
-RUN chmod +x entrypoint.testing.docker.sh
+COPY docker-testing/entrypoint.testing.docker.sh ./docker-testing/
+RUN chmod +x ./docker-testing/entrypoint.testing.docker.sh
 
 COPY . .
 
