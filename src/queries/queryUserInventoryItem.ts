@@ -275,7 +275,7 @@ export const prisma_deleteResourceUserInventoryItem = async (
   userId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<UserInventoryItemWithItem<"RESOURCE">> => {
-  return (await prismaClient.resourceUserInventoryItem.delete({
+  return await prismaClient.resourceUserInventoryItem.delete({
     where: {
       userId_resourceId: {
         userId,
@@ -285,7 +285,7 @@ export const prisma_deleteResourceUserInventoryItem = async (
     include: {
       item: true,
     },
-  })) as UserInventoryItemWithItem<"RESOURCE">;
+  });
 };
 
 /**
@@ -298,7 +298,7 @@ export const prisma_deleteHarvesterUserInventoryItem = async (
   userId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<UserInventoryItemWithItem<"HARVESTER">> => {
-  return (await prismaClient.harvesterUserInventoryItem.delete({
+  return await prismaClient.harvesterUserInventoryItem.delete({
     where: {
       userId_harvesterId: {
         userId,
@@ -308,5 +308,5 @@ export const prisma_deleteHarvesterUserInventoryItem = async (
     include: {
       item: true,
     },
-  })) as UserInventoryItemWithItem<"HARVESTER">;
+  });
 };

@@ -11,6 +11,7 @@ import * as ScanService from "../src/services/scanService";
 import * as QueryResource from "../src/queries/queryResource";
 import { Coordinate } from "../src/types";
 import { Prisma } from "@prisma/client";
+import { logger } from "../src/logger/logger";
 
 /**
  * ### Helper function to extract data from a TRPC response
@@ -176,7 +177,7 @@ export const mockScan = async (
   numberOfSpawnedResources: number,
   server: Server,
   idToken: string,
-) => {
+): Promise<ScanRequestOutput> => {
   if (numberOfSpawnedResources < 0 || numberOfSpawnedResources > 3) {
     throw new Error(
       `Number of spawned resources (${numberOfSpawnedResources}) is out of range (0 to 3)`,
@@ -391,6 +392,8 @@ export const resetPrisma = async () => {
   // - - - - - - - - - NEXT, re-seed our test data - - - - - - - -
 
   await setupBaseSeed(prisma);
+
+  logger.debug(`Prisma/Database Reset complete.`);
 };
 
 /**
