@@ -5,7 +5,7 @@ services:
     build:
       context: .
       target: staging
-    entrypoint: ["/bin/bash", "./entrypoint.staging.docker.sh"]
+    entrypoint: ["/bin/bash", "./docker-staging/entrypoint.staging.docker.sh"]
     ports:
     # This setting actually makes the application accessible from outside the Docker container
     # <host>:<container> 
@@ -24,7 +24,7 @@ services:
     build:
       context: .
       target: testing
-    entrypoint: ["/bin/bash", "./entrypoint.testing.docker.sh"]
+    entrypoint: ["/bin/bash", "./docker-testing/entrypoint.testing.docker.sh"]
     ports:
       - "2025:2025"
       - "9229:9229" #expose the debug port to the outside world

@@ -57,8 +57,8 @@ RUN dotenv -e .env.staging npx prisma generate
 COPY resource_app_trpc_https.cert resource_app_trpc_https.key ./
 
 # Entrypoint scripts are copied to the Docker image during build and have the execute permission
-COPY entrypoint.staging.docker.sh ./
-RUN chmod +x entrypoint.staging.docker.sh
+COPY docker-staging/entrypoint.staging.docker.sh ./docker-staging/
+RUN chmod +x ./docker-staging/entrypoint.staging.docker.sh
 
 EXPOSE 2024
 
@@ -80,8 +80,8 @@ COPY .env.common .env.test ./
 # Run prisma generate 
 RUN dotenv -e .env.test npx prisma generate
 
-COPY entrypoint.testing.docker.sh ./
-RUN chmod +x entrypoint.testing.docker.sh
+COPY docker-testing/entrypoint.testing.docker.sh ./docker-testing/
+RUN chmod +x ./docker-testing/entrypoint.testing.docker.sh
 
 COPY . .
 

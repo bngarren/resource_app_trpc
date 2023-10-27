@@ -15,7 +15,17 @@ printf "${PREFIX}${LIGHT_BLUE}Do you wish to rebuild the Docker images? [y/n]${N
 
 read answer
 
+printf "${PREFIX}${LIGHT_BLUE}Do you wish to rebuild the database volume? [y/n]${NC} "
+
+read answer2
+
+if [ "$answer2" != "${answer2#[Yy]}" ] ;then
+    printf "${PREFIX}${LIGHT_BLUE}Removing volume (resource_app_trpc_dbdata_staging)...${NC}\n"
+    docker volume rm resource_app_trpc_dbdata_staging
+fi
+
 if [ "$answer" != "${answer#[Yy]}" ] ;then
+
     printf "${PREFIX}${LIGHT_BLUE}Rebuilding Docker images...${NC}\n"
     docker-compose down
     docker-compose build app_staging
@@ -30,8 +40,9 @@ printf "\n${PREFIX}${LIGHT_BLUE}Container is READY.${NC}\n\n"
 while true; do
     printf "\n${PREFIX}${LIGHT_BLUE}Select an option:${NC}\n"
     printf "${PURPLE}1. Bash${NC}\n"
-    printf "${PURPLE}2. Prisma Reset${NC}\n"
-    printf "${PURPLE}3. Logs${NC}\n"
+    printf "${PURPLE}2. Reset database${NC}\n"
+    printf "${PURPLE}3. Seed database${NC}\n"
+    printf "${PURPLE}4. Log (follow)${NC}\n"
     printf "${PURPLE}*Press enter to exit with docker-compose down${NC}\n\n"
 
     read -p "Choose option: " option
@@ -44,10 +55,13 @@ while true; do
             ;;
         2)
             docker-compose exec app_staging npx prisma migrate reset --skip-seed
-            docker-compose exec app_staging node dist/prisma/seed.js
             ;;
         3)
-            docker-compose logs -t
+            docker-compose exec app_staging node dist/prisma/seed.js
+            ;;
+        4)
+            # Run docker-compose logs
+            docker-compose logs --timestamps --follow
             ;;
         *)
             printf "${PREFIX}${LIGHT_BLUE}See ya! Docker-compose down...${NC}\n\n"
