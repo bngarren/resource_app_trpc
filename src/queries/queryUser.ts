@@ -6,7 +6,7 @@ import { PrismaClientOrTransaction, prisma } from "../prisma";
  * @param prismaClient
  * @returns
  */
-export const getUserByFirebaseUid = async (
+export const prisma_getUserByFirebaseUid = async (
   uid: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {

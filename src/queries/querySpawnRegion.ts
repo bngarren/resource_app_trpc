@@ -6,27 +6,9 @@ import {
 } from "../types";
 
 /**
- * ### Gets the Spawn Region that owns/owned a SpawnedResource, by id
- * @param spawnedResourceId
- * @param prismaClient
- * @returns
+ * ### Creates a new SpawnRegion
  */
-export const getSpawnRegionBySpawnedResourceId = async (
-  spawnedResourceId: string,
-  prismaClient: PrismaClientOrTransaction = prisma,
-) => {
-  const res = await prismaClient.spawnedResource.findUniqueOrThrow({
-    where: {
-      id: spawnedResourceId,
-    },
-    select: {
-      spawnRegion: true,
-    },
-  });
-  return res.spawnRegion;
-};
-
-export const createSpawnRegion = async (
+export const prisma_createSpawnRegion = async (
   model: Prisma.SpawnRegionCreateInput,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<SpawnRegion> => {
@@ -35,7 +17,10 @@ export const createSpawnRegion = async (
   });
 };
 
-export const createSpawnRegions = async (
+/**
+ * ### Creates multiple new SpawnRegions
+ */
+export const prisma_createSpawnRegions = async (
   models: Prisma.SpawnRegionCreateManyInput[],
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<SpawnRegion[]> => {
@@ -56,9 +41,29 @@ export const createSpawnRegions = async (
 };
 
 /**
- * Returns an array of SpawnRegions, given an array of h3 indices that represent these regions
+ * ### Gets the Spawn Region that owns/owned a SpawnedResource, by id
+ * - A spawn region is still associated with an inactive SpawnedResource
  */
-export const getSpawnRegionsFromH3Indices = async (
+export const prisma_getSpawnRegionBySpawnedResourceId = async (
+  spawnedResourceId: string,
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  const res = await prismaClient.spawnedResource.findUniqueOrThrow({
+    where: {
+      id: spawnedResourceId,
+    },
+    select: {
+      spawnRegion: true,
+    },
+  });
+  return res.spawnRegion;
+};
+
+/**
+ * ### Returns an array of SpawnRegions, given an array of h3 indices that represent these regions
+ * - An h3Index must be the correct resolution, i.e. `config.spawn_region_h3_resolution`.
+ */
+export const prisma_getSpawnRegionsFromH3Indices = async (
   h3Indices: string[],
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<SpawnRegion[]> => {
@@ -74,16 +79,12 @@ export const getSpawnRegionsFromH3Indices = async (
 };
 
 /**
- * ### Returns a SpawnRegion based on the id.
+ * ### Gets a SpawnRegion, by id (primary key).
  *
  * This function does **NOT** return the associated SpawnedResources. For that,
  * use `getSpawnRegionWithResources`
- *
- * @param id
- * @param prismaClient
- * @returns SpawnRegion
  */
-export const getSpawnRegion = async (
+export const prisma_getSpawnRegion = async (
   id: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
@@ -93,7 +94,7 @@ export const getSpawnRegion = async (
 };
 
 /**
- * ### Returns a SpawnRegion based on the id and includes its associated resources.
+ * ### Gets a SpawnRegion, by id (primary key), and includes its associated resources.
  *
  * The `resources` property of the returned SpawnRegionWithResources is an array
  * of `SpawnedResourceWithResource`, which includes the SpawnedResource and
@@ -117,7 +118,7 @@ export const getSpawnRegion = async (
  * @param prismaClient
  * @returns SpawnRegionWithResources
  */
-export const getSpawnRegionWithResources = async (
+export const prisma_getSpawnRegionWithResources = async (
   id: string,
   includeInactive = false,
   prismaClient: PrismaClientOrTransaction = prisma,
@@ -164,11 +165,11 @@ export const getSpawnRegionWithResources = async (
 };
 
 /**
- * Use this function to update a SpawnRegion in the database.
+ * ### Updates a SpawnRegion, by id (primary key).
  *
- * E.g. We use it for updating the reset_date
+ * E.g. For updating the reset_date
  */
-export const updateSpawnRegion = async (
+export const prisma_updateSpawnRegion = async (
   id: string,
   partialModel: Prisma.SpawnRegionUpdateInput,
   prismaClient: PrismaClientOrTransaction = prisma,

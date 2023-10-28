@@ -35,13 +35,8 @@ import {
   getUserInventoryItemWithItemId,
   getUserInventoryItems,
 } from "../src/services/userInventoryService";
-import { updateHarvesterById } from "../src/queries/queryHarvester";
 import { ScanRequestOutput } from "../src/types/trpcTypes";
-import {
-  getResourceByUrl,
-  getSpawnedResourcesForSpawnRegion,
-  updateSpawnedResources,
-} from "../src/queries/queryResource";
+
 import config from "../src/config";
 import {
   addDays,
@@ -58,6 +53,12 @@ import {
 } from "date-fns";
 import * as HarvesterService from "../src/services/harvesterService";
 import * as QueryHarvester from "../src/queries/queryHarvester";
+import { prisma_updateHarvesterById } from "../src/queries/queryHarvester";
+import {
+  prisma_getResourceByUrl,
+  prisma_getSpawnedResourcesForSpawnRegion,
+  prisma_updateSpawnedResources,
+} from "../src/queries/queryResource";
 
 describe("/harvester", () => {
   let server: Server;
@@ -338,13 +339,13 @@ describe("/harvester", () => {
         },
       });
 
-      const spawnedResources = await getSpawnedResourcesForSpawnRegion(
+      const spawnedResources = await prisma_getSpawnedResourcesForSpawnRegion(
         spawnRegion.id,
       );
 
       // make the first spawned resource 'inactive'
       const inactiveSpawnedResource = spawnedResources[0];
-      await updateSpawnedResources([inactiveSpawnedResource.id], {
+      await prisma_updateSpawnedResources([inactiveSpawnedResource.id], {
         isActive: false,
       });
 
@@ -639,7 +640,7 @@ describe("/harvester", () => {
       throwIfBadStatus(h);
 
       // Manually back-date the Harvester's energyStartTime to simulate time has passed
-      await updateHarvesterById(testHarvester.id, {
+      await prisma_updateHarvesterById(testHarvester.id, {
         energyStartTime: subHours(new Date(), 1), // mimic 1 hour ago
       });
 
@@ -880,7 +881,7 @@ describe("/harvester", () => {
 
       it("should correctly add energy to a harvester that already has energy", async () => {
         // choose the energy resource
-        const _arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+        const _arcaneQuanta = await prisma_getResourceByUrl("arcane_quanta"); // from base seed
 
         const arcaneQuanta = await verifyArcaneEnergyResource(_arcaneQuanta.id);
 
@@ -1085,7 +1086,7 @@ describe("/harvester", () => {
         }
 
         // choose the energy resource
-        const _arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+        const _arcaneQuanta = await prisma_getResourceByUrl("arcane_quanta"); // from base seed
 
         const arcaneQuanta = await verifyArcaneEnergyResource(_arcaneQuanta.id);
 
@@ -1426,15 +1427,15 @@ describe("/harvester", () => {
           pre_TestHarvester.id,
         );
 
-        // Mock the updateHarvesterById function to throw Error
-        const spy_updateHarvesterById = jest
-          .spyOn(QueryHarvester, "updateHarvesterById")
+        // Mock the prisma_updateHarvesterById function to throw Error
+        const spy_prisma_updateHarvesterById = jest
+          .spyOn(QueryHarvester, "prisma_updateHarvesterById")
           .mockRejectedValueOnce(
             new Error("Mock error - e.g. database problem"),
           );
 
         // choose the energy resource
-        const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+        const arcaneQuanta = await prisma_getResourceByUrl("arcane_quanta"); // from base seed
 
         const amount = 3;
 
@@ -1463,12 +1464,12 @@ describe("/harvester", () => {
         // There should have been no net change to harvest operations (i.e. changes were rolled back)
         expect(post_HarvestOperations).toEqual(pre_HarvestOperations);
 
-        spy_updateHarvesterById.mockRestore();
+        spy_prisma_updateHarvesterById.mockRestore();
       });
 
       it.skip("should test how many prisma queries for /harvester.transferEnergy, add energy", async () => {
         // choose the energy resource
-        const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+        const arcaneQuanta = await prisma_getResourceByUrl("arcane_quanta"); // from base seed
 
         const amount = 3;
 
@@ -1530,7 +1531,7 @@ describe("/harvester", () => {
         }
 
         // choose the energy resource
-        const _arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+        const _arcaneQuanta = await prisma_getResourceByUrl("arcane_quanta"); // from base seed
 
         const arcaneQuanta = await verifyArcaneEnergyResource(_arcaneQuanta.id);
 
@@ -1657,7 +1658,7 @@ describe("/harvester", () => {
         }
 
         // choose the energy resource
-        const arcaneQuanta = await getResourceByUrl("arcane_quanta"); // from base seed
+        const arcaneQuanta = await prisma_getResourceByUrl("arcane_quanta"); // from base seed
 
         const amountAdd = 5;
         const res1 = await requester.send(

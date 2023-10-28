@@ -1,33 +1,33 @@
 import {
-  createSpawnRegion,
-  createSpawnRegions,
-  getSpawnRegionBySpawnedResourceId,
-  getSpawnRegionWithResources,
+  prisma_createSpawnRegion,
+  prisma_createSpawnRegions,
+  prisma_getSpawnRegionBySpawnedResourceId,
+  prisma_getSpawnRegionWithResources,
 } from "../queries/querySpawnRegion";
 import { Prisma } from "@prisma/client";
-import { updateSpawnedResourcesForSpawnRegionTransaction } from "../queries/queryResource";
+import { prisma_updateSpawnedResourcesForSpawnRegionTransaction } from "../queries/queryResource";
 import { SpawnRegionWithResources } from "../types";
 import { logger } from "../logger/logger";
 
 // TODO: Probably not the best to just re-export a database method.
-export { getSpawnRegionsFromH3Indices as getRegionsFromH3Array } from "../queries/querySpawnRegion";
+export { prisma_getSpawnRegionsFromH3Indices as getRegionsFromH3Array } from "../queries/querySpawnRegion";
 
 export const getSpawnRegionParentOfSpawnedResource = async (
   spawnedResourceId: string,
 ) => {
-  return await getSpawnRegionBySpawnedResourceId(spawnedResourceId);
+  return await prisma_getSpawnRegionBySpawnedResourceId(spawnedResourceId);
 };
 
 export const handleCreateSpawnRegion = async (
   spawnRegionModel: Prisma.SpawnRegionCreateInput,
 ) => {
-  return await createSpawnRegion(spawnRegionModel);
+  return await prisma_createSpawnRegion(spawnRegionModel);
 };
 
 export const handleCreateSpawnRegions = async (
   spawnRegionModels: Prisma.SpawnRegionCreateManyInput[],
 ) => {
-  return await createSpawnRegions(spawnRegionModels);
+  return await prisma_createSpawnRegions(spawnRegionModels);
 };
 
 /**
@@ -55,10 +55,10 @@ export const updateSpawnRegion = async (
   try {
     // Get an updated SpawnRegion (only a partial because it does not include all the Resource models)
     const _updatedSpawnRegion =
-      await updateSpawnedResourcesForSpawnRegionTransaction(spawnRegionId);
+      await prisma_updateSpawnedResourcesForSpawnRegionTransaction(spawnRegionId);
 
     // Re-query to get all the resources included
-    const updatedSpawnRegion = await getSpawnRegionWithResources(
+    const updatedSpawnRegion = await prisma_getSpawnRegionWithResources(
       _updatedSpawnRegion.id,
     );
 

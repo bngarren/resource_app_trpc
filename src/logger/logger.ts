@@ -2,13 +2,7 @@ import fs from "fs";
 import pino from "pino";
 import config from "../config";
 import path from "path";
-// import * as pretty from "pino-pretty";
-
-let pretty: any;
-
-if (["development", "testing"].includes(config.node_env)) {
-  pretty = import("pino-pretty").then((module) => module);
-}
+import * as pretty from "pino-pretty";
 
 const devLogger = () =>
   pino({

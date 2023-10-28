@@ -1,4 +1,4 @@
-import { getHarvestOperationsWithResetDateForHarvesterId } from "./../queries/queryHarvestOperation";
+import { prisma_getHarvestOperationsWithResetDateForHarvesterId } from "./../queries/queryHarvestOperation";
 import { pdate, pduration } from "../util/getPrettyDate";
 import { getAllSettled } from "./../util/getAllSettled";
 import {
@@ -11,9 +11,9 @@ import {
   Prisma,
 } from "@prisma/client";
 import {
-  getHarvesterById,
-  getHarvestersByUserId,
-  updateHarvesterById,
+  prisma_getHarvesterById,
+  prisma_getHarvestersByUserId,
+  prisma_updateHarvesterById,
 } from "../queries/queryHarvester";
 import {
   updateCreateOrRemoveUserInventoryItemWithNewQuantity,
@@ -24,14 +24,14 @@ import {
 import { prisma } from "../prisma";
 import { TRPCError } from "@trpc/server";
 import {
-  createHarvestOperationsTransaction,
-  deleteHarvestOperationsForHarvesterId,
-  getHarvestOperationsForHarvesterId,
-  updateHarvestOperationsTransaction,
+  prisma_createHarvestOperationsTransaction,
+  prisma_deleteHarvestOperationsForHarvesterId,
+  prisma_getHarvestOperationsForHarvesterId,
+  prisma_updateHarvestOperationsTransaction,
 } from "../queries/queryHarvestOperation";
 import config from "../config";
 import { getSpawnRegionsAround } from "../util/getSpawnRegionsAround";
-import { getSpawnedResourcesForSpawnRegion } from "../queries/queryResource";
+import { prisma_getSpawnedResourcesForSpawnRegion } from "../queries/queryResource";
 import { getDistanceBetweenCells } from "../util/getDistanceBetweenCells";
 import { logger } from "../logger/logger";
 import { getResource } from "./resourceService";
@@ -55,7 +55,7 @@ import { ArcaneEnergyResource, UserInventoryItemWithItem } from "../types";
  * @returns
  */
 export const getHarvester = async (harvesterId: string) => {
-  return await getHarvesterById(harvesterId);
+  return await prisma_getHarvesterById(harvesterId);
 };
 
 /**
@@ -65,7 +65,7 @@ export const getHarvester = async (harvesterId: string) => {
  * @returns
  */
 export const getHarvestersForUser = async (userId: string) => {
-  return await getHarvestersByUserId(userId);
+  return await prisma_getHarvestersByUserId(userId);
 };
 
 /**
@@ -100,7 +100,7 @@ export const isHarvesterDeployed = (harvester: Harvester) => {
  * @returns
  */
 export const getHarvestOperationsForHarvester = async (harvesterId: string) => {
-  return await getHarvestOperationsForHarvesterId(harvesterId);
+  return await prisma_getHarvestOperationsForHarvesterId(harvesterId);
 };
 
 /**
@@ -114,7 +114,7 @@ export const getHarvestOperationsForHarvester = async (harvesterId: string) => {
 export const getHarvestOperationsWithResetDateForHarvester = async (
   harvesterId: string,
 ) => {
-  return await getHarvestOperationsWithResetDateForHarvesterId(harvesterId);
+  return await prisma_getHarvestOperationsWithResetDateForHarvesterId(harvesterId);
 };
 
 /**
@@ -125,7 +125,7 @@ export const getHarvestOperationsWithResetDateForHarvester = async (
 export const removeHarvestOperationsForHarvester = async (
   harvesterId: string,
 ) => {
-  return await deleteHarvestOperationsForHarvesterId(harvesterId);
+  return await prisma_deleteHarvestOperationsForHarvesterId(harvesterId);
 };
 
 /**
@@ -171,7 +171,7 @@ export const handleDeploy = async (
   }
 
   // Update the Harvester to show as deployed
-  await updateHarvesterById(harvester.id, {
+  await prisma_updateHarvesterById(harvester.id, {
     deployedDate: new Date(),
     h3Index: harvestRegion,
   });
@@ -200,7 +200,7 @@ export const handleDeploy = async (
   // Get active spawned resources for each spawn region and filter by user_interact_distance (from config)
   const harvestableSpawnedResources = await getAllSettled<SpawnedResource[]>(
     spawnRegions.map((spawnRegion) => {
-      return getSpawnedResourcesForSpawnRegion(spawnRegion.id);
+      return prisma_getSpawnedResourcesForSpawnRegion(spawnRegion.id);
     }),
   ).then((res) =>
     // take the array of arrays and flatten into single array and then filter for distance
@@ -312,7 +312,7 @@ const updateHarvestOperationsForHarvester = async (
   this along with our database query for each harvest operation
   */
   // special HarvestOperationWithResetDate[] type
-  let harvestOperations = await getHarvestOperationsWithResetDateForHarvesterId(
+  let harvestOperations = await prisma_getHarvestOperationsWithResetDateForHarvesterId(
     harvesterId,
   );
 
@@ -403,7 +403,7 @@ const updateHarvestOperationsForHarvester = async (
 
   const newHarvestOperations = await Promise.all(newHarvestOperationsPromises);
 
-  const res = await updateHarvestOperationsTransaction(newHarvestOperations);
+  const res = await prisma_updateHarvestOperationsTransaction(newHarvestOperations);
 
   if (res != null) {
     logger.debug(res, `Updated HarvestOperations:`);
@@ -708,12 +708,12 @@ export const handleTransferEnergy = async (
       return updatedHarvestOperations;
     }, "updateHarvestOperationsForHarvester")
     .withCompensation(async () => {
-      return await updateHarvestOperationsTransaction(orig_harvestOperations);
+      return await prisma_updateHarvestOperationsTransaction(orig_harvestOperations);
     })
     // handleTransferEnergySaga STEP 2
     .invoke(async () => {
       // Update the harvester with new energy data
-      return await updateHarvesterById(harvester.id, {
+      return await prisma_updateHarvesterById(harvester.id, {
         initialEnergy: newInitialEnergy,
         energyStartTime: newEnergyStartTime,
         energyEndTime: newEnergyEndTime,
@@ -721,7 +721,7 @@ export const handleTransferEnergy = async (
       });
     }, "updateHarvesterById")
     .withCompensation(async () => {
-      return await updateHarvesterById(harvester.id, {
+      return await prisma_updateHarvesterById(harvester.id, {
         initialEnergy: harvester.initialEnergy,
         energyStartTime: harvester.energyStartTime,
         energyEndTime: harvester.energyEndTime,
@@ -834,7 +834,7 @@ export const handleCollect = async (userId: string, harvesterId: string) => {
  */
 export const handleReclaim = async (harvesterId: string) => {
   // get the harvester's user (owner)
-  const harvester = await getHarvesterById(harvesterId);
+  const harvester = await prisma_getHarvesterById(harvesterId);
 
   /**
    * Need to calculate how much remaining energy and which energy item to return to the user
@@ -879,7 +879,7 @@ export const handleReclaim = async (harvesterId: string) => {
   }
 
   // remove the deployed status and energy data from the harvester
-  await updateHarvesterById(harvesterId, {
+  await prisma_updateHarvesterById(harvesterId, {
     deployedDate: null,
     h3Index: null,
     initialEnergy: 0.0,
@@ -920,7 +920,7 @@ const newHarvestOperationsForHarvester = async (
     return [];
   }
 
-  const res = await createHarvestOperationsTransaction({
+  const res = await prisma_createHarvestOperationsTransaction({
     harvesterId,
     spawnedResourceIds,
   });

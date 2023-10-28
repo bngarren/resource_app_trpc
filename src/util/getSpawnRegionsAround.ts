@@ -1,6 +1,6 @@
 import { SpawnRegion } from "@prisma/client";
 import * as h3 from "h3-js";
-import { getSpawnRegionsFromH3Indices } from "../queries/querySpawnRegion";
+import { prisma_getSpawnRegionsFromH3Indices } from "../queries/querySpawnRegion";
 import config from "../config";
 
 /**
@@ -50,7 +50,7 @@ export const getSpawnRegionsAround = async (
   const h3Group = h3.gridDisk(resolvedH3Index, distance);
 
   // Query the database for existing SpawnRegions
-  const spawnRegions: SpawnRegion[] = await getSpawnRegionsFromH3Indices(
+  const spawnRegions: SpawnRegion[] = await prisma_getSpawnRegionsFromH3Indices(
     h3Group,
   );
 

@@ -1,12 +1,12 @@
 import { Prisma, Resource, SpawnRegion, SpawnedResource } from "@prisma/client";
 import selectRandom from "../util/selectRandom";
 import {
-  createResource,
-  createResources,
-  getResourceById,
-  getResourceByUrl,
-  getResources,
-  getResourcesForSpawnRegion,
+  prisma_createResource,
+  prisma_createResources,
+  prisma_getResourceById,
+  prisma_getResourceByUrl,
+  prisma_getResources,
+  prisma_getSpawnedResourcesWithResourceForSpawnRegion,
 } from "../queries/queryResource";
 import { cellToChildren, getResolution } from "h3-js";
 import { SpawnedResourceWithResource } from "../types";
@@ -19,7 +19,7 @@ import { prefixedError } from "../util/prefixedError";
  * @returns
  */
 export const getResource = async (resourceId: string) => {
-  return await getResourceById(resourceId);
+  return await prisma_getResourceById(resourceId);
 };
 
 /**
@@ -29,7 +29,7 @@ export const getResource = async (resourceId: string) => {
  * @returns
  */
 export const getResourceWithUrl = async (resourceUrl: string) => {
-  return await getResourceByUrl(resourceUrl);
+  return await prisma_getResourceByUrl(resourceUrl);
 };
 
 /**
@@ -60,7 +60,7 @@ export const pruneSpawnedResourceWithResource = (
 export const extendSpawnedResource = async (
   spawnedResource: SpawnedResource,
 ): Promise<SpawnedResourceWithResource> => {
-  const res = await getResourceById(spawnedResource.resourceId);
+  const res = await prisma_getResourceById(spawnedResource.resourceId);
   return {
     ...spawnedResource,
     resource: res,
@@ -79,7 +79,7 @@ export const getResourcesInSpawnRegion = async (
   includeInactive = false,
 ) => {
   // queryResource
-  return await getResourcesForSpawnRegion(spawnRegionId, includeInactive);
+  return await prisma_getSpawnedResourcesWithResourceForSpawnRegion(spawnRegionId, includeInactive);
 };
 
 /**
@@ -93,7 +93,7 @@ export const getResourcesInSpawnRegion = async (
  *
  */
 export const getRandomResource = async () => {
-  const allResources = await getResources();
+  const allResources = await prisma_getResources();
 
   if (allResources.length === 0) {
     throw new Error(
@@ -168,13 +168,13 @@ export const createSpawnedResourceModel = (
 export const handleCreateResource = async (
   resourceModel: Prisma.ResourceCreateInput,
 ) => {
-  return await createResource(resourceModel);
+  return await prisma_createResource(resourceModel);
 };
 
 export const handleCreateResources = async (
   resourceModels: Prisma.ResourceCreateManyInput[],
 ) => {
-  return await createResources(resourceModels);
+  return await prisma_createResources(resourceModels);
 };
 
 // TODO: Go to createRandomResourceModel() to work on the RNG aspect of resources

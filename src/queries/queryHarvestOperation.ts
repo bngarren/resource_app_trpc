@@ -5,12 +5,80 @@ import { getSpawnRegionParentOfSpawnedResource } from "../services/spawnRegionSe
 import { HarvestOperationWithResetDate } from "../types";
 
 /**
- * ### Returns all harvest operations associated with this harvester
- * - May return empty [] if no harvest operations are associated
- * @param harvesterId
+ * ### Creates a new Harvest Operation
+ */
+export const prisma_createHarvestOperation = async (
+  partialModel: Prisma.HarvestOperationCreateInput,
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  return await prismaClient.harvestOperation.create({
+    data: partialModel,
+  });
+};
+
+/**
+ * This type is used in the `createHarvestOperationsTransaction()`
+ */
+export type CreateHarvestOperationsTransactionInput = {
+  harvesterId: string;
+  spawnedResourceIds: string[];
+};
+
+/**
+ * ### Creates new HarvestOperations for a given harvester and spawned resources
+ * @param input containing the harvesterId and the spawnedResources that can be harvested
  * @returns
  */
-export const getHarvestOperationsForHarvesterId = async (
+export const prisma_createHarvestOperationsTransaction = async (
+  input: CreateHarvestOperationsTransactionInput,
+) => {
+  let trxResult;
+  try {
+    trxResult = await prisma.$transaction(async (trx) => {
+      // * - - - - - - - START TRANSACTION - - - - - - - -
+
+      // Loop through each spawned resource and create a HarvestOperation
+      return await Promise.all(
+        input.spawnedResourceIds.map(async (spawnedResourceId) => {
+          // get the parent spawn region of this resource so we can get the reset_date
+          const spawnRegion = await getSpawnRegionParentOfSpawnedResource(
+            spawnedResourceId,
+          );
+
+          return await prisma_createHarvestOperation(
+            {
+              harvester: {
+                connect: {
+                  id: input.harvesterId,
+                },
+              },
+              spawnedResource: {
+                connect: {
+                  id: spawnedResourceId,
+                },
+              },
+              endTime: spawnRegion.resetDate,
+            },
+            trx, // pass in the transaction client
+          );
+        }),
+      );
+    });
+    return trxResult; // Returns HarvestOperation[] if successful
+  } catch (error) {
+    logger.error(error, "Error within createHarvestOperationsTransaction");
+
+    // Any transaction query above should be automatically rolled-back
+
+    return null; // Returns null if transaction failed
+  }
+};
+
+/**
+ * ### Gets all harvest operations associated with this harvester, by id (primary key)
+ * - May return empty [] if no harvest operations are associated
+ */
+export const prisma_getHarvestOperationsForHarvesterId = async (
   harvesterId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
@@ -21,7 +89,15 @@ export const getHarvestOperationsForHarvesterId = async (
   });
 };
 
-export const getHarvestOperationsWithResetDateForHarvesterId = async (
+/**
+ * ### Gets HarvestOperations for a given harvester, by id (primary key)
+ * The return type is an array of HarvestOperations & { resetDate },
+ * i.e. `HarvestOperationWithResetDate[]` type
+ *
+ * Useful when you know you will also need the Spawn Region's 'resetDate' when
+ * getting HarvestOperations
+ */
+export const prisma_getHarvestOperationsWithResetDateForHarvesterId = async (
   harvesterId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
@@ -52,79 +128,9 @@ export const getHarvestOperationsWithResetDateForHarvesterId = async (
 };
 
 /**
- * ### Creates a new Harvest Operation
- * @param partialModel
- * @param prismaClient
- * @returns
+ * ### Updates a HarvestOperation, by id (primary key)
  */
-export const createHarvestOperation = async (
-  partialModel: Prisma.HarvestOperationCreateInput,
-  prismaClient: PrismaClientOrTransaction = prisma,
-) => {
-  return await prismaClient.harvestOperation.create({
-    data: partialModel,
-  });
-};
-
-/**
- * This type is used in the `createHarvestOperationsTransaction()`
- */
-export type CreateHarvestOperationsTransactionInput = {
-  harvesterId: string;
-  spawnedResourceIds: string[];
-};
-
-/**
- * ### Creates new HarvestOperations for a given harvester and spawned resources
- * @param input containing the harvesterId and the spawnedResources that can be harvested
- * @returns
- */
-export const createHarvestOperationsTransaction = async (
-  input: CreateHarvestOperationsTransactionInput,
-) => {
-  let trxResult;
-  try {
-    trxResult = await prisma.$transaction(async (trx) => {
-      // * - - - - - - - START TRANSACTION - - - - - - - -
-
-      // Loop through each spawned resource and create a HarvestOperation
-      return await Promise.all(
-        input.spawnedResourceIds.map(async (spawnedResourceId) => {
-          // get the parent spawn region of this resource so we can get the reset_date
-          const spawnRegion = await getSpawnRegionParentOfSpawnedResource(
-            spawnedResourceId,
-          );
-
-          return await createHarvestOperation(
-            {
-              harvester: {
-                connect: {
-                  id: input.harvesterId,
-                },
-              },
-              spawnedResource: {
-                connect: {
-                  id: spawnedResourceId,
-                },
-              },
-              endTime: spawnRegion.resetDate,
-            },
-            trx, // pass in the transaction client
-          );
-        }),
-      );
-    });
-    return trxResult; // Returns HarvestOperation[] if successful
-  } catch (error) {
-    logger.error(error, "Error within createHarvestOperationsTransaction");
-
-    // Any transaction query above should be automatically rolled-back
-
-    return null; // Returns null if transaction failed
-  }
-};
-
-export const updateHarvestOperationById = async (
+export const prisma_updateHarvestOperationById = async (
   harvestOperationId: string,
   partialModel: Prisma.HarvestOperationUpdateInput,
   prismaClient: PrismaClientOrTransaction = prisma,
@@ -137,7 +143,12 @@ export const updateHarvestOperationById = async (
   });
 };
 
-export const updateHarvestOperationsTransaction = async (
+/**
+ * ### Updates HarvestOperations in transaction
+ *
+ * Will return **null** if the transaction fails
+ */
+export const prisma_updateHarvestOperationsTransaction = async (
   models: Prisma.HarvestOperationUpdateInput[],
 ) => {
   let trxResult;
@@ -152,7 +163,7 @@ export const updateHarvestOperationsTransaction = async (
             throw new Error("Missing id for harvest operation");
           }
 
-          return updateHarvestOperationById(
+          return prisma_updateHarvestOperationById(
             harvestOperationId as string,
             partialModel,
             trx,
@@ -168,7 +179,10 @@ export const updateHarvestOperationsTransaction = async (
   }
 };
 
-export const deleteHarvestOperationsForHarvesterId = async (
+/**
+ * ### Deletes all HarvestOperations for a Harvester, by harvester id (primary key)
+ */
+export const prisma_deleteHarvestOperationsForHarvesterId = async (
   harvesterId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {

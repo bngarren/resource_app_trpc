@@ -12,35 +12,55 @@ import {
   pruneSpawnedResourceWithResource,
 } from "../services/resourceService";
 import {
-  getSpawnRegionWithResources,
-  updateSpawnRegion,
+  prisma_getSpawnRegionWithResources,
+  prisma_updateSpawnRegion,
 } from "./querySpawnRegion";
 import { prefixedError } from "../util/prefixedError";
 
 /**
-- getResource
-- getAllResources
-- getResourceForSpawnedResourceInSpawnRegion
-- getResourcesForSpawnRegion
-- getSpawnedResourcesForSpawnRegion
-- createResource
-- createResources
-- createSpawnedResource
-- deleteSpawnedResourcesForSpawnRegion
-- updateSpawnedResourcesForSpawnRegionTransaction
-
-*/
+ * ### Creates a new Resource
+ */
+export const prisma_createResource = async (
+  model: Prisma.ResourceCreateInput,
+  prismaClient: PrismaClientOrTransaction = prisma,
+): Promise<Resource> => {
+  return await prismaClient.resource.create({
+    data: model,
+  });
+};
 
 /**
- * ### Gets a Resource, by id.
- * **Throws** error if Resource is not found.
- * This is strictly the Resource schema (not SpawnedResource or variants)
- * @param resourceId
- * @param spawnRegionId
- * @param prismaClient
- * @returns
+ * ### Creates multiple new Resources
  */
-export const getResourceById = async (
+export const prisma_createResources = async (
+  models: Prisma.ResourceCreateManyInput[],
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  await prismaClient.resource.createMany({
+    data: models,
+    skipDuplicates: true,
+  });
+};
+
+/**
+ * ### Creates a new SpawnedResource
+ * (This is a resource associated with an actual SpawnRegion and at a specific h3 index)
+ */
+export const prisma_createSpawnedResource = async (
+  model: Prisma.SpawnedResourceCreateInput,
+  prismaClient: PrismaClientOrTransaction = prisma,
+): Promise<SpawnedResource> => {
+  return await prismaClient.spawnedResource.create({
+    data: model,
+  });
+};
+
+/**
+ * ### Gets a Resource, by id (primary key).
+ * **Throws** error if Resource is not found.
+ * This is strictly the Resource model (not SpawnedResource or variants)
+ */
+export const prisma_getResourceById = async (
   resourceId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
@@ -52,12 +72,9 @@ export const getResourceById = async (
 /**
  * ### Gets a Resource, by url
  * **Throws** error if Resource is not found.
- * This is strictly the Resource schema (not SpawnedResource or variants)
- * @param resourceUrl
- * @param prismaClient
- * @returns
+ * This is strictly the Resource model (not SpawnedResource or variants)
  */
-export const getResourceByUrl = async (
+export const prisma_getResourceByUrl = async (
   resourceUrl: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
@@ -67,16 +84,15 @@ export const getResourceByUrl = async (
 };
 
 /**
- * ### Gets all Resources.
- * This is strictly the Resource schema (not SpawnedResource or variants)
+ * ### Gets all Resources
+ * This is strictly the Resource models (not SpawnedResource or variants)
  *
- * We include a join on the ResourceRarity table as this function is used when
- * creating random resources (thus needs info on rarity, likelihood, etc.)
+ * We include a join on the **`ResourceRarity`** table.
  *
- * @param prismaClient
- * @returns
+ * E.g. can used when creating random resources (thus needs info on rarity, likelihood, etc.)
+ *
  */
-export const getResources = async (
+export const prisma_getResources = async (
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
   return await prismaClient.resource.findMany({
@@ -87,12 +103,9 @@ export const getResources = async (
 };
 
 /**
- * ### Gets all Resources, by the provided Ids
- * @param resourceIds
- * @param prismaClient
- * @returns
+ * ### Gets all Resources, by the id's (primary keys)
  */
-export const getResourcesByIds = async (
+export const prisma_getResourcesByIds = async (
   resourceIds: string[],
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
@@ -106,16 +119,16 @@ export const getResourcesByIds = async (
 };
 
 /**
- * ### Gets the resources associated with a given SpawnRegion
- * Each resource is the type `SpawnedResourceWithResource`
+ * ### Gets the SpawnedResources associated with a given SpawnRegion
+ * Each SpawnedResource is the type `SpawnedResourceWithResource`
  *
- * **Defaults to only include active SpawnedResources**
+ * Defaults to only include **_active_** SpawnedResources
  *
  * Use the helper function from resourceService `pruneSpawnedResourceWithResource`
- * to get only the SpawnedResources, or instead call `getSpawnedResourcesForSpawnRegion()`
+ * to get _only_ the SpawnedResources, or instead call `prisma_getSpawnedResourcesForSpawnRegion()`
  *
  */
-export const getResourcesForSpawnRegion = async (
+export const prisma_getSpawnedResourcesWithResourceForSpawnRegion = async (
   spawnRegionId: string,
   includeInactive = false,
   prismaClient: PrismaClientOrTransaction = prisma,
@@ -134,10 +147,10 @@ export const getResourcesForSpawnRegion = async (
 };
 
 /**
- * ### Gets a SpawnedResource, by id.
- * **Throws** error if Resource is not found.
+ * ### Gets a SpawnedResource, by id (primary key).
+ * **Throws** error if SpawnedResource is not found.
  */
-export const getSpawnedResourceById = async (
+export const prisma_getSpawnedResourceById = async (
   spawnedResourceId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
@@ -149,13 +162,13 @@ export const getSpawnedResourceById = async (
 /**
  * ### Gets the SpawnedResources associated with a given SpawnRegion
  *
- * **Defaults to include only active SpawnedResources**
+ * Defaults to include only **_active_** SpawnedResources
  *
- * This only returns `SpawnedResource[]`, not the custom `SpawnedResourceWithResource[]` type.
- * For that, instead use `getResourcesForSpawnRegion()`
+ * This only returns `SpawnedResource[]`, not the extended `SpawnedResourceWithResource[]` type.
+ * For that, instead use `prisma_getSpawnedResourcesWithResourceForSpawnRegion()`
  *
  */
-export const getSpawnedResourcesForSpawnRegion = async (
+export const prisma_getSpawnedResourcesForSpawnRegion = async (
   spawnRegionId: string,
   includeInactive = false,
   prismaClient: PrismaClientOrTransaction = prisma,
@@ -169,44 +182,11 @@ export const getSpawnedResourcesForSpawnRegion = async (
 };
 
 /**
- * ### Creates a new Resource
+ * ### Updates multiple SpawnedResources
+ * - The same `partialModel` will be used to update all SpawnedResources with the same data
+ * - E.g., update all `isActive` to false
  */
-export const createResource = async (
-  model: Prisma.ResourceCreateInput,
-  prismaClient: PrismaClientOrTransaction = prisma,
-): Promise<Resource> => {
-  return await prismaClient.resource.create({
-    data: model,
-  });
-};
-
-/**
- * ### Creates multiple new Resources
- */
-export const createResources = async (
-  models: Prisma.ResourceCreateManyInput[],
-  prismaClient: PrismaClientOrTransaction = prisma,
-) => {
-  await prismaClient.resource.createMany({
-    data: models,
-    skipDuplicates: true,
-  });
-};
-
-/**
- * ### Creates a new SpawnedResource
- * (This is a resource associated with an actual SpawnRegion and at a specific h3 index)
- */
-export const createSpawnedResource = async (
-  model: Prisma.SpawnedResourceCreateInput,
-  prismaClient: PrismaClientOrTransaction = prisma,
-): Promise<SpawnedResource> => {
-  return await prismaClient.spawnedResource.create({
-    data: model,
-  });
-};
-
-export const updateSpawnedResources = async (
+export const prisma_updateSpawnedResources = async (
   spawnedResourceIds: string[],
   partialModel: Prisma.SpawnedResourceUpdateManyMutationInput,
   prismaClient: PrismaClientOrTransaction = prisma,
@@ -232,12 +212,11 @@ export const updateSpawnedResources = async (
  * random generation that this function will normally use.
  * - If it is passed in as empty [], no spawned resources will be created.
  *
- * @param spawnRegionId
  * @param forcedSpawnedResourceModels - used for TESTING
  * @returns SpawnRegionWithResourcesPartial (this means the full Resource
  * model is not returned for each resource, only SpawnedResource)
  */
-export const updateSpawnedResourcesForSpawnRegionTransaction = async (
+export const prisma_updateSpawnedResourcesForSpawnRegionTransaction = async (
   spawnRegionId: string,
   forcedSpawnedResourceModels?: Prisma.SpawnedResourceCreateInput[],
 ) => {
@@ -260,7 +239,7 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
 
   // Get the spawn region and its active (prior to function call) resources
   const { resources: _priorResources, ...rest } =
-    await getSpawnRegionWithResources(spawnRegionId);
+    await prisma_getSpawnRegionWithResources(spawnRegionId);
   const priorResources = _priorResources.map((pr) =>
     pruneSpawnedResourceWithResource(pr),
   );
@@ -319,7 +298,7 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
         */
 
         // Set each spawned resource to isActive=false
-        await updateSpawnedResources(
+        await prisma_updateSpawnedResources(
           priorResources.map((r) => r.id),
           { isActive: false },
           trx,
@@ -335,7 +314,7 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
 
         const allSettledResult = await Promise.allSettled(
           spawnedResourceModels.map((model) =>
-            createSpawnedResource(model, trx),
+            prisma_createSpawnedResource(model, trx),
           ),
         );
 
@@ -362,7 +341,7 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
         const newSpawnRegionData = {
           resetDate: nextResetDate.toISOString(),
         };
-        const res_3 = await updateSpawnRegion(
+        const res_3 = await prisma_updateSpawnRegion(
           spawnRegion.id,
           newSpawnRegionData,
           trx,
@@ -401,7 +380,10 @@ export const updateSpawnedResourcesForSpawnRegionTransaction = async (
   }
 };
 
-export const deleteSpawnedResourcesForSpawnRegion = async (
+/**
+ * ### Deletes all SpawnedResources for a SpawnRegion, by id (primary key)
+ */
+export const prisma_deleteSpawnedResourcesForSpawnRegion = async (
   spawnRegionId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {

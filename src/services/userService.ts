@@ -1,4 +1,4 @@
-import { getUserByFirebaseUid } from "../queries/queryUser";
+import { prisma_getUserByFirebaseUid } from "../queries/queryUser";
 
 /**
  * ### Gets a user, by the Firebase UID
@@ -12,5 +12,5 @@ import { getUserByFirebaseUid } from "../queries/queryUser";
  * @returns a User
  */
 export const getUserByUid = async (uid: string) => {
-  return await getUserByFirebaseUid(uid);
+  return await prisma_getUserByFirebaseUid(uid);
 };

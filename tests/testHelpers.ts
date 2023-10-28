@@ -261,11 +261,14 @@ export const mockScan = async (
   ];
 
   // Mock the spawned resource generation for specific spawn region
-  const orig_updateSpawnedResourcesForSpawnRegionTransaction =
-    QueryResource.updateSpawnedResourcesForSpawnRegionTransaction;
+  const orig_prisma_updateSpawnedResourcesForSpawnRegionTransaction =
+    QueryResource.prisma_updateSpawnedResourcesForSpawnRegionTransaction;
 
-  const spy_updateSpawnedResourcesForSpawnRegionTransaction = jest
-    .spyOn(QueryResource, "updateSpawnedResourcesForSpawnRegionTransaction")
+  const spy_prisma_updateSpawnedResourcesForSpawnRegionTransaction = jest
+    .spyOn(
+      QueryResource,
+      "prisma_updateSpawnedResourcesForSpawnRegionTransaction",
+    )
     .mockImplementation(async (spawnRegionId: string) => {
       // We are only interested in 1 spawn region, locate it.
       const centralSpawnRegion = await prisma.spawnRegion.findUniqueOrThrow({
@@ -277,7 +280,7 @@ export const mockScan = async (
       // We use the special `forcedSpawnedResourceModels` parameter
       // If it's the Spawn region of interest, pass the models, if not just [] so that
       // all other spawn regions do not spawn any resources (better for testing)
-      return orig_updateSpawnedResourcesForSpawnRegionTransaction(
+      return orig_prisma_updateSpawnedResourcesForSpawnRegionTransaction(
         spawnRegionId,
         spawnRegionId === centralSpawnRegion.id
           ? forcedSpawnedResourceModels.slice(0, numberOfSpawnedResources) // if 0, get []. if 1, get first element, etc.
@@ -293,7 +296,7 @@ export const mockScan = async (
 
   // Revert the mocks
   spy_handleScan.mockRestore();
-  spy_updateSpawnedResourcesForSpawnRegionTransaction.mockRestore();
+  spy_prisma_updateSpawnedResourcesForSpawnRegionTransaction.mockRestore();
 
   return getDataFromTRPCResponse<ScanRequestOutput>(s);
 };

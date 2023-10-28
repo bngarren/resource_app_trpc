@@ -1,4 +1,4 @@
-import config from "./config";
+import config, { NodeEnvironment } from "./config";
 import { protectedProcedure, publicProcedure, router } from "./trpc/trpc";
 import express from "express";
 import * as trpcExpress from "@trpc/server/adapters/express";
@@ -113,8 +113,12 @@ if (!config.shouldCreateHTTPSServer) {
   server = https.createServer(credentials, app);
 }
 
-logger.info(message);
-console.info(message);
+if (
+  (["staging", "production"] as NodeEnvironment[]).includes(config.node_env)
+) {
+  logger.info(message);
+  console.info(message);
+}
 
 async function main() {
   // We can turn protected routes off for API testing, debugging, etc.
