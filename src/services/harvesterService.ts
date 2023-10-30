@@ -602,6 +602,9 @@ export const handleTransferEnergy = async (
           activeUserId,
           -amount, // Withdrawal amount is negative (compared to what we intend to place in harvester)
         );
+      logger.debug(
+        `✅ Validated user inventory item transfer, currently have ${orig_energyResourceUserInventoryItem.quantity} unit(s) of '${orig_energyResourceUserInventoryItem.item.url}' and plan to transfer ${amount} to the harvester.`,
+        );
       // ...
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError) {
@@ -609,6 +612,9 @@ export const handleTransferEnergy = async (
         // P2025 = NOT FOUND ERROR
         if (err.code === "P2025" && amount < 0) {
           // This is okay. We are transfering energy from harvester to user (who isn't currently holding this resource...)
+          logger.debug(
+            `✅ Validated user inventory item transfer, will transfer ${amount} to user inventory which currently has none of this resource.`,
+          );
         } else {
           throw prefixedError(
             err,
@@ -737,12 +743,39 @@ export const handleTransferEnergy = async (
     .when(shouldUpdateUserInventory)
     .invoke(async () => {
       /* Careful: the "amount" we update the user inventory is the opposite sign of 
-      what is transferred to/from the harvester */
+      what is transferred to/from the harvester 
+      
+      `orig_energyResourceUserInventoryItem` can be null if we are moving energy from the 
+      harvester to the user inventory which does not currently have this resource.
+
+      Boolean logic below:
+      - If orig_energyResourceUserInventoryItem exists, pass 'orig_energyResourceUserInventoryItem.quantity - amount',
+      which should not be negative (based on validateUserInventoryItemTransfer above)
+      - If orig_energyResourceUserInventoryItem doesn't exist, it's okay if we are moving energy INTO
+      the user's inventory (amount > 0)
+      - If amount < 0, this should be an error.
+      */
+
+      let newQuantity: number;
+
+      if (orig_energyResourceUserInventoryItem) {
+        newQuantity = Math.max(
+          0,
+          orig_energyResourceUserInventoryItem.quantity - amount,
+        );
+      } else if (amount > 0) {
+        newQuantity = amount;
+      } else {
+        throw new Error(
+          "Trying to remove energy from a user inventory that doesn't have it. This shouldn't have passed validateUserInventoryItemTransfer()??",
+        );
+      }
+
       return await updateCreateOrRemoveUserInventoryItemWithNewQuantity(
         energyResource.id,
         ItemType.RESOURCE,
         activeUserId,
-        orig_energyResourceUserInventoryItem?.quantity + -amount || -amount,
+        newQuantity,
       );
     }, "update user's inventory")
     .withCompensation(async () => {

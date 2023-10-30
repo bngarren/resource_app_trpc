@@ -252,7 +252,7 @@ class Saga {
         this.sagaLog.log("info", {
           step: stepNumber,
           name: this.steps[i].getName(),
-          message: "Compsenation successful.",
+          message: "Compensation successful.",
           data,
         });
       } catch (compensationError) {
@@ -304,11 +304,13 @@ class SagaLog {
     this.data.push(sagaLogMessage);
 
     if (this.logger) {
-      let logMsg = `- - Saga - -: ${sagaLogMessage.message} ${
-        sagaLogMessage.name?.trim() ? `(${sagaLogMessage.name})` : ""
-      }${
-        sagaLogMessage.step !== undefined ? `, step ${sagaLogMessage.step}` : ""
-      }`;
+      let logMsg = `- - Saga - -${
+        sagaLogMessage.step !== undefined
+          ? ` [Step=${sagaLogMessage.step}]`
+          : ""
+      }${sagaLogMessage.name?.trim() ? ` [Name=${sagaLogMessage.name}]` : ""} ${
+        sagaLogMessage.message
+      } `;
 
       if (sagaLogMessage.data && this.showVerbose) {
         logMsg += `\nOutput data: ${JSON.stringify(

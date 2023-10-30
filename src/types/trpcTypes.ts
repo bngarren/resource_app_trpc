@@ -32,3 +32,20 @@ export type GetUserInventoryRequestInput =
   RouterInput["userInventory"]["getUserInventory"];
 export type GetUserInventoryRequestOutput =
   RouterOutput["userInventory"]["getUserInventory"];
+
+// Harvester routes
+export type HarvesterDeployRequestInput = RouterInput["harvester"]["deploy"];
+export type HarvesterDeployRequestOutput = RouterOutput["harvester"]["deploy"];
+
+export type HarvesterCollectRequestInput = RouterInput["harvester"]["collect"];
+export type HarvesterCollectRequestOutput =
+  RouterOutput["harvester"]["collect"];
+
+export type HarvesterReclaimRequestInput = RouterInput["harvester"]["reclaim"];
+export type HarvesterReclaimRequestOutput =
+  RouterOutput["harvester"]["reclaim"];
+
+export type HarvesterTransferEnergyRequestInput =
+  RouterInput["harvester"]["transferEnergy"];
+export type HarvesterTransferEnergyRequestOutput =
+  RouterOutput["harvester"]["transferEnergy"];
