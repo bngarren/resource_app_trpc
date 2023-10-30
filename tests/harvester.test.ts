@@ -35,7 +35,10 @@ import {
   getUserInventoryItemWithItemId,
   getUserInventoryItems,
 } from "../src/services/userInventoryService";
-import { ScanRequestOutput } from "../src/types/trpcTypes";
+import {
+  HarvesterTransferEnergyRequestOutput,
+  ScanRequestOutput,
+} from "../src/types/trpcTypes";
 
 import config from "../src/config";
 import {
@@ -48,6 +51,7 @@ import {
   hoursToMinutes,
   isSameSecond,
   minutesToSeconds,
+  parseISO,
   subHours,
   subSeconds,
 } from "date-fns";
@@ -82,6 +86,7 @@ describe("/harvester", () => {
     await resetPrisma();
   });
 
+  // - - - - - DEPLOY - - - - -
   describe("/harvester.deploy", () => {
     let testUser: User;
     let testHarvester: Harvester;
@@ -373,7 +378,32 @@ describe("/harvester", () => {
     });
   });
 
+  // - - - - - COLLECT - - - - -
   describe("/harvester.collect", () => {
+    let testUser: User;
+    let testHarvester: Harvester;
+
+    // Setup testUser and testHarvester
+    beforeEach(async () => {
+      testUser = await prisma.user.findUniqueOrThrow({
+        where: {
+          email: "testUser@gmail.com",
+        },
+      });
+
+      const testHarvesterResult = await prisma.harvester.findFirst({
+        where: {
+          userId: testUser.id,
+        },
+      });
+
+      if (!testHarvesterResult) {
+        throw Error("Failed test due to seed data problem.");
+      } else {
+        testHarvester = testHarvesterResult;
+      }
+    });
+
     it("should return status code 400 (Bad Request) if missing user uid or harvester id", async () => {
       const res1 = await requester.send("POST", "/harvester.collect", {
         userUid: null,
@@ -390,12 +420,6 @@ describe("/harvester", () => {
       expect(res2.statusCode).toBe(400);
     });
     it("should return status code 404 (Not Found) for non-existent user or harvester id", async () => {
-      const testHarvester = await prisma.harvester.findFirst();
-
-      if (!testHarvester) {
-        throw Error("Failed test due to seed data problem.");
-      }
-
       const res1 = await requester.send(
         "POST",
         "/harvester.collect",
@@ -414,26 +438,6 @@ describe("/harvester", () => {
     });
 
     it("should return status code 403 (Forbidden) if harvester is not owned by user", async () => {
-      const testUser = await prisma.user.findUnique({
-        where: {
-          firebase_uid: userUid,
-        },
-      });
-
-      if (!testUser) {
-        throw Error("Failed test due to seed data problem.");
-      }
-
-      const harvester = await prisma.harvester.findFirst({
-        where: {
-          userId: testUser.id,
-        },
-      });
-
-      if (!harvester) {
-        throw Error("Failed test due to seed data problem.");
-      }
-
       // make another user (not part of base seed)
       const anotherUser = await prisma.user.create({
         data: {
@@ -446,41 +450,94 @@ describe("/harvester", () => {
       const res = await requester.send(
         "POST",
         "/harvester.collect",
-        { userUid: anotherUser.firebase_uid, harvesterId: harvester.id },
+        { userUid: anotherUser.firebase_uid, harvesterId: testHarvester.id },
         harvesterCollectRequestSchema,
       );
       expect(res.statusCode).toBe(403);
     });
 
     it("should return status code 409 (Conflict) if harvester is not deployed", async () => {
-      const harvester = await prisma.harvester.findFirst();
-
-      if (!harvester) {
-        throw Error("Failed test due to seed data problem.");
-      }
-
-      // make sure harvester doesn't appear deployed
-      // i.e., nullify the h3Index and deployedDate
-      await prisma.harvester.update({
-        where: {
-          id: harvester.id,
-        },
-        data: {
-          h3Index: null,
-          deployedDate: null,
-        },
-      });
+      // Make sure it appears non-deployed
+      expect(isHarvesterDeployed(testHarvester)).toBe(false);
 
       const res = await requester.send(
         "POST",
         "/harvester.collect",
-        { userUid: userUid, harvesterId: harvester.id },
+        { userUid: userUid, harvesterId: testHarvester.id },
         harvesterCollectRequestSchema,
       );
       expect(res.statusCode).toBe(409);
     });
+
+    // COLLECT - continued
+    describe("after harvester deployed and energy added", () => {
+      let t_0: Date;
+
+      beforeEach(async () => {
+        // Perform a mockScan and deploy test harvester
+        await scanAndDeployHarvester(testHarvester.id, server, idToken);
+
+        // Add energy
+        // Get energy from testUser's inventory
+
+        const _arcaneQuanta = await getResourceUserInventoryItemByUrl(
+          "arcane_quanta",
+          testUser.id,
+        );
+
+        // careful, use the item.id here, not the userinventoryitem id
+        const arcaneQuanta = await verifyArcaneEnergyResource(
+          _arcaneQuanta.item.id,
+        );
+
+        const res = await requester.send(
+          "POST",
+          "/harvester.transferEnergy",
+          {
+            energySourceId: arcaneQuanta.id,
+            harvesterId: testHarvester.id,
+            amount: 100, // *Must match what is in the base seed for user's inventory!
+          },
+          harvesterTransferEnergyRequestSchema,
+        );
+        throwIfBadStatus(res);
+
+        const energyStartTime =
+          getDataFromTRPCResponse<HarvesterTransferEnergyRequestOutput>(
+            res,
+          ).energyStartTime;
+
+        if (energyStartTime == null)
+          throw new Error(
+            `Problem setting up test (transfer energy request didn't return energyStartTime)`,
+          );
+
+        // postgres returns datetime in ISO format
+        t_0 = parseISO(energyStartTime);
+      });
+
+      it("should add correct amount of the resources collected from the harvester since startTime and reset the harvest operations", async () => {
+        /* For this test to work, we are relying on a correct setup. i.e. check preceding beforeEach()
+        
+        We assume that we have just scanned the mockScan location and deployed our harvester there.
+        
+        We have added abundant energy which started the 3 harvest operations. This occurred at present time, t_0
+
+        */
+
+        // Verify that mockScan (from beforeEach()) gave us 3 spawned resources
+        const spawnedResources = await prisma.spawnedResource.findMany();
+
+        expect(spawnedResources).toHaveLength(3);
+
+        const t_plus_6 = addHours(t_0, 6);
+
+        // Now we mock the handleCollect to 'occur' at t_plus_6 hours
+      });
+    });
   });
 
+  // - - - - - RECLAIM - - - - -
   describe("/harvester.reclaim", () => {
     let testUser: User;
     let testHarvester: Harvester;
@@ -732,6 +789,7 @@ describe("/harvester", () => {
     });
   });
 
+  // - - - - - TRANSFER ENERGY - - - - -
   describe("/harvester.transferEnergy", () => {
     let testUser: User;
     let testHarvester: Harvester;

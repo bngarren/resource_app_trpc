@@ -19,9 +19,7 @@ import {
   updateCreateOrRemoveUserInventoryItemWithNewQuantity,
   validateUserInventoryItemTransfer,
   removeUserInventoryItemByItemId,
-  getPlayerInventoryItemFromUserInventoryItem,
 } from "./userInventoryService";
-import { prisma } from "../prisma";
 import { TRPCError } from "@trpc/server";
 import {
   prisma_createHarvestOperationsTransaction,
@@ -604,7 +602,7 @@ export const handleTransferEnergy = async (
         );
       logger.debug(
         `✅ Validated user inventory item transfer, currently have ${orig_energyResourceUserInventoryItem.quantity} unit(s) of '${orig_energyResourceUserInventoryItem.item.url}' and plan to transfer ${amount} to the harvester.`,
-        );
+      );
       // ...
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError) {
@@ -816,47 +814,16 @@ export const handleTransferEnergy = async (
  * ! TODO: In Progress.
  * - Find the HarvestOperations associated with this Harvester
  * - Calculate the amount of resources harvested
- * - Update the UserInventoryItem table
+ * - Saga
+ *   - Update the UserInventoryItem table
+ *   - Create new harvest operations based on same spawned resources
+ *   - Remove old harvest operations
+ * - Return user inventory items that were added
  *
  * @param userId
  * @param harvesterId
  */
-export const handleCollect = async (userId: string, harvesterId: string) => {
-  /*
-    Let's pretend the Harvester has a HarvestOperation that reports 50 of Gold
-    */
-  // Update the UserInventoryItem table to add or update this Resource for this user
-  // !EXPERIMENTAL - using test data for now
-  const testUser = await prisma.user.findUnique({
-    where: {
-      email: "testUser@gmail.com",
-    },
-  });
-
-  const copper = await prisma.resource.findUnique({
-    where: {
-      url: "copper",
-    },
-  });
-
-  if (!copper || !testUser) {
-    throw Error("Error in handleCollect");
-  }
-
-  // Perform the user inventory update
-  const resultUserInventoryItem =
-    await updateCreateOrRemoveUserInventoryItemWithNewQuantity(
-      copper.id,
-      "RESOURCE",
-      testUser.id,
-      50,
-    );
-  // Return a client facing InventoryItem
-  // TODO: will need to return an array of InventoryItems for multiple collected resources...
-  return await getPlayerInventoryItemFromUserInventoryItem(
-    resultUserInventoryItem,
-  );
-};
+export const handleCollect = async (userId: string, harvesterId: string) => {};
 
 /**
  * ### Picks up the harvester and puts it back in the user's inventory
