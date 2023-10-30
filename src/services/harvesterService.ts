@@ -114,7 +114,9 @@ export const getHarvestOperationsForHarvester = async (harvesterId: string) => {
 export const getHarvestOperationsWithResetDateForHarvester = async (
   harvesterId: string,
 ) => {
-  return await prisma_getHarvestOperationsWithResetDateForHarvesterId(harvesterId);
+  return await prisma_getHarvestOperationsWithResetDateForHarvesterId(
+    harvesterId,
+  );
 };
 
 /**
@@ -312,9 +314,8 @@ const updateHarvestOperationsForHarvester = async (
   this along with our database query for each harvest operation
   */
   // special HarvestOperationWithResetDate[] type
-  let harvestOperations = await prisma_getHarvestOperationsWithResetDateForHarvesterId(
-    harvesterId,
-  );
+  let harvestOperations =
+    await prisma_getHarvestOperationsWithResetDateForHarvesterId(harvesterId);
 
   const totalHarvestOperations = harvestOperations.length;
 
@@ -403,7 +404,9 @@ const updateHarvestOperationsForHarvester = async (
 
   const newHarvestOperations = await Promise.all(newHarvestOperationsPromises);
 
-  const res = await prisma_updateHarvestOperationsTransaction(newHarvestOperations);
+  const res = await prisma_updateHarvestOperationsTransaction(
+    newHarvestOperations,
+  );
 
   if (res != null) {
     logger.debug(res, `Updated HarvestOperations:`);
@@ -708,7 +711,9 @@ export const handleTransferEnergy = async (
       return updatedHarvestOperations;
     }, "updateHarvestOperationsForHarvester")
     .withCompensation(async () => {
-      return await prisma_updateHarvestOperationsTransaction(orig_harvestOperations);
+      return await prisma_updateHarvestOperationsTransaction(
+        orig_harvestOperations,
+      );
     })
     // handleTransferEnergySaga STEP 2
     .invoke(async () => {

@@ -60,7 +60,7 @@ model Resource {
   name                      String
   resourceType              ResourceType                @map("resource_type")
   resourceRarity            ResourceRarity              @relation(fields: [resourceRarityLevel], references: [level])
-  resourceRarityLevel       ResourceRarityLevel
+  resourceRarityLevel       ResourceRarityLevel         // ResourceRarityLevel is the PK for ResourceRairty
   energyEfficiency          Float?                      @map("energy_efficiency") // Only for Arcane Energy
   SpawnedResources          SpawnedResource[]
   ResourceUserInventoryItem ResourceUserInventoryItem[]

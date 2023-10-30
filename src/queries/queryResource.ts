@@ -1,5 +1,6 @@
 import { logger } from "./../logger/logger";
 import {
+  ResourceWithRarity,
   SpawnRegionWithResourcesPartial,
   SpawnedResourceWithResource,
 } from "./../types/index";
@@ -57,8 +58,12 @@ export const prisma_createSpawnedResource = async (
 
 /**
  * ### Gets a Resource, by id (primary key).
+ *
+ * This returns a `Resource` type/model only. This _does not_ return a SpawnedResource.
+ *
+ * If you need the `ResourceRarity` data, use **`prisma_getResourceByIdWithRarity()`**
+ *
  * **Throws** error if Resource is not found.
- * This is strictly the Resource model (not SpawnedResource or variants)
  */
 export const prisma_getResourceById = async (
   resourceId: string,
@@ -70,9 +75,35 @@ export const prisma_getResourceById = async (
 };
 
 /**
- * ### Gets a Resource, by url
+ * ### Gets a Resource, by id (primary key), with ResourceRarity.
+ *
+ * This returns a `ResourceWithRarity` type which is a `Resource` with its
+ * associated rarity data. This _does not_ return a SpawnedResource.
+ *
+ * If you only need the `Resource` type, use **`prisma_getResourceById()`**
+ *
  * **Throws** error if Resource is not found.
- * This is strictly the Resource model (not SpawnedResource or variants)
+ */
+export const prisma_getResourceByIdWithRarity = async (
+  resourceId: string,
+  prismaClient: PrismaClientOrTransaction = prisma,
+): Promise<ResourceWithRarity> => {
+  return await prismaClient.resource.findUniqueOrThrow({
+    where: { id: resourceId },
+    include: {
+      resourceRarity: true,
+    },
+  });
+};
+
+/**
+ * ### Gets a Resource, by url
+ *
+ * This returns a `Resource` type only. This _does not_ return a SpawnedResource.
+ *
+ * If you need the `ResourceWithRarity` type, use **`prisma_getResourceByUrlWithRarity()`**
+ *
+ * **Throws** error if Resource is not found.
  */
 export const prisma_getResourceByUrl = async (
   resourceUrl: string,
@@ -80,6 +111,28 @@ export const prisma_getResourceByUrl = async (
 ) => {
   return await prismaClient.resource.findUniqueOrThrow({
     where: { url: resourceUrl },
+  });
+};
+
+/**
+ * ### Gets a Resource, by url, with ResourceRarity
+ *
+ * This returns a `ResourceWithRarity` type which is a `Resource` with its
+ * associated rarity data. This _does not_ return a SpawnedResource.
+ *
+ * If you only need the `Resource` type, use **`prisma_getResourceByUrl()`**
+ *
+ * **Throws** error if Resource is not found.
+ */
+export const prisma_getResourceByUrlWithRarity = async (
+  resourceUrl: string,
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  return await prismaClient.resource.findUniqueOrThrow({
+    where: { url: resourceUrl },
+    include: {
+      resourceRarity: true,
+    },
   });
 };
 

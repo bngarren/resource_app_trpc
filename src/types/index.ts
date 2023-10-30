@@ -12,6 +12,21 @@ import {
 // A dev type that helps me to see to full type structure of my types
 type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
 
+// - - - - - Resource - - - - -
+
+/**
+ * A `Resource` type with its associated `ResourceRarity`
+ */
+export type ResourceWithRarity = Omit<
+  Prisma.ResourceGetPayload<{
+    include: {
+      resourceRarity: true;
+    };
+  }>,
+  "resourceRarityLevel"
+>;
+
+// - - - - - SpawnedResource - - - - -
 /**
  * A custom SpawnedResource type that includes the associated Resource
  */
@@ -23,6 +38,8 @@ export type SpawnedResourceWithResource = Omit<
   }>,
   "resourceId"
 >;
+
+// - - - - - SpawnRegion - - - - -
 
 /**
  * A SpawnRegion type that includes all spawned resources (each of the type
@@ -42,6 +59,8 @@ export interface SpawnRegionWithResourcesPartial
   extends Omit<Prisma.SpawnRegionGetPayload<true>, "SpawnedResources"> {
   resources: SpawnedResource[];
 }
+
+// - - - - - HarvestOperation - - - - -
 
 /**
  * A HarvestOperation type that includes the resetDate of the spawned resource's
@@ -102,7 +121,7 @@ export type UserInventoryDict = {
 type test = Expand<SpawnRegionWithResources>;
 type test2 = Expand<UserInventoryItem>;
 type test3 = Expand<UserInventoryItemWithItem<"HARVESTER">>;
-type test4 = Expand<UserInventoryDict>;
+type test4 = Expand<ResourceWithRarity>;
 
 export type Coordinate = {
   latitude: number;

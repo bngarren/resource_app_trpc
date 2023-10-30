@@ -4,32 +4,64 @@ import {
   prisma_createResource,
   prisma_createResources,
   prisma_getResourceById,
+  prisma_getResourceByIdWithRarity,
   prisma_getResourceByUrl,
+  prisma_getResourceByUrlWithRarity,
   prisma_getResources,
   prisma_getSpawnedResourcesWithResourceForSpawnRegion,
 } from "../queries/queryResource";
 import { cellToChildren, getResolution } from "h3-js";
-import { SpawnedResourceWithResource } from "../types";
+import { ResourceWithRarity, SpawnedResourceWithResource } from "../types";
 import { prefixedError } from "../util/prefixedError";
 
 /**
- * ### Gets a single Resource, by ID
+ * ### Gets a single Resource, by id (primary key)
+ *
+ * If `withRarity`= **false** (_default_), returns a `Resource` model only. If **true**,
+ * returns a `ResourceWithRarity` type.
+ *
  * **Throws** error if resource is not found.
- * @param resourceId
- * @returns
  */
-export const getResource = async (resourceId: string) => {
-  return await prisma_getResourceById(resourceId);
+export const getResource = async <T extends boolean = false>(
+  resourceId: string,
+  withRarity: T = false as T, // typescript needs to know default value is type T
+): Promise<T extends true ? ResourceWithRarity : Resource> => {
+  /* We use a generic T to help return the correct type based on the withRarity boolean.
+  
+  Have to return each of these casted as `any` because Typescript can't determine
+  the actual type at that location; however, the callers of this function will receive
+  the correct type due to the return type in the function signature.
+  */
+  if (withRarity) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (await prisma_getResourceByIdWithRarity(resourceId)) as any;
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (await prisma_getResourceById(resourceId)) as any;
+  }
 };
 
 /**
- * ### Gets a single Resource, by URL
+ * ### Gets a single Resource, by url (unique)
+ *
+ * If `withRarity`= **false** (_default_), returns a `Resource` model only. If **true**,
+ * returns a `ResourceWithRarity` type.
+ *
  * **Throws** error if resource is not found.
- * @param resourceUrl
- * @returns
+ *
  */
-export const getResourceWithUrl = async (resourceUrl: string) => {
-  return await prisma_getResourceByUrl(resourceUrl);
+export const getResourceWithUrl = async <T extends boolean = false>(
+  resourceUrl: string,
+  withRarity: T = false as T,
+) => {
+  // For typescript explanation, see `getResource()`
+  if (withRarity) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (await prisma_getResourceByUrlWithRarity(resourceUrl)) as any;
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (await prisma_getResourceByUrl(resourceUrl)) as any;
+  }
 };
 
 /**
@@ -79,7 +111,10 @@ export const getResourcesInSpawnRegion = async (
   includeInactive = false,
 ) => {
   // queryResource
-  return await prisma_getSpawnedResourcesWithResourceForSpawnRegion(spawnRegionId, includeInactive);
+  return await prisma_getSpawnedResourcesWithResourceForSpawnRegion(
+    spawnRegionId,
+    includeInactive,
+  );
 };
 
 /**
