@@ -8,12 +8,26 @@ import {
   prisma_getResourceByUrl,
   prisma_getResourceByUrlWithRarity,
   prisma_getResources,
+  prisma_getSpawnedResourceById,
+  prisma_getSpawnedResourceByIdWithResource,
   prisma_getSpawnedResourcesWithResourceForSpawnRegion,
 } from "../queries/queryResource";
 import { cellToChildren, getResolution } from "h3-js";
 import { ResourceWithRarity, SpawnedResourceWithResource } from "../types";
 import { prefixedError } from "../util/prefixedError";
 
+// - - - - - RESOURCE - - - - -
+export const createResource = async (
+  resourceModel: Prisma.ResourceCreateInput,
+) => {
+  return await prisma_createResource(resourceModel);
+};
+
+export const createResources = async (
+  resourceModels: Prisma.ResourceCreateManyInput[],
+) => {
+  return await prisma_createResources(resourceModels);
+};
 /**
  * ### Gets a single Resource, by id (primary key)
  *
@@ -62,41 +76,6 @@ export const getResourceWithUrl = async <T extends boolean = false>(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (await prisma_getResourceByUrl(resourceUrl)) as any;
   }
-};
-
-/**
- * ### Helper function for converting a SpawnedResourceWithResource back to a SpawnedResource type
- * Sometimes we just want to carry the SpawnedResource type without the associated `resource: Resource`
- * property.
- *
- * @param fullResource The SpawnedResourceWithResource object to prune
- * @returns SpawnedResource
- */
-export const pruneSpawnedResourceWithResource = (
-  fullResource: SpawnedResourceWithResource,
-): SpawnedResource => {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { resource: _, ...rest } = fullResource;
-  return rest as SpawnedResource;
-};
-
-/**
- * ### Helper function for converting a SpawnedResource into a SpawnedResourceWithResource type
- * _This is the opposite of the_ `pruneSpawnedResourceWithResource` function
- *
- * This function adds a `resource: Resource` property to SpawnedResource
- *
- * @param spawnedResource
- * @returns SpawnedResoureWithResource
- */
-export const extendSpawnedResource = async (
-  spawnedResource: SpawnedResource,
-): Promise<SpawnedResourceWithResource> => {
-  const res = await prisma_getResourceById(spawnedResource.resourceId);
-  return {
-    ...spawnedResource,
-    resource: res,
-  };
 };
 
 /**
@@ -159,6 +138,8 @@ export const getRandomResource = async () => {
   return resource as Resource;
 };
 
+// - - - - - SpawnedResource - - - - -
+
 /**
  * ### Creates a SpawnedResource from a Resource model
  *
@@ -199,20 +180,6 @@ export const createSpawnedResourceModel = (
 
   return result;
 };
-
-export const handleCreateResource = async (
-  resourceModel: Prisma.ResourceCreateInput,
-) => {
-  return await prisma_createResource(resourceModel);
-};
-
-export const handleCreateResources = async (
-  resourceModels: Prisma.ResourceCreateManyInput[],
-) => {
-  return await prisma_createResources(resourceModels);
-};
-
-// TODO: Go to createRandomResourceModel() to work on the RNG aspect of resources
 
 /**
  *
@@ -273,4 +240,68 @@ export const generateSpawnedResourceModelsForSpawnRegion = async (
     );
   }
   return spawnedResourceModels;
+};
+
+/**
+ * ### Gets a single SpawnedResource, by id (primary key)
+ *
+ * If `withResource`= **true** (_default_), returns a `SpawnedResourceWithResource`. If **false**,
+ * returns a `SpawnedResource` model only.
+ *
+ * **Throws** error if SpawnedResource is not found.
+ */
+export const getSpawnedResource = async <T extends boolean = true>(
+  spawnedResourceId: string,
+  withResource: T = true as T, // typescript needs to know default value is type T
+): Promise<T extends true ? SpawnedResourceWithResource : SpawnedResource> => {
+  /* We use a generic T to help return the correct type based on the withResource boolean.
+  
+  Have to return each of these casted as `any` because Typescript can't determine
+  the actual type at that location; however, the callers of this function will receive
+  the correct type due to the return type in the function signature.
+  */
+  if (withResource) {
+    return (await prisma_getSpawnedResourceByIdWithResource(
+      spawnedResourceId,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    )) as any;
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (await prisma_getSpawnedResourceById(spawnedResourceId)) as any;
+  }
+};
+
+/**
+ * ### Helper function for converting a SpawnedResourceWithResource back to a SpawnedResource type
+ * Sometimes we just want to carry the SpawnedResource type without the associated `resource: Resource`
+ * property.
+ *
+ * @param fullResource The SpawnedResourceWithResource object to prune
+ * @returns SpawnedResource
+ */
+export const pruneSpawnedResourceWithResource = (
+  fullResource: SpawnedResourceWithResource,
+): SpawnedResource => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { resource: _, ...rest } = fullResource;
+  return rest as SpawnedResource;
+};
+
+/**
+ * ### Helper function for converting a SpawnedResource into a SpawnedResourceWithResource type
+ * _This is the opposite of the_ `pruneSpawnedResourceWithResource` function
+ *
+ * This function adds a `resource: Resource` property to SpawnedResource
+ *
+ * @param spawnedResource
+ * @returns SpawnedResoureWithResource
+ */
+export const extendSpawnedResource = async (
+  spawnedResource: SpawnedResource,
+): Promise<SpawnedResourceWithResource> => {
+  const res = await prisma_getResourceById(spawnedResource.resourceId);
+  return {
+    ...spawnedResource,
+    resource: res,
+  };
 };

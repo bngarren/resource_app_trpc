@@ -172,6 +172,46 @@ export const prisma_getResourcesByIds = async (
 };
 
 /**
+ * ### Gets a SpawnedResource, by id (primary key).
+ *
+ * This returns a `SpawnedResource` type/model only. This _does not_ include the associated Resource.
+ *
+ * If you need the `Resource` data, use **`prisma_getSpawnedResourceByIdWithResource()`**
+ *
+ * **Throws** error if SpawnedResource is not found.
+ */
+export const prisma_getSpawnedResourceById = async (
+  spawnedResourceId: string,
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  return await prismaClient.spawnedResource.findUniqueOrThrow({
+    where: { id: spawnedResourceId },
+  });
+};
+
+/**
+ * ### Gets a SpawnedResource, by id (primary key), with Resource.
+ *
+ * This returns a `SpawnedResourceWithResource` type which is a `SpawnedResource` with its
+ * associated resource data.
+ *
+ * If you only need the `SpawnedResource` model, use **`prisma_getSpawnedResourceById()`**
+ *
+ * **Throws** error if SpawnedResource is not found.
+ */
+export const prisma_getSpawnedResourceByIdWithResource = async (
+  spawnedResourceId: string,
+  prismaClient: PrismaClientOrTransaction = prisma,
+): Promise<SpawnedResourceWithResource> => {
+  return await prismaClient.spawnedResource.findUniqueOrThrow({
+    where: { id: spawnedResourceId },
+    include: {
+      resource: true,
+    },
+  });
+};
+
+/**
  * ### Gets the SpawnedResources associated with a given SpawnRegion
  * Each SpawnedResource is the type `SpawnedResourceWithResource`
  *
@@ -197,19 +237,6 @@ export const prisma_getSpawnedResourcesWithResourceForSpawnRegion = async (
       },
     });
   return res;
-};
-
-/**
- * ### Gets a SpawnedResource, by id (primary key).
- * **Throws** error if SpawnedResource is not found.
- */
-export const prisma_getSpawnedResourceById = async (
-  spawnedResourceId: string,
-  prismaClient: PrismaClientOrTransaction = prisma,
-) => {
-  return await prismaClient.resource.findUniqueOrThrow({
-    where: { id: spawnedResourceId },
-  });
 };
 
 /**

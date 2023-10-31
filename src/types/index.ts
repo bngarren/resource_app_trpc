@@ -1,3 +1,4 @@
+import { SpawnedResourceWithResource } from "./index";
 import {
   Prisma,
   SpawnedResource,
@@ -68,6 +69,17 @@ export interface SpawnRegionWithResourcesPartial
  */
 export type HarvestOperationWithResetDate = HarvestOperation &
   Pick<Prisma.SpawnRegionGetPayload<true>, "resetDate">;
+
+/**
+ * A HarvestOperation type that includes its SpawnedResource (which also includes its
+ * associated Resource)
+ *
+ * Thus, the 'spawnedResource' property holds a `SpawnedResourceWithResource` type.
+ */
+export type HarvestOperationWithSpawnedResourceWithResource = Omit<
+  HarvestOperation & { spawnedResource: SpawnedResourceWithResource },
+  "spawnedResourceId"
+>;
 
 export type ArcaneEnergyResource = Resource & {
   resourceType: "ARCANE_ENERGY";

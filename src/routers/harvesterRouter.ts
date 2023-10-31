@@ -68,43 +68,14 @@ export const harvesterRouter = router({
           code: "NOT_FOUND",
         });
       }
-      // next, get the harvester with this id
-      let harvester: Harvester;
-      try {
-        harvester = await getHarvester(input.harvesterId);
-      } catch (error) {
-        throw new TRPCError({
-          message: `harvester: ${input.harvesterId}`,
-          code: "NOT_FOUND",
-        });
-      }
+      // Verify harvester exists and is deployed
+      const harvester = await verifyDeployedHarvester(input.harvesterId);
 
       // Verify that this harvester is owned by this user
       if (harvester.userId !== user.id) {
         throw new TRPCError({
           message: `userUId: ${input.userUid} does not own this harvester: ${input.harvesterId}`,
           code: "FORBIDDEN",
-        });
-      }
-
-      // Verify that this harvester is currently deployed.
-      // We can't collect from a harvester that isn't deployed. This shouldn't even be doable
-      // from the client side, but we still check here
-
-      let isDeployed;
-      try {
-        isDeployed = isHarvesterDeployed(harvester);
-      } catch (error) {
-        throw new TRPCError({
-          message: `harvester: ${input.harvesterId}`,
-          code: "NOT_FOUND",
-        });
-      }
-
-      if (!isDeployed) {
-        throw new TRPCError({
-          message: `harvester: ${input.harvesterId} is not deployed`,
-          code: "CONFLICT",
         });
       }
 

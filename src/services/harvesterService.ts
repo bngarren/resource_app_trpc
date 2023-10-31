@@ -1,4 +1,8 @@
-import { prisma_getHarvestOperationsWithResetDateForHarvesterId } from "./../queries/queryHarvestOperation";
+import { SpawnedResourceWithResource } from "./../types/index";
+import {
+  prisma_getHarvestOperationsWithResetDateForHarvesterId,
+  prisma_getHarvestOperationsWithSpawnedResourceForHarvesterId,
+} from "./../queries/queryHarvestOperation";
 import { pdate, pduration } from "../util/getPrettyDate";
 import { getAllSettled } from "./../util/getAllSettled";
 import {
@@ -19,6 +23,7 @@ import {
   updateCreateOrRemoveUserInventoryItemWithNewQuantity,
   validateUserInventoryItemTransfer,
   removeUserInventoryItemByItemId,
+  getResourceUserInventoryItemByUrl,
 } from "./userInventoryService";
 import { TRPCError } from "@trpc/server";
 import {
@@ -92,22 +97,42 @@ export const isHarvesterDeployed = (harvester: Harvester) => {
 };
 
 /**
- * ### Returns all harvest operations for a harvester
+ * ### Returns all HarvestOperations for a harvester
  * - May return empty []
- * @param harvesterId
- * @returns
+ * ---
+ * - If you want to include the **resetDate** of the associated SpawnedResource's SpawnRegion,
+ * use `getHarvestOperationsWithResetDateForHarvester()`
+ *
+ * - If you want to include the **SpawnedResource** of associated with this HarvestOperation,
+ * use `getHarvestOperationsWithSpawnedResourceForHarvester()`
  */
 export const getHarvestOperationsForHarvester = async (harvesterId: string) => {
   return await prisma_getHarvestOperationsForHarvesterId(harvesterId);
 };
 
 /**
- * ### Returns all harvest operations for a harvester (special)
- * **Includes the `resetDate` property** from the associated spawned resource's spawn region.
+ * ### Returns all HarvestOperations for a harvester (special), each with the Spawned Resource
+ * - May return empty []
+ *
+ * Each HarvestOperation **includes a `spawnedResource` property** which is a `SpawnedResourceWithResource` type.
+ *
+ * See `getHarvestOperationsForHarvester()` for other variations.
+ */
+export const getHarvestOperationsWithSpawnedResourceForHarvester = async (
+  harvesterId: string,
+) => {
+  return await prisma_getHarvestOperationsWithSpawnedResourceForHarvesterId(
+    harvesterId,
+  );
+};
+
+/**
+ * ### Returns all harvest operations for a harvester (special), each with resetDate
+ * - May return empty []
+ *
+ * Each HarvestOperation **includes the `resetDate` property** from the associated spawned resource's spawn region.
  * This is useful for when looping through harvest operations looking for when a
  * harvested resource could be/would be stale or depleted.
- * @param harvesterId
- * @returns
  */
 export const getHarvestOperationsWithResetDateForHarvester = async (
   harvesterId: string,
@@ -820,10 +845,110 @@ export const handleTransferEnergy = async (
  *   - Remove old harvest operations
  * - Return user inventory items that were added
  *
+ * ---
+ *
+ * #### Force a different time?
+ * - If `atTime` is:
+ *   - **null**: we default to using the current time within our logic. **This forms the basis for
+ * how the HarvestOperations are "ended" and harvested resource calculations are made.
+ *   - **Date**: we use this passed date/time as the time to base our calculations. For example, this is
+ * utilized for testing purposes.
+ *
  * @param userId
  * @param harvesterId
  */
-export const handleCollect = async (userId: string, harvesterId: string) => {};
+export const handleCollect = async (
+  userId: string,
+  harvesterId: string,
+  atTime: Date | null,
+) => {
+  // - - - - - Get the Harvester - - - - -
+  let harvester: Harvester;
+  try {
+    harvester = await getHarvester(harvesterId);
+  } catch (error) {
+    throw new TRPCError({
+      message: `harvesterId: ${harvesterId}`,
+      code: "NOT_FOUND",
+    });
+  }
+
+  // - - - - - Saga setup - - - - -
+  // Get the harvest operations for this harvester
+  const orig_harvestOperationsWithSpawnedResource =
+    await getHarvestOperationsWithSpawnedResourceForHarvester(harvester.id);
+
+  // A HarvestedOp stores info about a completed HarvestOperation
+  type HarvestedOp = {
+    harvestOperationId: string;
+    spawnedResource: SpawnedResourceWithResource;
+    harvestedAmount: number;
+  };
+
+  /**
+   * An array of our HarvestOperation id's along with the SpawnedResource they harvested and the amount
+   */
+  const harvestedOps: HarvestedOp[] = [];
+
+  // This is the time we will say is the end of the harvest operation (collect up until this time)
+  const asOf = atTime ?? new Date();
+
+  const orig_harvestOperations = orig_harvestOperationsWithSpawnedResource.map(
+    (harvestOperationWithSpawnedResource) => {
+      // Pull out the spawned resource
+      const { spawnedResource, ..._harvestOperation } =
+        harvestOperationWithSpawnedResource;
+
+      // Reconstitute a HarvestOperation type
+      const harvestOperation: HarvestOperation = {
+        ..._harvestOperation,
+        spawnedResourceId: spawnedResource.id,
+      };
+
+      const amt = getAmountHarvestedByHarvestOperation(harvestOperation, asOf);
+
+      harvestedOps.push({
+        harvestOperationId: harvestOperation.id,
+        spawnedResource,
+        harvestedAmount: amt,
+      });
+
+      return harvestOperation;
+    },
+  );
+
+  // Store the user's current inventory items for these resources (if they exist), in case we roll back
+  const orig_resourceUserInventoryItems = await Promise.all(
+    harvestedOps.map((harvestedOp) => {
+      return getResourceUserInventoryItemByUrl(
+        harvestedOp.spawnedResource.resource.url,
+        userId,
+      );
+    }),
+  );
+
+  const handleCollectSaga = new SagaBuilder("handleCollect")
+    .withLogger()
+    // handleCollectSaga STEP 1
+    .invoke(async () => {
+      // Update ResourceUserInventoryItems
+      const updatePromises = harvestedOps.map(async (harvestedOp) => {
+        const resource = harvestedOp.spawnedResource.resource;
+
+        return await updateCreateOrRemoveUserInventoryItemWithNewQuantity(
+          resource.id,
+          "RESOURCE",
+          userId,
+          harvestedOp.harvestedAmount,
+        );
+      });
+    }, "update user inventory items")
+    .withCompensation(async () => {
+      // Remove previously added
+      // TODO
+      // Recreate the original items
+    });
+};
 
 /**
  * ### Picks up the harvester and puts it back in the user's inventory

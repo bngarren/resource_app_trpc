@@ -2,7 +2,10 @@ import { Prisma } from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
 import { logger } from "../logger/logger";
 import { getSpawnRegionParentOfSpawnedResource } from "../services/spawnRegionService";
-import { HarvestOperationWithResetDate } from "../types";
+import {
+  HarvestOperationWithResetDate,
+  HarvestOperationWithSpawnedResourceWithResource,
+} from "../types";
 
 /**
  * ### Creates a new Harvest Operation
@@ -75,7 +78,7 @@ export const prisma_createHarvestOperationsTransaction = async (
 };
 
 /**
- * ### Gets all harvest operations associated with this harvester, by id (primary key)
+ * ### Gets all harvest operations associated with this harvester, by harvesterId (primary key)
  * - May return empty [] if no harvest operations are associated
  */
 export const prisma_getHarvestOperationsForHarvesterId = async (
@@ -90,7 +93,34 @@ export const prisma_getHarvestOperationsForHarvesterId = async (
 };
 
 /**
- * ### Gets HarvestOperations for a given harvester, by id (primary key)
+ * ### Gets HarvestOperations for a given harvester, by harvesterId (primary key), with SpawnedResource
+ * - May return empty [] if no harvest operations are associated
+ *
+ * The return type is an array of HarvestOperations & { spawnedResource },
+ * of which 'spawnedResource' is a `SpawnedResourceWithResource` type
+ * thus the overall return type is an array, `HarvestOperationWithSpawnedResource[]` type
+ */
+export const prisma_getHarvestOperationsWithSpawnedResourceForHarvesterId =
+  async (
+    harvesterId: string,
+    prismaClient: PrismaClientOrTransaction = prisma,
+  ): Promise<HarvestOperationWithSpawnedResourceWithResource[]> => {
+    return await prismaClient.harvestOperation.findMany({
+      where: {
+        harvesterId: harvesterId,
+      },
+      include: {
+        spawnedResource: {
+          include: {
+            resource: true,
+          },
+        },
+      },
+    });
+  };
+
+/**
+ * ### Gets HarvestOperations for a given harvester, by harvesterId (primary key), with resetDate
  * The return type is an array of HarvestOperations & { resetDate },
  * i.e. `HarvestOperationWithResetDate[]` type
  *
