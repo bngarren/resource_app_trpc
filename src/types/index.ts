@@ -1,4 +1,3 @@
-import { SpawnedResourceWithResource } from "./index";
 import {
   Prisma,
   SpawnedResource,
@@ -10,56 +9,91 @@ import {
   Harvester,
 } from "@prisma/client";
 
-// A dev type that helps me to see to full type structure of my types
+/*
+
+We create variations of the Prisma generated types according to Prisma doc's suggested
+solution at https://www.prisma.io/docs/concepts/components/prisma-client/advanced-type-safety/operating-against-partial-structures-of-model-types#problem-using-variations-of-the-generated-model-type
+
+Essentially, the 'Prisma.validator' is a utility function that ensures a certain query shape is correct/valid
+according to our schema. By passing this validated query to Prisma's 'GetPayload' utility we can get the 
+expected type that would return from using this query. This allows us to create types that include certain 
+relations, e.g. SpawnedResourceWithResource.
+
+*/
+
+/** A dev type that helps me to see to full type structure of my types
+ */
 type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
 
 // - - - - - Resource - - - - -
 
+const resourceWithRarityQuery = Prisma.validator<Prisma.ResourceArgs>()({
+  include: {
+    resourceRarity: true,
+  },
+});
+
 /**
- * A `Resource` type with its associated `ResourceRarity`
+ * ### A `Resource` type with its associated `ResourceRarity`
  */
 export type ResourceWithRarity = Omit<
-  Prisma.ResourceGetPayload<{
-    include: {
-      resourceRarity: true;
-    };
-  }>,
+  Prisma.ResourceGetPayload<typeof resourceWithRarityQuery>,
   "resourceRarityLevel"
 >;
 
 // - - - - - SpawnedResource - - - - -
+
+const spawnedResourceWithResourceQuery =
+  Prisma.validator<Prisma.SpawnedResourceArgs>()({
+    include: {
+      resource: true,
+    },
+  });
 /**
- * A custom SpawnedResource type that includes the associated Resource
+ * ### A SpawnedResource type that includes its associated Resource
+ *
+ * A **'spawned resource'** is one that has been populated into the world, i.e.
+ * associated with a spawn region and having an h3 index. A **'Resource'** is
+ * the static model that contains the details about the resource which the spawned
+ * resource references.
  */
 export type SpawnedResourceWithResource = Omit<
-  Prisma.SpawnedResourceGetPayload<{
-    include: {
-      resource: true;
-    };
-  }>,
+  Prisma.SpawnedResourceGetPayload<typeof spawnedResourceWithResourceQuery>,
   "resourceId"
 >;
 
 // - - - - - SpawnRegion - - - - -
 
-/**
- * A SpawnRegion type that includes all spawned resources (each of the type
- * `SpawnedResourceWithResource`)
- */
-export interface SpawnRegionWithResources
-  extends Omit<Prisma.SpawnRegionGetPayload<true>, "SpawnedResources"> {
-  resources: SpawnedResourceWithResource[];
-}
+const spawnRegionWithSpawnedResourcesQuery =
+  Prisma.validator<Prisma.SpawnRegionArgs>()({
+    include: {
+      spawnedResources: true,
+    },
+  });
 
 /**
- * A SpawnRegion type that includes all spawned resources (each of the type
- * `SpawnedResource`). **DOES NOT INCLUDE** the full Resource model. For this type,
- * see `SpawnRegionWithResources`
+ * ### A SpawnRegion type that includes spawned resources (each of the type
+ * `SpawnedResourceWithResource`)
+ *
+ * If you do not need the full Resource model returned with the SpawnedResource,
+ * use `SpawnRegionWithSpawnedResourcesPartial` type.
  */
-export interface SpawnRegionWithResourcesPartial
-  extends Omit<Prisma.SpawnRegionGetPayload<true>, "SpawnedResources"> {
-  resources: SpawnedResource[];
-}
+export type SpawnRegionWithSpawnedResources = Omit<
+  Prisma.SpawnRegionGetPayload<typeof spawnRegionWithSpawnedResourcesQuery>,
+  "spawnedResources"
+> & { spawnedResources: SpawnedResourceWithResource[] };
+
+/**
+ * ### A SpawnRegion type that includes spawned resources (each of the type
+ * `SpawnedResource`)
+ *
+ * **DOES NOT INCLUDE** the full Resource model. For this type,
+ * see `SpawnRegionWithSpawnedResources`
+ */
+export type SpawnRegionWithSpawnedResourcesPartial = Omit<
+  Prisma.SpawnRegionGetPayload<typeof spawnRegionWithSpawnedResourcesQuery>,
+  "spawnedResources"
+> & { spawnedResources: SpawnedResource[] };
 
 // - - - - - HarvestOperation - - - - -
 
@@ -70,16 +104,28 @@ export interface SpawnRegionWithResourcesPartial
 export type HarvestOperationWithResetDate = HarvestOperation &
   Pick<Prisma.SpawnRegionGetPayload<true>, "resetDate">;
 
+const harvestOperationWithSpawnedResourceQuery =
+  Prisma.validator<Prisma.HarvestOperationArgs>()({
+    include: {
+      spawnedResource: {
+        include: {
+          resource: true,
+        },
+      },
+    },
+  });
 /**
  * A HarvestOperation type that includes its SpawnedResource (which also includes its
  * associated Resource)
  *
- * Thus, the 'spawnedResource' property holds a `SpawnedResourceWithResource` type.
+ * Thus, the **'spawnedResource'** property holds a `SpawnedResourceWithResource` type.
  */
 export type HarvestOperationWithSpawnedResourceWithResource = Omit<
-  HarvestOperation & { spawnedResource: SpawnedResourceWithResource },
-  "spawnedResourceId"
->;
+  Prisma.HarvestOperationGetPayload<
+    typeof harvestOperationWithSpawnedResourceQuery
+  >,
+  "spawnedResourceId" | "spawnedResource"
+> & { spawnedResource: SpawnedResourceWithResource };
 
 export type ArcaneEnergyResource = Resource & {
   resourceType: "ARCANE_ENERGY";
@@ -112,9 +158,9 @@ export type UserInventoryItem =
  * ```
  */
 export type UserInventoryItemWithItem<T extends ItemType> = T extends "RESOURCE"
-  ? ResourceUserInventoryItem & { item: Resource }
+  ? ResourceUserInventoryItem & { item: Resource; itemType: "RESOURCE" }
   : T extends "HARVESTER"
-  ? HarvesterUserInventoryItem & { item: Harvester }
+  ? HarvesterUserInventoryItem & { item: Harvester; itemType: "HARVESTER" }
   : never;
 
 export type UserInventoryItemWithAnyItem = UserInventoryItemWithItem<
@@ -129,11 +175,6 @@ export type UserInventoryDict = {
   resources: UserInventoryItemWithItem<"RESOURCE">[];
   harvesters: UserInventoryItemWithItem<"HARVESTER">[];
 };
-
-type test = Expand<SpawnRegionWithResources>;
-type test2 = Expand<UserInventoryItem>;
-type test3 = Expand<UserInventoryItemWithItem<"HARVESTER">>;
-type test4 = Expand<ResourceWithRarity>;
 
 export type Coordinate = {
   latitude: number;

@@ -24,6 +24,7 @@ import {
   validateUserInventoryItemTransfer,
   removeUserInventoryItemByItemId,
   getResourceUserInventoryItemByUrl,
+  addResourceToUserInventory,
 } from "./userInventoryService";
 import { TRPCError } from "@trpc/server";
 import {
@@ -860,7 +861,7 @@ export const handleTransferEnergy = async (
 export const handleCollect = async (
   userId: string,
   harvesterId: string,
-  atTime: Date | null,
+  atTime?: Date,
 ) => {
   // - - - - - Get the Harvester - - - - -
   let harvester: Harvester;
@@ -942,11 +943,32 @@ export const handleCollect = async (
           harvestedOp.harvestedAmount,
         );
       });
+
+      return await Promise.all(updatePromises);
     }, "update user inventory items")
     .withCompensation(async () => {
       // Remove previously added
-      // TODO
+      await Promise.all(
+        harvestedOps.map((harvestedOp) => {
+          return removeUserInventoryItemByItemId(
+            harvestedOp.spawnedResource.id,
+            "RESOURCE",
+            userId,
+          );
+        }),
+      );
+
       // Recreate the original items
+      return await Promise.all(
+        orig_resourceUserInventoryItems.map(
+          (orig_resourceUserInventoryItem) => {
+            const { item: _item, ...resourceUserInventoryItem } =
+              orig_resourceUserInventoryItem;
+
+            return addResourceToUserInventory(resourceUserInventoryItem);
+          },
+        ),
+      );
     });
 };
 

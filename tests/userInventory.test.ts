@@ -15,7 +15,10 @@ import { logger } from "../src/logger/logger";
 import { getUserInventoryRequestSchema } from "../src/schema";
 import { GetUserInventoryRequestOutput } from "../src/types/trpcTypes";
 import { prisma } from "../src/prisma";
-import { UserInventoryItemWithAnyItem } from "../src/types";
+import {
+  UserInventoryItemWithAnyItem,
+  UserInventoryItemWithItem,
+} from "../src/types";
 import { parseISO } from "date-fns";
 import { User } from "@prisma/client";
 
@@ -81,27 +84,26 @@ describe("/userInventory", () => {
       expect(res.statusCode).toBe(200);
     });
 
-    it("should return a correct Player Inventory$", async () => {
-      const userResourceItems = await prisma.resourceUserInventoryItem.findMany(
-        {
+    it("should return a correct Player Inventory", async () => {
+      const userResourceItems =
+        (await prisma.resourceUserInventoryItem.findMany({
           where: {
             userId: testUser.id,
           },
           include: {
             item: true,
           },
-        },
-      );
+        })) as UserInventoryItemWithItem<"RESOURCE">[];
 
       const userHarvesterItems =
-        await prisma.harvesterUserInventoryItem.findMany({
+        (await prisma.harvesterUserInventoryItem.findMany({
           where: {
             userId: testUser.id,
           },
           include: {
             item: true,
           },
-        });
+        })) as UserInventoryItemWithItem<"HARVESTER">[];
       // ...
       // TODO: include userComponentItems when necessary...
 
@@ -161,7 +163,7 @@ describe("/userInventory", () => {
       });
     });
 
-    it("should return an object with an empty items array if the user has no inventory items$", async () => {
+    it("should return an object with an empty items array if the user has no inventory items", async () => {
       const userInventoryItemsDict = await getUserInventoryItems(testUser.id);
 
       const userInventoryItems = Object.values(userInventoryItemsDict).flat();
@@ -211,11 +213,12 @@ describe("/userInventory", () => {
       // Grab a resource
       const resource = await prisma.resource.findFirstOrThrow();
 
-      const anotherUserInventoryItem = await addResourceToUserInventory(
-        resource.id,
-        anotherUser.id,
-        1,
-      );
+      const anotherUserInventoryItem = await addResourceToUserInventory({
+        resourceId: resource.id,
+        userId: anotherUser.id,
+        quantity: 1,
+        itemType: "RESOURCE",
+      });
 
       const res = await requester.send(
         "GET",

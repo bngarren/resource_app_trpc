@@ -13,13 +13,13 @@ datasource db {
 }
 
 model User {
-  id                         String                       @id @default(uuid())
-  firebase_uid               String                       @unique
-  email                      String                       @unique
-  username                   String?
-  Harvesters                 Harvester[]
-  ResourceUserInventoryItem  ResourceUserInventoryItem[]
-  HarvesterUserInventoryItem HarvesterUserInventoryItem[]
+  id                          String                       @id @default(uuid())
+  firebase_uid                String                       @unique
+  email                       String                       @unique
+  username                    String?
+  harvesters                  Harvester[] // Prisma relation field; does NOT exist in database
+  resourceUserInventoryItems  ResourceUserInventoryItem[] // Prisma relation field; does NOT exist in database
+  harvesterUserInventoryItems HarvesterUserInventoryItem[] // Prisma relation field; does NOT exist in database
 }
 
 model SpawnRegion {
@@ -29,7 +29,7 @@ model SpawnRegion {
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
   resetDate        DateTime?         @map("reset_date")
-  SpawnedResources SpawnedResource[]
+  spawnedResources SpawnedResource[] // Prisma relation field; does NOT exist in database
 }
 
 enum ResourceType {
@@ -51,19 +51,19 @@ model ResourceRarity {
   level      ResourceRarityLevel @id @default(VERY_COMMON)
   name       String
   likelihood Int                 @unique @default(1) // Should be 1-6
-  Resource   Resource[]
+  resources  Resource[] // Prisma relation field; does NOT exist in database
 }
 
 model Resource {
-  id                        String                      @id @default(uuid())
-  url                       String                      @unique
-  name                      String
-  resourceType              ResourceType                @map("resource_type")
-  resourceRarity            ResourceRarity              @relation(fields: [resourceRarityLevel], references: [level])
-  resourceRarityLevel       ResourceRarityLevel         // ResourceRarityLevel is the PK for ResourceRairty
-  energyEfficiency          Float?                      @map("energy_efficiency") // Only for Arcane Energy
-  SpawnedResources          SpawnedResource[]
-  ResourceUserInventoryItem ResourceUserInventoryItem[]
+  id                         String                      @id @default(uuid())
+  url                        String                      @unique
+  name                       String
+  resourceType               ResourceType                @map("resource_type")
+  resourceRarity             ResourceRarity              @relation(fields: [resourceRarityLevel], references: [level])
+  resourceRarityLevel        ResourceRarityLevel // ResourceRarityLevel is the PK for ResourceRairty
+  energyEfficiency           Float?                      @map("energy_efficiency") // Only for Arcane Energy
+  spawnedResources           SpawnedResource[] // Prisma relation field; does NOT exist in database
+  resourceUserInventoryItems ResourceUserInventoryItem[] // Prisma relation field; does NOT exist in database
 }
 
 model SpawnedResource {
@@ -75,7 +75,7 @@ model SpawnedResource {
   h3Index           String             @unique @map("h3_index")
   h3Resolution      Int                @map("h3_resolution")
   isActive          Boolean            @default(true) @map("is_active")
-  HarvestOperations HarvestOperation[]
+  harvestOperations HarvestOperation[] // Prisma relation field; does NOT exist in database
 
   // Each SpawnedResource is uniquely defined by an h3Index and spawnRegionId
   // Thus, you can't have an h3Index used by more than one SpawnedResource per region
@@ -83,19 +83,19 @@ model SpawnedResource {
 }
 
 model Harvester {
-  id                         String                       @id @default(uuid())
-  name                       String
-  user                       User                         @relation(fields: [userId], references: [id])
-  userId                     String                       @map("user_id") // owner
-  deployedDate               DateTime?                    @map("deployed_date") // the time the harvester was deployed to a harvestRegion
-  metadata                   Json                         @default("{}") // includes energy efficiency, extraction rate, inventory max size, etc.
-  h3Index                    String?                      @map("h3_index") // deployment location. Should be size/resolution of harvest region. If null, not deployed
-  initialEnergy              Float                        @default(0.0) @map("initial_energy") // starting energy level
-  energyStartTime            DateTime?                    @map("energy_start_time") // start time of initial energy usage
-  energyEndTime              DateTime?                    @map("energy_end_time") // expected end time for energy
-  energySourceId             String?                      @map("energy_source_id") // references a Resource id for the Arcane Energy source input
-  HarvestOperations          HarvestOperation[]
-  HarvesterUserInventoryItem HarvesterUserInventoryItem[]
+  id                          String                       @id @default(uuid())
+  name                        String
+  user                        User                         @relation(fields: [userId], references: [id])
+  userId                      String                       @map("user_id") // owner
+  deployedDate                DateTime?                    @map("deployed_date") // the time the harvester was deployed to a harvestRegion
+  metadata                    Json                         @default("{}") // includes energy efficiency, extraction rate, inventory max size, etc.
+  h3Index                     String?                      @map("h3_index") // deployment location. Should be size/resolution of harvest region. If null, not deployed
+  initialEnergy               Float                        @default(0.0) @map("initial_energy") // starting energy level
+  energyStartTime             DateTime?                    @map("energy_start_time") // start time of initial energy usage
+  energyEndTime               DateTime?                    @map("energy_end_time") // expected end time for energy
+  energySourceId              String?                      @map("energy_source_id") // references a Resource id for the Arcane Energy source input
+  harvestOperations           HarvestOperation[] // Prisma relation field; does NOT exist in database
+  harvesterUserInventoryItems HarvesterUserInventoryItem[] // Prisma relation field; does NOT exist in database
 
   @@unique([id, userId]) // only 1 user per harvester
 }
@@ -131,7 +131,7 @@ model ResourceUserInventoryItem {
   userId     String   @map("user_id")
   item       Resource @relation(fields: [resourceId], references: [id])
   resourceId String   @map("resource_id")
-  itemType   ItemType @map("item_type")
+  itemType   ItemType @map("item_type") @default(RESOURCE)
   quantity   Int
   // i.e., a user should not have 2 records in ResourceUserInventoryItem table for the same item
 
@@ -144,7 +144,7 @@ model HarvesterUserInventoryItem {
   userId      String    @map("user_id")
   item        Harvester @relation(fields: [harvesterId], references: [id])
   harvesterId String    @map("harvester_id")
-  itemType    ItemType  @map("item_type")
+  itemType    ItemType  @map("item_type") @default(HARVESTER)
   quantity    Int
   // i.e., a user should not have 2 records in HarvesterUserInventoryItem table for the same item
 

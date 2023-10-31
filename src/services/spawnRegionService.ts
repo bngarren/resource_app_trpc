@@ -6,7 +6,7 @@ import {
 } from "../queries/querySpawnRegion";
 import { Prisma } from "@prisma/client";
 import { prisma_updateSpawnedResourcesForSpawnRegionTransaction } from "../queries/queryResource";
-import { SpawnRegionWithResources } from "../types";
+import { SpawnRegionWithSpawnedResources } from "../types";
 import { logger } from "../logger/logger";
 
 // TODO: Probably not the best to just re-export a database method.
@@ -46,7 +46,7 @@ export const handleCreateSpawnRegions = async (
  */
 export const updateSpawnRegion = async (
   spawnRegionId: string,
-): Promise<SpawnRegionWithResources | null> => {
+): Promise<SpawnRegionWithSpawnedResources | null> => {
   if (spawnRegionId === null) {
     console.error(`Couldn't find SpawnRegion (id=${spawnRegionId}) to update.`);
     return null;

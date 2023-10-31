@@ -8,7 +8,7 @@ import {
   Coordinate,
   InteractableResource,
   LatLngTuple,
-  SpawnRegionWithResources,
+  SpawnRegionWithSpawnedResources,
   ScanResult,
 } from "../types";
 import config from "../config";
@@ -87,9 +87,10 @@ export const handleScan = async (
   /**
    * A `SpawnRegionWithResource[]` array that contains the updated SpawnRegions
    */
-  const updatedSpawnRegions = await getAllSettled<SpawnRegionWithResources>(
-    spawnRegions.map((r) => updateSpawnRegion(r.id)),
-  );
+  const updatedSpawnRegions =
+    await getAllSettled<SpawnRegionWithSpawnedResources>(
+      spawnRegions.map((r) => updateSpawnRegion(r.id)),
+    );
 
   /* Expect that every spawn region was sucessfully updated.
   If not, the errored regions would have returned null and not be present
@@ -134,7 +135,7 @@ export const handleScan = async (
     // For each SpawnRegion...
     .map((reg): InteractableResource[] => {
       // Loop through the SpawnRegions's spawned resources
-      return reg.resources.map((r) => {
+      return reg.spawnedResources.map((r) => {
         const resourceLatLngCenter = h3.cellToLatLng(r.h3Index);
 
         /**
