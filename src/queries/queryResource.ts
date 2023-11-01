@@ -1,7 +1,7 @@
 import { logger } from "./../logger/logger";
 import {
   ResourceWithRarity,
-  SpawnRegionWithResourcesPartial,
+  SpawnRegionWithSpawnedResourcesPartial,
   SpawnedResourceWithResource,
 } from "./../types/index";
 import { Prisma, SpawnRegion, Resource, SpawnedResource } from "@prisma/client";
@@ -318,7 +318,7 @@ export const prisma_updateSpawnedResourcesForSpawnRegionTransaction = async (
   }
 
   // Get the spawn region and its active (prior to function call) resources
-  const { resources: _priorResources, ...rest } =
+  const { spawnedResources: _priorResources, ...rest } =
     await prisma_getSpawnRegionWithResources(spawnRegionId);
   const priorResources = _priorResources.map((pr) =>
     pruneSpawnedResourceWithResource(pr),
@@ -362,7 +362,7 @@ export const prisma_updateSpawnedResourcesForSpawnRegionTransaction = async (
       }
     }
 
-    let trxResult: SpawnRegionWithResourcesPartial;
+    let trxResult: SpawnRegionWithSpawnedResourcesPartial;
 
     try {
       trxResult = await prisma.$transaction(async (trx) => {
@@ -434,9 +434,9 @@ export const prisma_updateSpawnedResourcesForSpawnRegionTransaction = async (
         /* The SpawnRegion WAS stale/overdue, so we updated the resources.
             Return the updated SpawnRegion        
           */
-        const updatedSpawnRegion: SpawnRegionWithResourcesPartial = {
+        const updatedSpawnRegion: SpawnRegionWithSpawnedResourcesPartial = {
           ...res_3,
-          resources: newSpawnedResources,
+          spawnedResources: newSpawnedResources,
         };
         return updatedSpawnRegion;
       });
@@ -455,8 +455,8 @@ export const prisma_updateSpawnedResourcesForSpawnRegionTransaction = async (
       */
     return {
       ...spawnRegion,
-      resources: priorResources,
-    } as SpawnRegionWithResourcesPartial;
+      spawnedResources: priorResources,
+    } as SpawnRegionWithSpawnedResourcesPartial;
   }
 };
 

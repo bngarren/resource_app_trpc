@@ -97,7 +97,7 @@ CREATE TABLE "ResourceUserInventoryItem" (
     "id" TEXT NOT NULL,
     "user_id" TEXT NOT NULL,
     "resource_id" TEXT NOT NULL,
-    "item_type" "ItemType" NOT NULL,
+    "item_type" "ItemType" NOT NULL DEFAULT 'RESOURCE',
     "quantity" INTEGER NOT NULL,
 
     CONSTRAINT "ResourceUserInventoryItem_pkey" PRIMARY KEY ("id")
@@ -108,7 +108,7 @@ CREATE TABLE "HarvesterUserInventoryItem" (
     "id" TEXT NOT NULL,
     "user_id" TEXT NOT NULL,
     "harvester_id" TEXT NOT NULL,
-    "item_type" "ItemType" NOT NULL,
+    "item_type" "ItemType" NOT NULL DEFAULT 'HARVESTER',
     "quantity" INTEGER NOT NULL,
 
     CONSTRAINT "HarvesterUserInventoryItem_pkey" PRIMARY KEY ("id")
@@ -173,3 +173,41 @@ ALTER TABLE "HarvesterUserInventoryItem" ADD CONSTRAINT "HarvesterUserInventoryI
 
 -- AddForeignKey
 ALTER TABLE "HarvesterUserInventoryItem" ADD CONSTRAINT "HarvesterUserInventoryItem_harvester_id_fkey" FOREIGN KEY ("harvester_id") REFERENCES "Harvester"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- This SQL must be executed AFTER the initial migration that generates the TABLES!
+
+
+-- Generalized function to enforce itemType for ResourceUserInventoryItem
+CREATE FUNCTION set_resource_item_type() RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.item_type <> 'RESOURCE' THEN
+    RAISE NOTICE 'itemType was attempted to be set to %, overriding to RESOURCE', NEW.item_type;
+    NEW.item_type := 'RESOURCE';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for ResourceUserInventoryItem
+CREATE TRIGGER enforce_resource_type
+  BEFORE INSERT OR UPDATE ON "ResourceUserInventoryItem"
+  FOR EACH ROW EXECUTE FUNCTION set_resource_item_type();
+
+-- Generalized function to enforce itemType for HarvesterUserInventoryItem
+CREATE FUNCTION set_harvester_item_type() RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.item_type <> 'HARVESTER' THEN
+    RAISE NOTICE 'itemType was attempted to be set to %, overriding to HARVESTER', NEW.item_type;
+    NEW.item_type := 'HARVESTER';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for HarvesterUserInventoryItem
+CREATE TRIGGER enforce_harvester_type
+  BEFORE INSERT OR UPDATE ON "HarvesterUserInventoryItem"
+  FOR EACH ROW EXECUTE FUNCTION set_harvester_item_type();
+
+
+

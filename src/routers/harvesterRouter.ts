@@ -199,21 +199,21 @@ async function verifyDeployedHarvester(harvesterId: string) {
   let isDeployed;
   try {
     isDeployed = isHarvesterDeployed(harvester);
-
-    if (!isDeployed) {
-      const errMsg = `harvester: ${harvesterId} is not deployed`;
-      logger.error(errMsg);
-      throw new TRPCError({
-        message: errMsg,
-        code: "CONFLICT",
-      });
-    }
   } catch (error) {
-    const errMsg = `harvester: ${harvesterId} not found`;
+    const errMsg = `harvester: ${harvesterId} not found (but should have already been verified??)`;
     logger.error(errMsg);
     throw new TRPCError({
       message: errMsg,
       code: "NOT_FOUND",
+    });
+  }
+
+  if (!isDeployed) {
+    const errMsg = `harvester: ${harvesterId} is not deployed`;
+    logger.error(errMsg);
+    throw new TRPCError({
+      message: errMsg,
+      code: "CONFLICT",
     });
   }
 

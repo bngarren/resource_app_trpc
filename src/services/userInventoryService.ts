@@ -23,46 +23,73 @@ import {
 
 /**
  * ### Adds a new Resource item to the user's inventory
+ *
+ * The `model` includes the scalar relation fields, e.g. userId, resourceId
  * @returns
  */
 export const addResourceToUserInventory = async (
-  resourceId: string,
-  userId: string,
-  quantity = 1,
-) => {
-  if (quantity <= 0) {
+  model: Prisma.ResourceUserInventoryItemUncheckedCreateInput & {
+    itemType: "RESOURCE";
+  },
+): Promise<UserInventoryItemWithItem<"RESOURCE">> => {
+  if (model.quantity <= 0) {
     throw new Error(
-      `Quantity cannot be less than or equal to 0 (received ${quantity})`,
+      `Quantity cannot be less than or equal to 0 (received ${model.quantity})`,
     );
   }
-  return await prisma_createResourceUserInventoryItem({
-    itemType: "RESOURCE",
-    quantity,
-    userId,
-    resourceId,
-  });
+
+  const { userId, resourceId, ...partialModel } = model;
+
+  const newModel: Prisma.ResourceUserInventoryItemCreateInput = {
+    ...partialModel,
+    user: {
+      connect: {
+        id: userId,
+      },
+    },
+    item: {
+      connect: {
+        id: resourceId,
+      },
+    },
+  };
+
+  return await prisma_createResourceUserInventoryItem(newModel);
 };
 
 /**
  * ### Adds a new Harvester item to the user's inventory
+ *
+ * The `model` includes the scalar relation fields, e.g. userId, harvesterId
  * @returns
  */
 export const addHarvesterToUserInventory = async (
-  harvesterId: string,
-  userId: string,
-  quantity = 1,
+  model: Prisma.HarvesterUserInventoryItemUncheckedCreateInput & {
+    itemType: "HARVESTER";
+  },
 ) => {
-  if (quantity <= 0) {
+  if (model.quantity <= 0) {
     throw new Error(
-      `Quantity cannot be less than or equal to 0 (received ${quantity})`,
+      `Quantity cannot be less than or equal to 0 (received ${model.quantity})`,
     );
   }
-  return await prisma_createHarvesterUserInventoryItem({
-    itemType: "HARVESTER",
-    quantity,
-    userId,
-    harvesterId,
-  });
+  const { userId, harvesterId, ...partialModel } = model;
+
+  const newModel: Prisma.HarvesterUserInventoryItemCreateInput = {
+    ...partialModel,
+    user: {
+      connect: {
+        id: userId,
+      },
+    },
+    item: {
+      connect: {
+        id: harvesterId,
+      },
+    },
+  };
+
+  return await prisma_createHarvesterUserInventoryItem(newModel);
 };
 
 /**

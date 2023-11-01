@@ -446,6 +446,14 @@ describe("/harvester", () => {
         },
       });
 
+      // deploy the test harvester
+      await requester.send(
+        "POST",
+        "/harvester.deploy",
+        { harvesterId: testHarvester.id, harvestRegion },
+        harvesterDeployRequestSchema,
+      );
+
       // attempt request with wrong user + harvester
       const res = await requester.send(
         "POST",

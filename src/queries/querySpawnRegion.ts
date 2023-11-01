@@ -1,7 +1,7 @@
 import { Prisma, SpawnRegion } from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
 import {
-  SpawnRegionWithResources,
+  SpawnRegionWithSpawnedResources,
   SpawnedResourceWithResource,
 } from "../types";
 
@@ -122,11 +122,11 @@ export const prisma_getSpawnRegionWithResources = async (
   id: string,
   includeInactive = false,
   prismaClient: PrismaClientOrTransaction = prisma,
-): Promise<SpawnRegionWithResources> => {
+): Promise<SpawnRegionWithSpawnedResources> => {
   const spawnRegion = await prismaClient.spawnRegion.findUnique({
     where: { id },
     include: {
-      SpawnedResources: {
+      spawnedResources: {
         include: {
           resource: true,
         },
@@ -138,15 +138,16 @@ export const prisma_getSpawnRegionWithResources = async (
     throw new Error(`No spawn region found with id: ${id}`);
   }
 
-  const resources: SpawnedResourceWithResource[] =
-    spawnRegion.SpawnedResources.filter((spawnedResource) => {
+  const resources: SpawnedResourceWithResource[] = spawnRegion.spawnedResources
+    .filter((spawnedResource) => {
       // Filter the SpawnedResources; defaults to including only active ones
       if (includeInactive) {
         return true;
       } else {
         return spawnedResource.isActive;
       }
-    }).map((spawnedResource) => {
+    })
+    .map((spawnedResource) => {
       // Add the Resource as a property to the SpawnedResource
       const { resource, ...rest } = spawnedResource;
       return {
@@ -155,13 +156,13 @@ export const prisma_getSpawnRegionWithResources = async (
       };
     });
 
-  const { SpawnedResources, ...restSpawnRegion } = spawnRegion;
+  const { spawnedResources, ...restSpawnRegion } = spawnRegion;
 
   // Return the SpawnRegion along with SpawnedResourceWithResource[]
   return {
     ...restSpawnRegion,
-    resources,
-  } as SpawnRegionWithResources;
+    spawnedResources: resources,
+  } as SpawnRegionWithSpawnedResources;
 };
 
 /**
