@@ -2,9 +2,9 @@
 
 ### Entrypoint for our TESTING target. 
 
-# For testing environment, need to run prisma migrations
+# For testing environment, can run prisma reset here. 
 
-dockerize -wait tcp://db_testing:5432 -timeout 10s echo "Postgres up. Now resetting and migrating..."
+dockerize -wait tcp://db_testing:5432 -timeout 10s echo "Postgres up. Now resetting database..."
 npx dotenv -e .env.test -- npx prisma migrate reset --force --skip-seed --skip-generate
 #npx dotenv -e .env.test -- npx prisma migrate deploy
 echo

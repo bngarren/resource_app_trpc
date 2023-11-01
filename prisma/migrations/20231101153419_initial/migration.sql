@@ -174,23 +174,40 @@ ALTER TABLE "HarvesterUserInventoryItem" ADD CONSTRAINT "HarvesterUserInventoryI
 -- AddForeignKey
 ALTER TABLE "HarvesterUserInventoryItem" ADD CONSTRAINT "HarvesterUserInventoryItem_harvester_id_fkey" FOREIGN KEY ("harvester_id") REFERENCES "Harvester"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- Create Trigger Function
-CREATE OR REPLACE FUNCTION check_itemtype_update()
-RETURNS TRIGGER AS $$
+-- This SQL must be executed AFTER the initial migration that generates the TABLES!
+
+
+-- Generalized function to enforce itemType for ResourceUserInventoryItem
+CREATE FUNCTION set_resource_item_type() RETURNS TRIGGER AS $$
 BEGIN
-  IF OLD.item_type IS DISTINCT FROM NEW.item_type THEN
-    RAISE EXCEPTION 'The itemType field cannot be modified!';
+  IF NEW.item_type <> 'RESOURCE' THEN
+    RAISE NOTICE 'itemType was attempted to be set to %, overriding to RESOURCE', NEW.item_type;
+    NEW.item_type := 'RESOURCE';
   END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Create Trigger for ResourceUserInventoryItem
-CREATE TRIGGER trigger_check_itemtype_update_resource
-BEFORE UPDATE ON "ResourceUserInventoryItem"
-FOR EACH ROW EXECUTE FUNCTION check_itemtype_update();
+-- Trigger for ResourceUserInventoryItem
+CREATE TRIGGER enforce_resource_type
+  BEFORE INSERT OR UPDATE ON "ResourceUserInventoryItem"
+  FOR EACH ROW EXECUTE FUNCTION set_resource_item_type();
 
--- Create Trigger for HarvesterUserInventoryItem
-CREATE TRIGGER trigger_check_itemtype_update_harvester
-BEFORE UPDATE ON "HarvesterUserInventoryItem"
-FOR EACH ROW EXECUTE FUNCTION check_itemtype_update();
+-- Generalized function to enforce itemType for HarvesterUserInventoryItem
+CREATE FUNCTION set_harvester_item_type() RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.item_type <> 'HARVESTER' THEN
+    RAISE NOTICE 'itemType was attempted to be set to %, overriding to HARVESTER', NEW.item_type;
+    NEW.item_type := 'HARVESTER';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for HarvesterUserInventoryItem
+CREATE TRIGGER enforce_harvester_type
+  BEFORE INSERT OR UPDATE ON "HarvesterUserInventoryItem"
+  FOR EACH ROW EXECUTE FUNCTION set_harvester_item_type();
+
+
+
