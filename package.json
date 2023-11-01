@@ -11,7 +11,7 @@
   },
   "scripts": {
     "prisma:generate": "dotenv -e .env.${NODE_ENV} -- npx prisma generate",
-    "prisma:migrate:dev": "dotenv -e .env.${NODE_ENV} -- ./prisma/run_migrations.sh",
+    "prisma:migrate:dev": "dotenv -e .env.${NODE_ENV} -- ./prisma/run-migrations.sh",
     "prisma:migrate:deploy": "dotenv -e .env.${NODE_ENV} -- npx prisma migrate deploy",
     "prisma:push": "dotenv -e .env.${NODE_ENV} -- npx prisma db push",
     "prisma:seed": "dotenv -e .env.${NODE_ENV} -- npx prisma db seed",
