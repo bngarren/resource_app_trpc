@@ -28,9 +28,7 @@ import {
  * @returns
  */
 export const addResourceToUserInventory = async (
-  model: Prisma.ResourceUserInventoryItemUncheckedCreateInput & {
-    itemType: "RESOURCE";
-  },
+  model: Prisma.ResourceUserInventoryItemUncheckedCreateInput,
 ): Promise<UserInventoryItemWithItem<"RESOURCE">> => {
   if (model.quantity <= 0) {
     throw new Error(
@@ -64,9 +62,7 @@ export const addResourceToUserInventory = async (
  * @returns
  */
 export const addHarvesterToUserInventory = async (
-  model: Prisma.HarvesterUserInventoryItemUncheckedCreateInput & {
-    itemType: "HARVESTER";
-  },
+  model: Prisma.HarvesterUserInventoryItemUncheckedCreateInput,
 ) => {
   if (model.quantity <= 0) {
     throw new Error(

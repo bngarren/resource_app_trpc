@@ -1,19 +1,20 @@
-import { UserInventoryDict, UserInventoryItemWithItem } from "./../types/index";
+import {
+  OmitItemType,
+  UserInventoryDict,
+  UserInventoryItemWithItem,
+} from "./../types/index";
 import { ItemType, Prisma } from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
 
 /**
  * ### Creates a new ResourceUserInventoryItem
  * - The `model` must include all necessary params to create this model
+ * - The 'itemType' property cannot be included. We always use database default.
  * @returns A `UserInventoryItemWithItem` type which includes the item details
  */
 export const prisma_createResourceUserInventoryItem = async (
-  model: Prisma.ResourceUserInventoryItemCreateInput,
+  model: OmitItemType<Prisma.ResourceUserInventoryItemCreateInput>,
 ): Promise<UserInventoryItemWithItem<"RESOURCE">> => {
-  if (model.itemType !== ItemType.RESOURCE) {
-    throw new Error(`Must be RESOURCE (received ${model.itemType})`);
-  }
-
   return (await prisma.resourceUserInventoryItem.create({
     data: model,
     include: { item: true },
@@ -23,14 +24,12 @@ export const prisma_createResourceUserInventoryItem = async (
 /**
  * ### Creates a new HarvesterUserInventoryItem
  * - The `model` must include all necessary params to create this model
+ * - The 'itemType' property cannot be included. We always use database default.
  * @returns A `UserInventoryItemWithItem` type which includes the item details
  */
 export const prisma_createHarvesterUserInventoryItem = async (
-  model: Prisma.HarvesterUserInventoryItemCreateInput,
+  model: OmitItemType<Prisma.HarvesterUserInventoryItemCreateInput>,
 ): Promise<UserInventoryItemWithItem<"HARVESTER">> => {
-  if (model.itemType !== ItemType.HARVESTER) {
-    throw new Error(`Must be HARVESTER (received ${model.itemType})`);
-  }
   return (await prisma.harvesterUserInventoryItem.create({
     data: model,
     include: { item: true },
@@ -220,10 +219,12 @@ export const prisma_getHarvesterUserInventoryItems = async (
 /**
  * ### Updates or Creates a ResourceUserInventoryItem for a user
  * - The `data` param requires all the properties necessary to create a new row
+ * - The 'itemType' property cannot be included. We always use database default.
+ *
  * @returns A `UserInventoryItemWithItem<"RESOURCE">` type which includes the item details
  */
 export const prisma_upsertResourceUserInventoryItem = async (
-  data: Prisma.ResourceUserInventoryItemUncheckedCreateInput,
+  data: OmitItemType<Prisma.ResourceUserInventoryItemUncheckedCreateInput>,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<UserInventoryItemWithItem<"RESOURCE">> => {
   return (await prismaClient.resourceUserInventoryItem.upsert({
@@ -244,10 +245,12 @@ export const prisma_upsertResourceUserInventoryItem = async (
 /**
  * ### Updates or Creates a HarvesterUserInventoryItem for a user
  * - The `data` param requires all the properties necessary to create a new row
+ * - The 'itemType' property cannot be included. We always use database default.
+ *
  * @returns A `UserInventoryItemWithItem<"HARVESTER">` type which includes the item details
  */
 export const prisma_upsertHarvesterUserInventoryItem = async (
-  data: Prisma.HarvesterUserInventoryItemUncheckedCreateInput,
+  data: OmitItemType<Prisma.HarvesterUserInventoryItemUncheckedCreateInput>,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<UserInventoryItemWithItem<"HARVESTER">> => {
   return (await prismaClient.harvesterUserInventoryItem.upsert({

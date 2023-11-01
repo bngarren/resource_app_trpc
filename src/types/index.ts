@@ -135,6 +135,15 @@ export type ArcaneEnergyResource = Resource & {
 // - - - - - Inventory Items - - - - -
 
 /**
+ * Omits the itemType property from a given type, T
+ *
+ * E.g., Used when dealing with CREATE, UPDATE, UPSERT operations
+ * on ResourceUserInventoryItem, HarvesterUserInventoryItem, etc. so
+ * that the itemType should not be included in the input.
+ */
+export type OmitItemType<T> = Omit<T, "itemType">;
+
+/**
  * A UserInventoryItem represents a row in one of the tables:
  * - ResourceUserInventoryItem
  * - HarvesterUserInventoryItem
