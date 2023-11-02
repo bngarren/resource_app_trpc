@@ -125,6 +125,8 @@ export const getUserInventoryItems = async (userId: string) => {
  * - The `resourceUrl` refers to the `url` field (_unique_) on the Resource table
  *   - Example: 'gold' or 'arcane_flux'
  *
+ * **Throws** if not found.
+ *
  * @returns A `UserInventoryItemWithItem` type which includes the item details
  */
 export const getResourceUserInventoryItemByUrl = async (
@@ -254,7 +256,11 @@ export const updateCreateOrRemoveUserInventoryItemWithNewQuantity = async <
 
   // Remove inventory item if quantity is set to 0
   if (newQuantity === 0) {
-    const removed = removeUserInventoryItemByItemId(itemId, itemType, userId);
+    const removed = await removeUserInventoryItemByItemId(
+      itemId,
+      itemType,
+      userId,
+    );
     logger.debug(
       removed,
       `User inventory item removed due to quantity=0 after update`,

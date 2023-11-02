@@ -58,6 +58,7 @@ services:
   db_testing:
     container_name: db_testing
     image: postgres:14
+    command: postgres -c log_min_messages=info -c log_statement=all
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

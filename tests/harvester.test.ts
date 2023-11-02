@@ -83,6 +83,7 @@ describe("/harvester", () => {
     Could re-time it again in the future to see how this changes. If concerned that this is too much,
     can move resetPrisma() closer to each test/test suite when data absolutely needs to be refreshed.
     */
+    logger.info("afterEach -> calling resetPrisma() now!");
     await resetPrisma();
   });
 
@@ -380,122 +381,142 @@ describe("/harvester", () => {
 
   // - - - - - COLLECT - - - - -
   describe("/harvester.collect", () => {
-    let testUser: User;
-    let testHarvester: Harvester;
+    describe("before harvester is deployed", () => {
+      let testUser: User;
+      let testHarvester: Harvester;
 
-    // Setup testUser and testHarvester
-    beforeEach(async () => {
-      testUser = await prisma.user.findUniqueOrThrow({
-        where: {
-          email: "testUser@gmail.com",
-        },
+      // Setup testUser and testHarvester
+      beforeEach(async () => {
+        testUser = await prisma.user.findUniqueOrThrow({
+          where: {
+            email: "testUser@gmail.com",
+          },
+        });
+
+        const testHarvesterResult = await prisma.harvester.findFirst({
+          where: {
+            userId: testUser.id,
+          },
+        });
+
+        if (!testHarvesterResult) {
+          throw Error("Failed test due to seed data problem.");
+        } else {
+          testHarvester = testHarvesterResult;
+        }
       });
 
-      const testHarvesterResult = await prisma.harvester.findFirst({
-        where: {
-          userId: testUser.id,
-        },
+      it("should return status code 400 (Bad Request) if missing user uid or harvester id", async () => {
+        const res1 = await requester.send("POST", "/harvester.collect", {
+          userUid: null,
+          harvesterId: "test",
+        });
+
+        expect(res1.statusCode).toBe(400);
+
+        const res2 = await requester.send("POST", "/harvester.collect", {
+          userUid: userUid,
+          harvesterId: null,
+        });
+
+        expect(res2.statusCode).toBe(400);
+      });
+      it("should return status code 404 (Not Found) for non-existent user or harvester id", async () => {
+        const res1 = await requester.send(
+          "POST",
+          "/harvester.collect",
+          { userUid: "some-fake-uid", harvesterId: testHarvester.id },
+          harvesterCollectRequestSchema,
+        );
+        expect(res1.statusCode).toBe(404);
+
+        const res2 = await requester.send(
+          "POST",
+          "/harvester.collect",
+          { userUid: userUid, harvesterId: "some-fake-harvester-id" },
+          harvesterCollectRequestSchema,
+        );
+        expect(res2.statusCode).toBe(404);
       });
 
-      if (!testHarvesterResult) {
-        throw Error("Failed test due to seed data problem.");
-      } else {
-        testHarvester = testHarvesterResult;
-      }
-    });
+      it("should return status code 403 (Forbidden) if harvester is not owned by user", async () => {
+        // make another user (not part of base seed)
+        const anotherUser = await prisma.user.create({
+          data: {
+            email: "anotherUser@gmail.com",
+            firebase_uid: "another-uid",
+          },
+        });
 
-    it("should return status code 400 (Bad Request) if missing user uid or harvester id", async () => {
-      const res1 = await requester.send("POST", "/harvester.collect", {
-        userUid: null,
-        harvesterId: "test",
+        // deploy the test harvester
+        await requester.send(
+          "POST",
+          "/harvester.deploy",
+          { harvesterId: testHarvester.id, harvestRegion },
+          harvesterDeployRequestSchema,
+        );
+
+        // attempt request with wrong user + harvester
+        const res = await requester.send(
+          "POST",
+          "/harvester.collect",
+          { userUid: anotherUser.firebase_uid, harvesterId: testHarvester.id },
+          harvesterCollectRequestSchema,
+        );
+        expect(res.statusCode).toBe(403);
       });
 
-      expect(res1.statusCode).toBe(400);
+      it("should return status code 409 (Conflict) if harvester is not deployed", async () => {
+        // Make sure it appears non-deployed
+        expect(isHarvesterDeployed(testHarvester)).toBe(false);
 
-      const res2 = await requester.send("POST", "/harvester.collect", {
-        userUid: userUid,
-        harvesterId: null,
+        const res = await requester.send(
+          "POST",
+          "/harvester.collect",
+          { userUid: userUid, harvesterId: testHarvester.id },
+          harvesterCollectRequestSchema,
+        );
+        expect(res.statusCode).toBe(409);
       });
-
-      expect(res2.statusCode).toBe(400);
-    });
-    it("should return status code 404 (Not Found) for non-existent user or harvester id", async () => {
-      const res1 = await requester.send(
-        "POST",
-        "/harvester.collect",
-        { userUid: "some-fake-uid", harvesterId: testHarvester.id },
-        harvesterCollectRequestSchema,
-      );
-      expect(res1.statusCode).toBe(404);
-
-      const res2 = await requester.send(
-        "POST",
-        "/harvester.collect",
-        { userUid: userUid, harvesterId: "some-fake-harvester-id" },
-        harvesterCollectRequestSchema,
-      );
-      expect(res2.statusCode).toBe(404);
-    });
-
-    it("should return status code 403 (Forbidden) if harvester is not owned by user", async () => {
-      // make another user (not part of base seed)
-      const anotherUser = await prisma.user.create({
-        data: {
-          email: "anotherUser@gmail.com",
-          firebase_uid: "another-uid",
-        },
-      });
-
-      // deploy the test harvester
-      await requester.send(
-        "POST",
-        "/harvester.deploy",
-        { harvesterId: testHarvester.id, harvestRegion },
-        harvesterDeployRequestSchema,
-      );
-
-      // attempt request with wrong user + harvester
-      const res = await requester.send(
-        "POST",
-        "/harvester.collect",
-        { userUid: anotherUser.firebase_uid, harvesterId: testHarvester.id },
-        harvesterCollectRequestSchema,
-      );
-      expect(res.statusCode).toBe(403);
-    });
-
-    it("should return status code 409 (Conflict) if harvester is not deployed", async () => {
-      // Make sure it appears non-deployed
-      expect(isHarvesterDeployed(testHarvester)).toBe(false);
-
-      const res = await requester.send(
-        "POST",
-        "/harvester.collect",
-        { userUid: userUid, harvesterId: testHarvester.id },
-        harvesterCollectRequestSchema,
-      );
-      expect(res.statusCode).toBe(409);
     });
 
     // COLLECT - continued
     describe("after harvester deployed and energy added", () => {
+      let testUser: User;
+      let testHarvester: Harvester;
       let t_0: Date;
 
       beforeEach(async () => {
+        testUser = await prisma.user.findUniqueOrThrow({
+          where: {
+            email: "testUser@gmail.com",
+          },
+        });
+
+        const testHarvesterResult = await prisma.harvester.findFirst({
+          where: {
+            userId: testUser.id,
+          },
+        });
+
+        if (!testHarvesterResult) {
+          throw Error("Failed test due to seed data problem.");
+        } else {
+          testHarvester = testHarvesterResult;
+        }
+
         // Perform a mockScan and deploy test harvester
         await scanAndDeployHarvester(testHarvester.id, server, idToken);
 
         // Add energy
         // Get energy from testUser's inventory
 
-        const _arcaneQuanta = await getResourceUserInventoryItemByUrl(
-          "arcane_quanta",
-          testUser.id,
-        );
+        const arcaneQuantaInventoryItem =
+          await getResourceUserInventoryItemByUrl("arcane_quanta", testUser.id);
 
         // careful, use the item.id here, not the userinventoryitem id
         const arcaneQuanta = await verifyArcaneEnergyResource(
-          _arcaneQuanta.item.id,
+          arcaneQuantaInventoryItem.item.id,
         );
 
         const res = await requester.send(
@@ -504,7 +525,7 @@ describe("/harvester", () => {
           {
             energySourceId: arcaneQuanta.id,
             harvesterId: testHarvester.id,
-            amount: 100, // *Must match what is in the base seed for user's inventory!
+            amount: arcaneQuantaInventoryItem.quantity,
           },
           harvesterTransferEnergyRequestSchema,
         );
@@ -541,6 +562,29 @@ describe("/harvester", () => {
         const t_plus_6 = addHours(t_0, 6);
 
         // Now we mock the handleCollect to 'occur' at t_plus_6 hours
+        const orig_handleCollect = HarvesterService.handleCollect;
+        const spy_handleCollect = jest
+          .spyOn(HarvesterService, "handleCollect")
+          .mockImplementation((userId: string, harvesterId: string) => {
+            return orig_handleCollect(userId, harvesterId, t_plus_6);
+          });
+
+        // Collect
+        const res = await requester.send(
+          "POST",
+          "/harvester.collect",
+          { userUid: userUid, harvesterId: testHarvester.id },
+          harvesterCollectRequestSchema,
+        );
+        throwIfBadStatus(res);
+
+        const postCollect_userInventory = await getUserInventoryItems(
+          testUser.id,
+        );
+
+        console.log(postCollect_userInventory);
+
+        spy_handleCollect.mockRestore();
       });
     });
   });
@@ -893,7 +937,6 @@ describe("/harvester", () => {
         }
 
         // Get energy from testUser's inventory
-        // TODO: Need to actually implement getUserInventoryItemWithItem
         const _arcaneQuanta = await getResourceUserInventoryItemByUrl(
           "arcane_quanta",
           testUser.id,
@@ -1078,6 +1121,63 @@ describe("/harvester", () => {
           ) + amount;
 
         expect(post2_TestHarvester.initialEnergy - k).toBeLessThanOrEqual(0.01); // equal within 0.01
+      });
+
+      it("should correctly transfer energy from user's inventory when the amount is exactly what the user has available", async () => {
+        // verify harvester is deployed and without energy
+        const pre_TestHarvester = await prisma.harvester.findUniqueOrThrow({
+          where: {
+            id: testHarvester.id,
+          },
+        });
+
+        if (
+          !isHarvesterDeployed(pre_TestHarvester) ||
+          pre_TestHarvester.initialEnergy != 0
+        ) {
+          throw new Error(
+            `Problem with seeding harvester for this test (should be deployed and with initialEnergy 0): ${pre_TestHarvester.initialEnergy}`,
+          );
+        }
+
+        // Get energy from testUser's inventory
+        const pre_arcaneQuantaInventory =
+          await getResourceUserInventoryItemByUrl("arcane_quanta", testUser.id);
+
+        const inventoryQty = pre_arcaneQuantaInventory.quantity;
+
+        // careful, use the item.id here, not the userinventoryitem id
+        const arcaneQuanta = await verifyArcaneEnergyResource(
+          pre_arcaneQuantaInventory.item.id,
+        );
+
+        // Now add exactly what the user has to the harvester
+        await requester.send(
+          "POST",
+          "/harvester.transferEnergy",
+          {
+            harvesterId: testHarvester.id,
+            energySourceId: arcaneQuanta.id,
+            amount: inventoryQty,
+            useUserInventory: true,
+          },
+          harvesterTransferEnergyRequestSchema,
+        );
+
+        const post_TestHarvester = await prisma.harvester.findUniqueOrThrow({
+          where: {
+            id: testHarvester.id,
+          },
+        });
+
+        // should throw, when awaited, because the inventory item should have been removed (we used it all)
+        const post_arcaneQuantaInventory = getResourceUserInventoryItemByUrl(
+          "arcane_quanta",
+          testUser.id,
+        );
+
+        expect(post_TestHarvester.initialEnergy).toBe(inventoryQty);
+        await expect(post_arcaneQuantaInventory).rejects.toThrow();
       });
 
       // TODO: WIP

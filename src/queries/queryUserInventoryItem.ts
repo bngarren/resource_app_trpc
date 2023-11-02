@@ -5,6 +5,7 @@ import {
 } from "./../types/index";
 import { ItemType, Prisma } from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
+import { logger } from "../logger/logger";
 
 /**
  * ### Creates a new ResourceUserInventoryItem
@@ -100,6 +101,8 @@ export const prisma_getResourceUserInventoryItemByResourceId = async (
 /**
  * ### Gets a ResourceUserInventoryItem by the Resource url
  * - The `resourceUrl` refers to the `url` field (_unique_) on the Resource table
+ *
+ * **Throws** if not found.
  *
  * @returns A `UserInventoryItemWithItem` type which includes the item details
  */
@@ -227,6 +230,23 @@ export const prisma_upsertResourceUserInventoryItem = async (
   data: OmitItemType<Prisma.ResourceUserInventoryItemUncheckedCreateInput>,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<UserInventoryItemWithItem<"RESOURCE">> => {
+  logger.debug(data, `prisma_upsertResourceUserInventoryItem()`);
+
+  const safeUpdateData: Prisma.ResourceUserInventoryItemUpdateInput &
+    Prisma.ResourceUserInventoryItemCreateInput = {
+    user: {
+      connect: {
+        id: data.userId,
+      },
+    },
+    item: {
+      connect: {
+        id: data.resourceId,
+      },
+    },
+    quantity: data.quantity,
+  };
+
   return (await prismaClient.resourceUserInventoryItem.upsert({
     where: {
       userId_resourceId: {
@@ -234,8 +254,8 @@ export const prisma_upsertResourceUserInventoryItem = async (
         resourceId: data.resourceId,
       },
     },
-    update: data,
-    create: data,
+    update: safeUpdateData,
+    create: safeUpdateData,
     include: {
       item: true,
     },

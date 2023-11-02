@@ -24,7 +24,6 @@ import {
   validateUserInventoryItemTransfer,
   removeUserInventoryItemByItemId,
   getResourceUserInventoryItemByUrl,
-  addResourceToUserInventory,
 } from "./userInventoryService";
 import { TRPCError } from "@trpc/server";
 import {
@@ -874,6 +873,8 @@ export const handleCollect = async (
     });
   }
 
+  logger.debug(`userId (${userId}) handleCollect()`);
+
   // - - - - - Saga setup - - - - -
   // Get the harvest operations for this harvester
   const orig_harvestOperationsWithSpawnedResource =
@@ -919,24 +920,30 @@ export const handleCollect = async (
   );
 
   // Store the user's current inventory items for these resources (if they exist), in case we roll back
-  const orig_resourceUserInventoryItems = await Promise.all(
-    harvestedOps.map((harvestedOp) => {
-      return getResourceUserInventoryItemByUrl(
+  const orig_resourceUserInventoryItems: UserInventoryItemWithItem<"RESOURCE">[] =
+    [];
+
+  for (const harvestedOp of harvestedOps) {
+    try {
+      const res = await getResourceUserInventoryItemByUrl(
         harvestedOp.spawnedResource.resource.url,
         userId,
       );
-    }),
-  );
+      orig_resourceUserInventoryItems.push(res);
+    } catch (err) {
+      // Handle or log the error here if needed
+    }
+  }
 
   const handleCollectSaga = new SagaBuilder("handleCollect")
     .withLogger()
     // handleCollectSaga STEP 1
     .invoke(async () => {
       // Update ResourceUserInventoryItems
-      const updatePromises = harvestedOps.map(async (harvestedOp) => {
+      const updatePromises = harvestedOps.map((harvestedOp) => {
         const resource = harvestedOp.spawnedResource.resource;
 
-        return await updateCreateOrRemoveUserInventoryItemWithNewQuantity(
+        return updateCreateOrRemoveUserInventoryItemWithNewQuantity(
           resource.id,
           "RESOURCE",
           userId,
@@ -948,6 +955,7 @@ export const handleCollect = async (
     }, "update user inventory items")
     .withCompensation(async () => {
       // Remove previously added
+      /*
       await Promise.all(
         harvestedOps.map((harvestedOp) => {
           return removeUserInventoryItemByItemId(
@@ -969,7 +977,20 @@ export const handleCollect = async (
           },
         ),
       );
-    });
+      */
+    })
+    .build();
+
+  // - - - - - Execute Saga to make database updates - - - - -
+  try {
+    const sagaResult = await handleCollectSaga.execute();
+
+    // - - - - - RETURN - - - - -
+    return sagaResult[0] as UserInventoryItemWithItem<"RESOURCE">[]; // output from the first step
+  } catch (error) {
+    // TODO: how should we handle any error thrown from the saga? It may or may not have been rolled back successfully...
+    throw error;
+  }
 };
 
 /**

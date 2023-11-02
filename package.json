@@ -27,7 +27,7 @@
     "start:staging": "NODE_ENV=STAGING node dist/src/main.js",
     "start:dev": "NODE_ENV=DEVELOPMENT ts-node-dev --respawn --clear --transpile-only --debounce 1000 ./src/main.ts",
     "test": "NODE_ENV=TEST jest --detectOpenHandles --runInBand --verbose",
-    "test:docker": "NODE_ENV=TEST jest --detectOpenHandles --runInBand --verbose"
+    "test:fresh": "rm -f ./logs/app_testing.log && NODE_ENV=TEST jest --detectOpenHandles --runInBand --verbose"
   },
   "author": "Ben Garren",
   "license": "ISC",
