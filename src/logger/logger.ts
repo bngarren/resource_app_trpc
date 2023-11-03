@@ -3,6 +3,7 @@ import pino from "pino";
 import config from "../config";
 import path from "path";
 import * as pretty from "pino-pretty";
+import net from "net";
 
 const devLogger = () =>
   pino({
@@ -31,11 +32,6 @@ const testLogger = () => {
   // Creates the directory if it doesn't exist.
   fs.mkdirSync(logDirectory, { recursive: true });
 
-  // Stream where the logs will be written.
-  const writeStream = fs.createWriteStream(testLogPath, {
-    flags: "a", // 'a' means appending (old data will be preserved)
-  });
-
   const prettyStream = pretty.default({
     destination: testLogPath,
     translateTime: "SYS:mm/dd HH:MM:ss Z",
@@ -53,7 +49,17 @@ const testLogger = () => {
     prettyStream,
   );
 
-  return logger;
+  // ! EXPERIMENTAL - ELK log
+
+  const elkTransport = pino.transport({
+    target: "pino-socket",
+    options: {
+      address: "logstash",
+      port: 50000,
+      mode: "tcp",
+    },
+  });
+  return pino(elkTransport);
 };
 
 const stagingLogger = () => {
@@ -97,4 +103,29 @@ const getLogger = () => {
   }
 };
 
-export const logger = getLogger();
+export const logger = getLogger().child({
+  app: config.app_name,
+  node_env: config.node_env,
+});
+
+function testLogstashConnection(host: string, port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+
+    const timer = setTimeout(() => {
+      socket.destroy();
+      resolve(false);
+    }, 2000); // Timeout after 2 seconds
+
+    socket.once("error", () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+
+    socket.connect(port, host, () => {
+      clearTimeout(timer);
+      socket.end();
+      resolve(true);
+    });
+  });
+}

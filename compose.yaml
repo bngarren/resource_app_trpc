@@ -17,6 +17,8 @@ services:
     env_file:
       - .env.common
       - .env.staging
+    networks:
+      - internal_network
     volumes:
       - ./logs:/app/logs # Map the logs directory
   app_testing:
@@ -34,6 +36,9 @@ services:
     env_file:
       - .env.common
       - .env.test
+    networks:
+      - internal_network
+      - elk
     volumes:
       - ./tests:/app/tests:ro #Allow container to read from host's ./tests/
       - ./src:/app/src:ro #Allow container to read from host's ./src/
@@ -53,6 +58,8 @@ services:
     restart: always
     ports:
       - 5434:5432
+    networks:
+      - internal_network
     volumes:
       - dbdata_staging:/var/lib/postgresql/data
   db_testing:
@@ -69,6 +76,8 @@ services:
       timeout: 5s
       retries: 5
     restart: always
+    networks:
+      - internal_network
     ports:
       - 5435:5432
     volumes:
@@ -76,3 +85,10 @@ services:
 volumes:
   dbdata_staging:
   dbdata_testing:
+networks:
+      elk:
+        name: docker-elk_elk
+        external: true
+      internal_network:
+        driver: bridge
+          

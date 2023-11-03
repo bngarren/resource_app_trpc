@@ -57,6 +57,7 @@ export default {
   //
   //
   // App
+  app_name: "arcane_prospector",
   min_resources_per_spawn_region: 1,
   max_resources_per_spawn_region: 3,
   spawn_region_h3_resolution: 9,
