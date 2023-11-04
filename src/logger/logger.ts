@@ -4,6 +4,7 @@ import config from "../config";
 import path from "path";
 import * as pretty from "pino-pretty";
 import net from "net";
+import { ecsFormat } from "@elastic/ecs-pino-format";
 
 const devLogger = () =>
   pino({
@@ -59,7 +60,14 @@ const testLogger = () => {
       mode: "tcp",
     },
   });
-  return pino(elkTransport);
+
+  return pino(
+    {
+      ...ecsFormat(),
+      level: "debug",
+    },
+    elkTransport,
+  );
 };
 
 const stagingLogger = () => {
