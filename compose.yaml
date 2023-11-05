@@ -82,6 +82,23 @@ services:
       - 5435:5432
     volumes:
       - dbdata_testing:/var/lib/postgresql/data
+  filebeat:
+    container_name: filebeat
+    build:
+      context: ./docker-filebeat
+      args:
+        FILEBEAT_VERSION: 8.10.4 # Can pull fro env variable in the future
+    env_file:
+      - .env.common
+    environment:
+      - ELASTICSEARCH_HOST=elasticsearch:9200
+      - LOG_PATH=/app/logs/
+    volumes:
+      - ./logs:/app/logs:ro # Map the logs directory
+      - ./docker-filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro,Z
+    networks:
+      - elk
+
 volumes:
   dbdata_staging:
   dbdata_testing:

@@ -1,0 +1,36 @@
+
+name: arcane_prospector
+
+filebeat.inputs:
+- type: filestream
+  enabled: true
+  paths:
+    - ${LOG_PATH}app_*.log
+  ignore_older: 6h  # Ignores 
+
+  # From https://www.elastic.co/guide/en/ecs-logging/nodejs/current/pino.html
+  parsers:
+    - ndjson:
+      overwrite_keys: true
+      add_error_key: true
+      expand_keys: true
+
+processors:
+  - timestamp:
+      field: "@timestamp"
+      layouts:
+        - '2006-01-02T15:04:05Z'
+        - '2006-01-02T15:04:05.999Z'
+      test:
+        - '2019-06-22T16:33:51Z'
+        - '2023-11-05T19:47:55.194Z'
+  - add_docker_metadata:
+
+output.elasticsearch:
+  hosts: ["${ELASTICSEARCH_HOST}"]
+  # Dynamically set the index name based on the environment field
+  index: "arcane_prospector-%{[node_env]}-logs-%{+yyyy.MM.dd}"
+  username: "elastic"
+  password: ${ELASTICSEARCH_PASSWORD}
+
+setup.template.enabled: false # Don't use Filebeat default or make my own; it's already made in ES

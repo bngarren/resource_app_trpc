@@ -28,10 +28,15 @@ const devLogger = () =>
  */
 const testLogger = () => {
   const logDirectory = path.join(process.cwd(), "/logs"); // This points to the project root /logs
-  const testLogPath = path.join(logDirectory, `app_testing.log`);
+  const testLogPath = path.join(logDirectory, `app_test.log`);
 
   // Creates the directory if it doesn't exist.
   fs.mkdirSync(logDirectory, { recursive: true });
+
+  // Stream where the logs will be written.
+  const stream = fs.createWriteStream(testLogPath, {
+    flags: "a", // 'a' means appending (old data will be preserved)
+  });
 
   const prettyStream = pretty.default({
     destination: testLogPath,
@@ -42,31 +47,13 @@ const testLogger = () => {
     ignore: "hostname,pid",
   });
 
-  const logger = pino(
-    {
-      level: "debug", // previously, config.log_level,
-      sync: true,
-    },
-    prettyStream,
-  );
-
-  // ! EXPERIMENTAL - ELK log
-
-  const elkTransport = pino.transport({
-    target: "pino-socket",
-    options: {
-      address: "logstash",
-      port: 50000,
-      mode: "tcp",
-    },
-  });
-
   return pino(
     {
       ...ecsFormat(),
       level: "debug",
+      sync: true,
     },
-    elkTransport,
+    stream,
   );
 };
 
