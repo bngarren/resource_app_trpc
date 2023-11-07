@@ -77,11 +77,8 @@ app.use(
   trpcExpress.createExpressMiddleware({
     router: appRouter,
     createContext,
-    onError({ error: err }) {
-      logger.error({
-        code: err.code,
-        err,
-      });
+    onError({ error }) {
+      logger.error(error);
     },
   }),
 );

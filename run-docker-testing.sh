@@ -23,7 +23,7 @@ fi
 
 printf "\n${PREFIX}${LIGHT_BLUE}Starting app_testing container...${NC}\n\n"
 
-docker-compose up -d app_testing --wait
+docker-compose up -d app_testing --wait filebeat
 
 printf "\n${PREFIX}${LIGHT_BLUE}Container is READY.${NC}\n\n"
 

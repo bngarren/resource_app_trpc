@@ -3,7 +3,6 @@ import pino from "pino";
 import config from "../config";
 import path from "path";
 import * as pretty from "pino-pretty";
-import net from "net";
 import { ecsFormat } from "@elastic/ecs-pino-format";
 
 const devLogger = () =>
@@ -38,6 +37,10 @@ const testLogger = () => {
     flags: "a", // 'a' means appending (old data will be preserved)
   });
 
+  const destination = pino.destination({
+    dest: testLogPath,
+  });
+
   const prettyStream = pretty.default({
     destination: testLogPath,
     translateTime: "SYS:mm/dd HH:MM:ss Z",
@@ -49,11 +52,14 @@ const testLogger = () => {
 
   return pino(
     {
-      ...ecsFormat(),
+      ...ecsFormat({ convertErr: false }),
       level: "debug",
       sync: true,
+      timestamp: () => `,"time":"${new Date().toISOString()}"`,
+      nestedKey: "payload",
+      errorKey: "error",
     },
-    stream,
+    destination,
   );
 };
 
@@ -102,25 +108,3 @@ export const logger = getLogger().child({
   app: config.app_name,
   node_env: config.node_env,
 });
-
-function testLogstashConnection(host: string, port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-
-    const timer = setTimeout(() => {
-      socket.destroy();
-      resolve(false);
-    }, 2000); // Timeout after 2 seconds
-
-    socket.once("error", () => {
-      clearTimeout(timer);
-      resolve(false);
-    });
-
-    socket.connect(port, host, () => {
-      clearTimeout(timer);
-      socket.end();
-      resolve(true);
-    });
-  });
-}

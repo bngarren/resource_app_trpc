@@ -17,14 +17,21 @@ filebeat.inputs:
 
 processors:
   - timestamp:
-      field: "@timestamp"
+      field: "time"
+      target_field: "@timestamp"
+      timezone: UTC
       layouts:
-        - '2006-01-02T15:04:05Z'
         - '2006-01-02T15:04:05.999Z'
       test:
-        - '2019-06-22T16:33:51Z'
         - '2023-11-05T19:47:55.194Z'
-  - add_docker_metadata:
+  - drop_fields:
+      fields: ["time"]
+  - rename:
+      fields:
+        - from: "payload.error"
+          to: "error"
+      ignore_missing: true
+      fail_on_error: false
 
 output.elasticsearch:
   hosts: ["${ELASTICSEARCH_HOST}"]
@@ -34,3 +41,6 @@ output.elasticsearch:
   password: ${ELASTICSEARCH_PASSWORD}
 
 setup.template.enabled: false # Don't use Filebeat default or make my own; it's already made in ES
+
+#logging.level: debug
+
