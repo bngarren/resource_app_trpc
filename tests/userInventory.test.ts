@@ -11,7 +11,7 @@ import {
   throwIfBadStatus,
 } from "./testHelpers";
 import { Server } from "http";
-import { logger } from "../src/logger/logger";
+import { logger } from "../src/main";
 import { getUserInventoryRequestSchema } from "../src/schema";
 import { GetUserInventoryRequestOutput } from "../src/types/trpcTypes";
 import { prisma } from "../src/prisma";

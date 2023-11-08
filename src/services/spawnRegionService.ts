@@ -7,7 +7,7 @@ import {
 import { Prisma } from "@prisma/client";
 import { prisma_updateSpawnedResourcesForSpawnRegionTransaction } from "../queries/queryResource";
 import { SpawnRegionWithSpawnedResources } from "../types";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 
 // TODO: Probably not the best to just re-export a database method.
 export { prisma_getSpawnRegionsFromH3Indices as getRegionsFromH3Array } from "../queries/querySpawnRegion";

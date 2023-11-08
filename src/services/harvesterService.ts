@@ -36,7 +36,7 @@ import config from "../config";
 import { getSpawnRegionsAround } from "../util/getSpawnRegionsAround";
 import { prisma_getSpawnedResourcesForSpawnRegion } from "../queries/queryResource";
 import { getDistanceBetweenCells } from "../util/getDistanceBetweenCells";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 import { getResource } from "./resourceService";
 import {
   addMilliseconds,

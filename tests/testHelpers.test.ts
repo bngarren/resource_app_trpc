@@ -1,5 +1,5 @@
 import { Server } from "http";
-import { logger } from "../src/logger/logger";
+import { logger } from "../src/main";
 import { TestSingleton } from "./TestSingleton";
 import { mockScan, resetPrisma } from "./testHelpers";
 import { prisma } from "../src/prisma";

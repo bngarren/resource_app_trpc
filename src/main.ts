@@ -1,10 +1,10 @@
+import { logger as customLogger } from "./logger/customLogger";
 import config, { NodeEnvironment } from "./config";
 import { protectedProcedure, publicProcedure, router } from "./trpc/trpc";
 import express from "express";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import cors from "cors";
 import { createContext } from "./trpc/trpc";
-import { logger } from "./logger/logger";
 import { prisma } from "./prisma";
 import https from "https";
 import http, { Server } from "http";
@@ -12,6 +12,8 @@ import fs from "fs";
 import { scanRouter } from "./routers/scanRouter";
 import { userInventoryRouter } from "./routers/userInventoryRouter";
 import { harvesterRouter } from "./routers/harvesterRouter";
+
+export const logger = customLogger;
 
 const appRouter = router({
   greeting: publicProcedure.query(async () => {
@@ -78,7 +80,7 @@ app.use(
     router: appRouter,
     createContext,
     onError({ error }) {
-      logger.error(error);
+      logger.error({ err: error });
     },
   }),
 );

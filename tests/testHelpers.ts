@@ -11,7 +11,7 @@ import * as ScanService from "../src/services/scanService";
 import * as QueryResource from "../src/queries/queryResource";
 import { Coordinate } from "../src/types";
 import { Prisma } from "@prisma/client";
-import { logger } from "../src/logger/logger";
+import { logger } from "../src/main";
 
 /**
  * ### Helper function to extract data from a TRPC response

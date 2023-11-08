@@ -1,6 +1,6 @@
 import { router } from "../trpc/trpc";
 import { TRPCError } from "@trpc/server";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 import { logScanResult } from "../logger/loggerHelper";
 import { scanRequestSchema } from "../schema";
 import { handleScan } from "../services/scanService";

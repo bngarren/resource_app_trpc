@@ -5,7 +5,7 @@ import {
 } from "./../types/index";
 import { ItemType, Prisma } from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 
 /**
  * ### Creates a new ResourceUserInventoryItem

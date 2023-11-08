@@ -1,7 +1,7 @@
 import { initializeApp, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import config from "../config";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 
 /*
 Firebase Admin SDK needs to be initialized with a service account.

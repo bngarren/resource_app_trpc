@@ -13,7 +13,7 @@ import {
 } from "../types";
 import config from "../config";
 import { v4 as uuid } from "uuid";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 import { getDistanceBetweenCells } from "../util/getDistanceBetweenCells";
 import { getSpawnRegionsAround } from "../util/getSpawnRegionsAround";
 import { SpawnRegion } from "@prisma/client";

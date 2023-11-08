@@ -1,5 +1,5 @@
 import { setupBaseSeed } from "../seed/setupBaseSeed";
-import { logger } from "./../src/logger/logger";
+import { logger } from "./../src/main";
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 

@@ -17,7 +17,7 @@ filebeat.inputs:
 
 processors:
   - timestamp:
-      field: "time"
+      field: "${LOGGER_TIMESTAMP_KEY}"
       target_field: "@timestamp"
       timezone: UTC
       layouts:
@@ -25,13 +25,21 @@ processors:
       test:
         - '2023-11-05T19:47:55.194Z'
   - drop_fields:
-      fields: ["time"]
+      fields: ["${LOGGER_TIMESTAMP_KEY}"]
   - rename:
       fields:
-        - from: "payload.error"
+        - from: "${LOGGER_NESTED_KEY}.error"
           to: "error"
       ignore_missing: true
       fail_on_error: false
+  - rename:
+      fields:
+        - from: "${LOGGER_NESTED_KEY}.${LOGGER_TESTNAME_KEY}"
+          to: "testName"
+      ignore_missing: true
+      fail_on_error: false
+
+
 
 output.elasticsearch:
   hosts: ["${ELASTICSEARCH_HOST}"]
@@ -42,5 +50,5 @@ output.elasticsearch:
 
 setup.template.enabled: false # Don't use Filebeat default or make my own; it's already made in ES
 
-#logging.level: debug
+logging.level: debug
 

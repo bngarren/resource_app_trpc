@@ -1,5 +1,5 @@
 import { SagaBuilder } from "./../src/util/saga";
-import { logger } from "../src/logger/logger";
+import { logger } from "../src/main";
 import { prefixedError } from "../src/util/prefixedError";
 
 describe("saga", () => {

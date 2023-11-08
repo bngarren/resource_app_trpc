@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 import { getSpawnRegionParentOfSpawnedResource } from "../services/spawnRegionService";
 import {
   HarvestOperationWithResetDate,

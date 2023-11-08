@@ -15,7 +15,7 @@ import * as SpawnRegionService from "../src/services/spawnRegionService";
 import * as ResourceService from "../src/services/resourceService";
 import { scanRequestSchema } from "../src/schema";
 import { ScanRequestOutput } from "../src/types/trpcTypes";
-import { logger } from "../src/logger/logger";
+import { logger } from "../src/main";
 
 describe("/scan", () => {
   let server: Server;

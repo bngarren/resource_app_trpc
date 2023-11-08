@@ -1,4 +1,5 @@
-import { logger } from "../src/logger/logger";
+import { logger } from "./../src/logger/customLogger";
+
 import { resetPrisma } from "./testHelpers";
 import { TestSingleton } from "./TestSingleton";
 
@@ -13,5 +14,9 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  logger.info(expect.getState().currentTestName);
+  logger.addBinding({ testName: expect.getState().currentTestName });
+});
+
+afterEach(() => {
+  logger.removeBinding("testName");
 });

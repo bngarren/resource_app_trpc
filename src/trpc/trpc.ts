@@ -1,6 +1,6 @@
 import { TRPCError, inferAsyncReturnType, initTRPC } from "@trpc/server";
 import * as trpcExpress from "@trpc/server/adapters/express";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 import { Request } from "express";
 import { decodeAndVerifyJwtToken } from "../auth/firebaseAuth";
 import config from "../config";

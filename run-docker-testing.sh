@@ -21,9 +21,18 @@ if [ "$answer" != "${answer#[Yy]}" ] ;then
     docker-compose build app_testing
 fi
 
+printf "${PREFIX}${LIGHT_BLUE}Run with Filebeat container? [y/n]${NC} "
+
+read answer2
+
+if [ "$answer2" != "${answer2#[Yy]}" ] ;then
+    printf "${PREFIX}${LIGHT_BLUE}Starting Filebeat...${NC}\n"
+    docker-compose up -d filebeat
+fi
+
 printf "\n${PREFIX}${LIGHT_BLUE}Starting app_testing container...${NC}\n\n"
 
-docker-compose up -d app_testing --wait filebeat
+docker-compose up -d app_testing --wait
 
 printf "\n${PREFIX}${LIGHT_BLUE}Container is READY.${NC}\n\n"
 

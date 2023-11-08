@@ -15,7 +15,7 @@ import {
   UserInventoryItemWithAnyItem,
   UserInventoryItemWithItem,
 } from "../types";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 import {
   prisma_getUserInventoryItemByItemId,
   prisma_getAllUserInventoryItems,

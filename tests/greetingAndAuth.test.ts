@@ -4,7 +4,7 @@ import { prisma } from "../src/prisma";
 import { TestSingleton } from "./TestSingleton";
 import { Server } from "http";
 import { GreetingRequestOutput } from "../src/types/trpcTypes";
-import { logger } from "../src/logger/logger";
+import { logger } from "../src/main";
 
 describe("Greeting/Authentication", () => {
   let server: Server;

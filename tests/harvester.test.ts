@@ -23,7 +23,7 @@ import {
   transformQueryLog,
 } from "./testHelpers";
 import { Server } from "http";
-import { logger } from "../src/logger/logger";
+import { logger } from "../src/main";
 import { prisma } from "../src/prisma";
 import { Harvester, HarvesterUserInventoryItem, User } from "@prisma/client";
 import {

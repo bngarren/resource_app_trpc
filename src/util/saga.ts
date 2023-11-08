@@ -6,7 +6,7 @@ TODO: Add retry capability to Saga
 */
 
 import { prefixedError } from "./prefixedError";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 
 type InvokeFnType<T> = (...args: any[]) => Promise<T>;
 type CompensationFnType<T, K> = (data: T, ...args: any[]) => Promise<K>;

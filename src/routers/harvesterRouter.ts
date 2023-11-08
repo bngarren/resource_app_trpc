@@ -18,7 +18,7 @@ import {
   handleTransferEnergy,
 } from "../services/harvesterService";
 import config from "../config";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 
 export const harvesterRouter = router({
   /**

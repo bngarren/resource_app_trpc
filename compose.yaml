@@ -87,9 +87,7 @@ services:
     build:
       context: ./docker-filebeat
       args:
-        FILEBEAT_VERSION: 8.10.4 # Can pull fro env variable in the future
-    depends_on:
-      - app_testing
+        FILEBEAT_VERSION: 8.10.4 # Can pull from env variable in the future
     env_file:
       - .env.common
     environment:
