@@ -88,7 +88,7 @@ services:
       context: ./docker-filebeat
       args:
         FILEBEAT_VERSION: 8.10.4 # Can pull from env variable in the future
-    env_file:
+    env_file: # only passes to the container, not the docker compose file
       - .env.common
     environment:
       - ELASTICSEARCH_HOST=elasticsearch:9200

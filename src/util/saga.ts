@@ -7,6 +7,7 @@ TODO: Add retry capability to Saga
 
 import { prefixedError } from "./prefixedError";
 import { logger } from "../main";
+import config from "../config";
 
 type InvokeFnType<T> = (...args: any[]) => Promise<T>;
 type CompensationFnType<T, K> = (data: T, ...args: any[]) => Promise<K>;
@@ -60,6 +61,9 @@ class SagaStep<T = any, K = any> {
 /**
  * ### Helps build a Saga instance with invocations and compsenations
  * 
+ * - `withLogger(verbose?)` - Will log the Saga output using our app's logger. If verbose is false (default=true),
+ * will not include logging of data objects, i.e. Errors.
+ * 
  * 
  * #### Example
  * ```javascript
@@ -94,7 +98,7 @@ class SagaStep<T = any, K = any> {
 export class SagaBuilder {
   private steps: SagaStep[] = [];
   private logger: Logger | undefined;
-  private context: string | undefined;
+  private sagaName: string;
   private verbose: boolean;
 
   /**
@@ -110,9 +114,9 @@ export class SagaBuilder {
    */
   private lastStepSkipped = false;
 
-  constructor(context?: string) {
-    this.context = context;
-    this.verbose = false;
+  constructor(name = "unnamed") {
+    this.sagaName = name;
+    this.verbose = true;
   }
 
   /**
@@ -130,10 +134,10 @@ export class SagaBuilder {
     return this;
   }
 
-  invoke<T>(invokeFn: () => Promise<T>, name?: string): this {
+  invoke<T>(invokeFn: () => Promise<T>, stepName?: string): this {
     if (this.shouldAddNextStep) {
       this.steps.push(
-        new SagaStep<T>(name ?? "", invokeFn, () => Promise.resolve()),
+        new SagaStep<T>(stepName ?? "", invokeFn, () => Promise.resolve()),
       );
       this.lastStepSkipped = false;
     } else {
@@ -159,8 +163,9 @@ export class SagaBuilder {
 
   withLogger(verbose = this.verbose): this {
     this.logger = logger;
-    if (this.context && this.context.trim().length > 0) {
-      this.logger = this.logger.child({ saga: this.context });
+    if (this.sagaName && this.sagaName.trim().length > 0) {
+      /* We use a pino Child logger to added a key/value to each logged message */
+      this.logger = this.logger.child({ saga: this.sagaName });
     }
     this.verbose = verbose;
     return this;
@@ -169,11 +174,11 @@ export class SagaBuilder {
   build(): Saga {
     if (this.steps.length === 0) {
       throw new Error(
-        "Cannot build Saga with 0 steps. Add at least 1 invoke()",
+        "Cannot build Saga with 0 steps. Add at least 1 step with invoke()",
       );
     }
 
-    return new Saga(this.steps, this.logger, this.verbose);
+    return new Saga(this.sagaName, this.steps, this.logger, this.verbose);
   }
 }
 
@@ -188,6 +193,7 @@ class Saga {
   private readonly sagaLog: SagaLog;
 
   constructor(
+    private readonly name: string,
     private readonly steps: SagaStep[],
     logger?: Logger,
     verbose = false,
@@ -207,6 +213,7 @@ class Saga {
     const executedData: any[] = [];
 
     this.sagaLog.log("info", {
+      sagaName: this.name,
       message: `Starting a new Saga with ${this.steps.length} step${
         this.steps.length !== 1 ? "s" : ""
       }`,
@@ -218,21 +225,26 @@ class Saga {
         const data = await step.invoke();
         executedData.push(data);
         this.sagaLog.log("debug", {
+          sagaName: this.name,
           step: stepNumber,
-          name: step.getName(),
-          message: "Executed step.",
+          stepName: step.getName(),
+          message: "Successfully executed step",
           data,
         });
       } catch (error) {
-        const errMsg = "Saga step failed.";
         this.sagaLog.log("error", {
+          sagaName: this.name,
           step: stepNumber,
-          name: step.getName(),
-          message: prefixedError(error, errMsg).message,
+          stepName: step.getName(),
+          message: "Failed saga step!",
+          data: error as Error,
         });
 
         await this.rollback(executedData, index);
-        throw prefixedError(error, `${errMsg} During step ${index + 1}`);
+        throw prefixedError(
+          error,
+          `Saga error during step ${index + 1}, successfully rolled back.`,
+        );
       }
     }
     return executedData;
@@ -240,8 +252,9 @@ class Saga {
 
   async rollback(executedData: any[], fromStepIndex: number): Promise<void> {
     this.sagaLog.log("info", {
+      sagaName: this.name,
       step: fromStepIndex + 1,
-      message: "Starting rollback.",
+      message: "Starting rollback of saga",
     });
 
     for (let i = fromStepIndex; i >= 0; i--) {
@@ -250,23 +263,29 @@ class Saga {
         const data = await this.steps[i].compensate(executedData[i]);
 
         this.sagaLog.log("info", {
+          sagaName: this.name,
           step: stepNumber,
-          name: this.steps[i].getName(),
-          message: "Compensation successful.",
-          data,
+          stepName: this.steps[i].getName(),
+          message: "Step compensation successful",
+          data: data,
         });
       } catch (compensationError) {
-        const errMsg = "Saga failed to compensate.";
         this.sagaLog.log("error", {
+          sagaName: this.name,
           step: stepNumber,
-          name: this.steps[i].getName(),
-          message: errMsg,
+          stepName: this.steps[i].getName(),
+          message: "Failed to compensate step",
+          data: compensationError as Error,
         });
 
-        throw prefixedError(compensationError, `${errMsg} Step ${i + 1}`);
+        throw prefixedError(
+          compensationError,
+          `Compensation for step ${i + 1}`,
+        );
       }
     }
     this.sagaLog.log("info", {
+      sagaName: this.name,
       step: fromStepIndex + 1,
       message: "Rollback complete.",
     });
@@ -277,10 +296,11 @@ class Saga {
   }
 }
 
-type SagaLogMessage = {
+type SagaLogItem = {
+  sagaName: string;
   date?: Date;
   step?: number;
-  name?: string;
+  stepName?: string;
   message: string;
   data?: Record<string, any>;
 };
@@ -288,70 +308,86 @@ type SagaLogMessage = {
 class SagaLog {
   private logger: Logger | undefined;
   private showVerbose: boolean;
+  private items: SagaLogItem[] = [];
 
   constructor(logger?: Logger, verbose = false) {
     this.logger = logger;
     this.showVerbose = verbose;
   }
 
-  private data: SagaLogMessage[] = [];
+  log(logType: pino.Level = "debug", sagaLogItem: SagaLogItem): void {
+    if (!this.logger) {
+      return;
+    }
 
-  log(logType: pino.Level = "debug", payload: SagaLogMessage): void {
-    const sagaLogMessage = { ...payload };
+    const { data, ...sagaLogMessage } = { ...sagaLogItem };
+
+    const sagaLogData =
+      data instanceof Error
+        ? { [config.logger_error_key]: data }
+        : { data: data };
 
     sagaLogMessage.date = sagaLogMessage.date ?? new Date();
 
-    this.data.push(sagaLogMessage);
+    this.items.push(sagaLogItem);
 
-    if (this.logger) {
-      let logMsg = `- - Saga - -${
-        sagaLogMessage.step !== undefined
-          ? ` [Step=${sagaLogMessage.step}]`
-          : ""
-      }${sagaLogMessage.name?.trim() ? ` [Name=${sagaLogMessage.name}]` : ""} ${
-        sagaLogMessage.message
-      } `;
+    let loggerMessage = "Saga";
+    loggerMessage = loggerMessage.concat(` ('${sagaLogMessage.sagaName}')`);
+    if (sagaLogMessage.step != null) {
+      loggerMessage = loggerMessage.concat(` Step #${sagaLogMessage.step}`);
+    }
+    if (sagaLogMessage.stepName?.trim()) {
+      loggerMessage = loggerMessage.concat(` ('${sagaLogMessage.stepName}')`);
+    }
+    loggerMessage = loggerMessage.concat(` >> ${sagaLogMessage.message}`);
 
-      if (sagaLogMessage.data && this.showVerbose) {
-        logMsg += `\nOutput data: ${JSON.stringify(
-          sagaLogMessage.data,
-          null,
-          2,
-        )}`;
-      }
+    const charLimit = 1000;
+    // Remove all whitespaces using replace()
+    const logMsgNoSpaces = loggerMessage.replace(/\s/g, "");
 
-      const charLimit = 1000;
-      // Remove all whitespaces using replace()
-      const logMsgNoSpaces = logMsg.replace(/\s/g, "");
+    if (logMsgNoSpaces.length > charLimit) {
+      loggerMessage =
+        loggerMessage.substring(0, charLimit) + "\n\n...(truncated)";
+    }
 
-      if (logMsgNoSpaces.length > charLimit) {
-        logMsg = logMsg.substring(0, charLimit) + "\n\n...(truncated)";
-      }
-
-      switch (logType) {
-        case "debug":
-          this.logger.debug(logMsg);
-          break;
-        case "info":
-          this.logger.info(logMsg);
-          break;
-        case "warn":
-          this.logger.warn(logMsg);
-          break;
-        case "error":
-          this.logger.error(logMsg);
-          break;
-        case "fatal":
-          this.logger.fatal(logMsg);
-          break;
-        default:
-          this.logger.info(logMsg);
-          break;
-      }
+    switch (logType) {
+      case "debug":
+        this.logger.debug(this.showVerbose ? sagaLogData : {}, loggerMessage);
+        break;
+      case "info":
+        this.logger.info(
+          this.showVerbose ? { ...sagaLogData } : {},
+          loggerMessage,
+        );
+        break;
+      case "warn":
+        this.logger.warn(
+          this.showVerbose ? { ...sagaLogData } : {},
+          loggerMessage,
+        );
+        break;
+      case "error":
+        this.logger.error(
+          this.showVerbose ? { ...sagaLogData } : {},
+          loggerMessage,
+        );
+        break;
+      case "fatal":
+        this.logger.fatal(
+          this.showVerbose ? { ...sagaLogData } : {},
+          loggerMessage,
+        );
+        break;
+      default:
+        this.logger.info(
+          this.showVerbose ? { ...sagaLogData } : {},
+          loggerMessage,
+        );
+        break;
     }
   }
 
-  getData(): SagaLogMessage[] {
-    return this.data;
+  getData(): SagaLogItem[] {
+    return this.items;
   }
 }

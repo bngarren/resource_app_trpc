@@ -262,7 +262,7 @@ export const updateCreateOrRemoveUserInventoryItemWithNewQuantity = async <
       userId,
     );
     logger.debug(
-      removed,
+      { removedUserInventoryItem: removed },
       `User inventory item removed due to quantity=0 after update`,
     );
     return removed;

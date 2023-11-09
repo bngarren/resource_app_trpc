@@ -16,6 +16,7 @@ export const prefixedError = (error: unknown, _prefix: string) => {
   if (error instanceof Error) {
     newError = new Error(`${prefix}${error.message}`);
     newError.stack = error.stack;
+    newError.cause = error.cause;
   } else {
     newError = new Error(`${prefix}`);
   }

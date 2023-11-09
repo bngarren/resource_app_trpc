@@ -111,7 +111,7 @@ export const getRandomResource = async () => {
 
   if (allResources.length === 0) {
     throw new Error(
-      "Could not find any resources when attempting to select random resource",
+      "Could not find any resources when attempting to select random resource. Ensure that the database is seeded correctly!",
     );
   }
 

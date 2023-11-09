@@ -7,6 +7,7 @@ import { TestSingleton } from "./TestSingleton";
 import {
   AuthenticatedRequester,
   getDataFromTRPCResponse,
+  getTestFilename,
   resetPrisma,
   throwIfBadStatus,
 } from "./testHelpers";
@@ -29,7 +30,9 @@ describe("/userInventory", () => {
   let requester: AuthenticatedRequester;
 
   beforeAll(() => {
-    logger.info("Starting test suite: /userInventory");
+    logger.info(
+      `Starting test suite located at: ${getTestFilename(__filename)}`,
+    );
     server = TestSingleton.getInstance().server;
     idToken = TestSingleton.getInstance().idToken;
     userUid = TestSingleton.getInstance().userId;
@@ -180,9 +183,9 @@ describe("/userInventory", () => {
           }),
         );
       } catch (err) {
-        console.error(
-          "Unexpected error when removing user inventory items",
+        logger.error(
           err,
+          "Unexpected error when removing user inventory items",
         );
       }
 

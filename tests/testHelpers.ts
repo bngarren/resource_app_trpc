@@ -12,6 +12,17 @@ import * as QueryResource from "../src/queries/queryResource";
 import { Coordinate } from "../src/types";
 import { Prisma } from "@prisma/client";
 import { logger } from "../src/main";
+import path from "path";
+
+export const TEST_USER = Object.freeze({
+  email: "testUser@gmail.com",
+});
+
+export const getTestFilename = (filename: string) => {
+  const fullPath = path.resolve(filename);
+  const fileNameFull = fullPath.split("tests/")[1];
+  return fileNameFull; // .split(".test")[0]; to remove the file extensions
+};
 
 /**
  * ### Helper function to extract data from a TRPC response
@@ -394,9 +405,58 @@ export const resetPrisma = async () => {
 
   // - - - - - - - - - NEXT, re-seed our test data - - - - - - - -
 
+  const startSeedTime = Date.now();
+
   await setupBaseSeed(prisma);
 
-  logger.debug(`Prisma/Database Reset complete.`);
+  const count_resources = await prisma.resource.count();
+  const count_spawnRegions = await prisma.spawnRegion.count();
+  const count_spawnedResources = await prisma.spawnedResource.count();
+  const testUser = await prisma.user.findUnique({
+    where: {
+      email: TEST_USER.email,
+    },
+    include: {
+      resourceUserInventoryItems: {
+        select: {
+          id: true,
+          item: {
+            select: {
+              id: true,
+              name: true,
+              url: true,
+            },
+          },
+          quantity: true,
+        },
+      },
+      harvesterUserInventoryItems: {
+        select: {
+          id: true,
+          item: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          quantity: true,
+        },
+      },
+    },
+  });
+
+  const endSeedTime = Date.now();
+  const durationSeedTime = endSeedTime - startSeedTime;
+
+  logger.info(
+    {
+      count_resources,
+      count_spawnRegions,
+      count_spawnedResources,
+      testUser,
+    },
+    `Prisma/database reset. The seeding and query took ${durationSeedTime} ms.`,
+  );
 };
 
 /**

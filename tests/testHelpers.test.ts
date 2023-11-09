@@ -1,7 +1,7 @@
 import { Server } from "http";
 import { logger } from "../src/main";
 import { TestSingleton } from "./TestSingleton";
-import { mockScan, resetPrisma } from "./testHelpers";
+import { getTestFilename, mockScan, resetPrisma } from "./testHelpers";
 import { prisma } from "../src/prisma";
 import * as h3 from "h3-js";
 
@@ -11,7 +11,9 @@ describe("testHelpers", () => {
   let userUid: string;
 
   beforeAll(() => {
-    logger.info("Starting test suite: testHelpers");
+    logger.info(
+      `Starting test suite located at: ${getTestFilename(__filename)}`,
+    );
     server = TestSingleton.getInstance().server;
     idToken = TestSingleton.getInstance().idToken;
     userUid = TestSingleton.getInstance().userId;

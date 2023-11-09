@@ -4,8 +4,9 @@ name: arcane_prospector
 filebeat.inputs:
 - type: filestream
   enabled: true
+  # Where we search for our log files
   paths:
-    - ${LOG_PATH}app_*.log
+    - ${LOG_PATH}${LOG_FILE_PREFIX}_*.log # The LOG_PATH var comes from compose file
   ignore_older: 6h  # Ignores 
 
   # From https://www.elastic.co/guide/en/ecs-logging/nodejs/current/pino.html
@@ -16,6 +17,8 @@ filebeat.inputs:
       expand_keys: true
 
 processors:
+  # Overwrite the @timestamp field with the time from our log, otherwise
+  # filebeat uses the @timestamp from when the log was harvested
   - timestamp:
       field: "${LOGGER_TIMESTAMP_KEY}"
       target_field: "@timestamp"
@@ -26,12 +29,17 @@ processors:
         - '2023-11-05T19:47:55.194Z'
   - drop_fields:
       fields: ["${LOGGER_TIMESTAMP_KEY}"]
+  # If an "error" key exists within the nestedKey, pull it out to the root level
+
+  # Remember, that when @elastic/ecs-pino-format is used, it will transform whatever was in the pino 'errorKey' to
+  # error.message, error.stack_trace, error.code, etc. Thus we look for the 'error' key here...
   - rename:
       fields:
         - from: "${LOGGER_NESTED_KEY}.error"
           to: "error"
       ignore_missing: true
       fail_on_error: false
+  # If a "testName" key exists within the nestedKey, pull it out to the root level
   - rename:
       fields:
         - from: "${LOGGER_NESTED_KEY}.${LOGGER_TESTNAME_KEY}"
@@ -39,16 +47,14 @@ processors:
       ignore_missing: true
       fail_on_error: false
 
-
-
 output.elasticsearch:
   hosts: ["${ELASTICSEARCH_HOST}"]
   # Dynamically set the index name based on the environment field
   index: "arcane_prospector-%{[node_env]}-logs-%{+yyyy.MM.dd}"
-  username: "elastic"
+  username: ${ELASTICSEARCH_USERNAME}
   password: ${ELASTICSEARCH_PASSWORD}
 
-setup.template.enabled: false # Don't use Filebeat default or make my own; it's already made in ES
+setup.template.enabled: false # Don't use Filebeat default or make a new one; it's already made in ES
 
 logging.level: debug
 

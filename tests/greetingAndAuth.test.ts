@@ -1,5 +1,9 @@
 import request from "supertest";
-import { extractDataFromTRPCResponse, resetPrisma } from "./testHelpers";
+import {
+  extractDataFromTRPCResponse,
+  getTestFilename,
+  resetPrisma,
+} from "./testHelpers";
 import { prisma } from "../src/prisma";
 import { TestSingleton } from "./TestSingleton";
 import { Server } from "http";
@@ -11,7 +15,9 @@ describe("Greeting/Authentication", () => {
   let idToken: string;
 
   beforeAll(() => {
-    logger.info("Starting test suite: Greeting/Authentication");
+    logger.info(
+      `Starting test suite located at: ${getTestFilename(__filename)}`,
+    );
 
     server = TestSingleton.getInstance().server;
     idToken = TestSingleton.getInstance().idToken;

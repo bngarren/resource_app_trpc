@@ -15,6 +15,7 @@ import { TestSingleton } from "./TestSingleton";
 import {
   AuthenticatedRequester,
   getDataFromTRPCResponse,
+  getTestFilename,
   harvestRegion,
   mockScan,
   resetPrisma,
@@ -71,7 +72,10 @@ describe("/harvester", () => {
   let requester: AuthenticatedRequester;
 
   beforeAll(() => {
-    logger.info("Starting test suite: /harvester");
+    logger.info(
+      `Starting test suite located at: ${getTestFilename(__filename)}`,
+    );
+
     server = TestSingleton.getInstance().server;
     idToken = TestSingleton.getInstance().idToken;
     userUid = TestSingleton.getInstance().userId;

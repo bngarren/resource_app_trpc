@@ -1,5 +1,5 @@
 import { ScanResult } from "../types";
-import { logger } from "./logger";
+import { logger } from "../main";
 
 type NestedUnknown<T> = {
   [P in keyof T]: unknown;
@@ -32,8 +32,11 @@ export const logScanResult = (scanResult: ScanResult) => {
     sortedCanInteractableIds: scanResult.sortedCanInteractableIds.length,
   };
 
-  logger.info(result, "Scan Result");
+  logger.debug(result, "Scan Result");
   if (scanResult.interactables.length > 0) {
-    logger.debug(scanResult.interactables[0], "Example interactable");
+    logger.debug(
+      { exampleInteractable: scanResult.interactables[0] },
+      "Example interactable",
+    );
   }
 };

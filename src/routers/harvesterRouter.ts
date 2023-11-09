@@ -126,7 +126,7 @@ export const harvesterRouter = router({
         });
       }
 
-      logger.info(harvester, `Reclaiming harvester`);
+      logger.info({ harvester }, `Reclaiming harvester`);
 
       const res = await handleReclaim(harvester.id);
     }),
@@ -142,11 +142,12 @@ export const harvesterRouter = router({
         harvester.energySourceId !== input.energySourceId
       ) {
         const errMsg = `Cannot modify energy of a different type than what is presently in the harvester (id=${harvester.id})`;
-        logger.error(errMsg);
-        throw new TRPCError({
+        const err = new TRPCError({
           message: errMsg,
           code: "CONFLICT",
         });
+        logger.error(err);
+        throw err;
       }
 
       /* //* NOTE: 
@@ -185,11 +186,12 @@ async function verifyDeployedHarvester(harvesterId: string) {
     harvester = await getHarvester(harvesterId);
   } catch (error) {
     const errMsg = `harvester: ${harvesterId} not found`;
-    logger.error(errMsg);
-    throw new TRPCError({
+    const err = new TRPCError({
       message: errMsg,
       code: "NOT_FOUND",
     });
+    logger.error(err);
+    throw err;
   }
 
   // Verify that this harvester is currently deployed.
@@ -201,20 +203,22 @@ async function verifyDeployedHarvester(harvesterId: string) {
     isDeployed = isHarvesterDeployed(harvester);
   } catch (error) {
     const errMsg = `harvester: ${harvesterId} not found (but should have already been verified??)`;
-    logger.error(errMsg);
-    throw new TRPCError({
+    const err = new TRPCError({
       message: errMsg,
       code: "NOT_FOUND",
     });
+    logger.error(err);
+    throw err;
   }
 
   if (!isDeployed) {
     const errMsg = `harvester: ${harvesterId} is not deployed`;
-    logger.error(errMsg);
-    throw new TRPCError({
+    const err = new TRPCError({
       message: errMsg,
       code: "CONFLICT",
     });
+    logger.error(err);
+    throw err;
   }
 
   return harvester;

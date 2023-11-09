@@ -71,7 +71,10 @@ function createProtectedRouter() {
     } else {
       // We are using protectedRoutes, so let's throw Error if unauthorized user...
       if (!ctx.user) {
-        throw new TRPCError({ code: "UNAUTHORIZED" });
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: `This is a protected endpoint! Ensure that the request is authenticated!`,
+        });
       }
     }
     return next({

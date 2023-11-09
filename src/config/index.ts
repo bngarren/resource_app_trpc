@@ -33,7 +33,9 @@ const firebase_service_acct_key: string | undefined =
   process.env.FIREBASE_SERVICE_ACCT_KEY;
 
 if (!firebase_service_acct_key) {
-  throw new Error("Missing Firebase Service Account Key.");
+  throw new Error(
+    "Missing Firebase Service Account Key. Expected it at env variable: FIREBASE_SERVICE_ACCT_KEY",
+  );
 }
 
 // Always use protected routes unless we are in development environment
