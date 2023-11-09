@@ -88,14 +88,18 @@ services:
       context: ./docker-filebeat
       args:
         FILEBEAT_VERSION: 8.10.4 # Can pull from env variable in the future
-    env_file: # only passes to the container, not the docker compose file
+    env_file:
       - .env.common
     environment:
-      - ELASTICSEARCH_HOST=elasticsearch:9200
       - LOG_PATH=/app/logs/
+      - ELASTICSEARCH_HOST=elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=bng2113!
     volumes:
       - ./logs:/app/logs:ro # Map the logs directory
       - ./docker-filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro,Z
+      - ./docker-filebeat/createIndexTemplates.sh:/usr/share/filebeat/createIndexTemplates.sh:ro,Z
+      - ./docker-filebeat/index-templates:/usr/share/filebeat/index-templates:ro,Z
     networks:
       - elk
 

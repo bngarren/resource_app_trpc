@@ -86,6 +86,10 @@ export default {
    * root level, for improved searching/querying.
    */
   logger_testname_key: process.env.LOGGER_TESTNAME_KEY ?? "testName",
+  /**
+   * Whether to log the seed results
+   */
+  should_log_seed_results: true,
   use_protected_routes: shouldUseProtectedRoutes,
   firebase_service_acct_key: firebase_service_acct_key,
   firebase_test_user_uid: process.env.FIREBASE_TEST_USER_UID,

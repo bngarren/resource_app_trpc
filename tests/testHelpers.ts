@@ -299,6 +299,11 @@ export const mockScan = async (
       );
     });
 
+  logger.debug(
+    { harvestRegion, scanLocation, numberOfSpawnedResources },
+    `Performing mockScan`,
+  );
+
   // Perform the scan request
   const s = await authenticatedRequest(server, "POST", "/scan", idToken, {
     userLocation: scanLocation,
@@ -405,58 +410,7 @@ export const resetPrisma = async () => {
 
   // - - - - - - - - - NEXT, re-seed our test data - - - - - - - -
 
-  const startSeedTime = Date.now();
-
   await setupBaseSeed(prisma);
-
-  const count_resources = await prisma.resource.count();
-  const count_spawnRegions = await prisma.spawnRegion.count();
-  const count_spawnedResources = await prisma.spawnedResource.count();
-  const testUser = await prisma.user.findUnique({
-    where: {
-      email: TEST_USER.email,
-    },
-    include: {
-      resourceUserInventoryItems: {
-        select: {
-          id: true,
-          item: {
-            select: {
-              id: true,
-              name: true,
-              url: true,
-            },
-          },
-          quantity: true,
-        },
-      },
-      harvesterUserInventoryItems: {
-        select: {
-          id: true,
-          item: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          quantity: true,
-        },
-      },
-    },
-  });
-
-  const endSeedTime = Date.now();
-  const durationSeedTime = endSeedTime - startSeedTime;
-
-  logger.info(
-    {
-      count_resources,
-      count_spawnRegions,
-      count_spawnedResources,
-      testUser,
-    },
-    `Prisma/database reset. The seeding and query took ${durationSeedTime} ms.`,
-  );
 };
 
 /**
