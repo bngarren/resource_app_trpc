@@ -1,17 +1,22 @@
 import { TRPCError } from "@trpc/server";
+import { addBinding, removeBinding } from "../src/logger/loggerManager";
+import { logger } from "../src/main";
 import config from "../src/config";
-import { logger } from "../src/logger/customLogger";
 
 it("customLogger should work", async () => {
   logger.error(new Error("Kaboom!"), "Custom error message!");
 
   logger.warn({ param1: "Test", param2: "Test2" }, "My warning message");
 
-  logger.addBinding({ anotherKey: "anotherValue" });
+  addBinding(logger, { anotherKey: "anotherValue" });
 
   logger.debug("DEBUG this");
 
-  logger.removeBinding("anotherKey");
+  const childLogger = logger.child({ child: true });
+
+  childLogger.info({ foo: "bar" }, "Test");
+
+  removeBinding(logger, "anotherKey");
 
   logger.error({
     [config.logger_error_key]: new TRPCError({

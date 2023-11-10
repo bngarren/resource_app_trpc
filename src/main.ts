@@ -1,4 +1,3 @@
-import { logger as customLogger } from "./logger/customLogger";
 import config, { NodeEnvironment } from "./config";
 import { protectedProcedure, publicProcedure, router } from "./trpc/trpc";
 import express from "express";
@@ -12,8 +11,9 @@ import fs from "fs";
 import { scanRouter } from "./routers/scanRouter";
 import { userInventoryRouter } from "./routers/userInventoryRouter";
 import { harvesterRouter } from "./routers/harvesterRouter";
+import { getLogger } from "./logger/loggerManager";
 
-export const logger = customLogger;
+export const logger = getLogger();
 
 const appRouter = router({
   greeting: publicProcedure.query(async () => {
