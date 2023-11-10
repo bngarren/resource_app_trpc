@@ -148,7 +148,7 @@ describe("saga", () => {
     const predicates = [false, () => false];
 
     await Promise.all(
-      predicates.map(async (predicate) => {
+      predicates.map(async (predicate, i) => {
         const orig_testDatabase = [
           {
             id: "initial",
@@ -179,13 +179,15 @@ describe("saga", () => {
           Promise.resolve();
         });
         // Make this testFunction4 fail so that all are rolled back
-        const testFunction4 = jest.fn(async () => Promise.reject());
+        const testFunction4 = jest.fn(async () =>
+          Promise.reject(new Error("A mock error has occured!")),
+        );
         const compensationFunction4 = jest.fn(async () => {
           testDatabase = testDatabase.filter((el) => el.id !== "four");
           Promise.resolve();
         });
 
-        const saga = new SagaBuilder("test saga")
+        const saga = new SagaBuilder(`test saga, with predicate #${i + 1}`)
           .withLogger()
           .invoke(testFunction1, "testFunction1")
           .withCompensation(compensationFunction1)

@@ -1,21 +1,7 @@
 import ecsFormat from "@elastic/ecs-pino-format";
 import path from "path";
-import pino, {
-  BaseLogger,
-  Bindings,
-  ChildLoggerOptions,
-  LogFn,
-  Logger,
-  LoggerOptions,
-} from "pino";
+import pino, { BaseLogger, Bindings, LogFn, Logger, LoggerOptions } from "pino";
 import config from "../config";
-import { Expand } from "../types";
-
-// eslint-disable-next-line @typescript-eslint/ban-types
-type ChildFunction = <ChildOptions extends ChildLoggerOptions = {}>(
-  bindings: Bindings,
-  options?: ChildOptions | undefined,
-) => Logger<LoggerOptions & ChildOptions>;
 
 const logDirectory = path.join(process.cwd(), config.log_directory); // This points to the project root /logs
 const testLogPath = path.join(
@@ -23,14 +9,11 @@ const testLogPath = path.join(
   `${config.log_file_prefix}_${config.node_env}.log`,
 );
 
-const loggerManager = () => {
-  const loggerBindings = new Map<Logger, Bindings>();
-
+export const getBaseLogger = () => {
   const fileDestination = pino.destination({
     dest: testLogPath,
   });
-
-  const baseLogger = pino(
+  return pino(
     {
       ...ecsFormat({ convertErr: true }),
       level: "debug",
@@ -45,6 +28,14 @@ const loggerManager = () => {
     app: config.app_name,
     node_env: config.node_env,
   });
+};
+
+export const loggerManager = (baseLogger: Logger) => {
+  const loggerBindings = new Map<Logger, Bindings>();
+  const loggerOriginalMethods = new Map<
+    Logger,
+    Partial<{ [K in keyof BaseLogger]: LogFn }>
+  >();
 
   const addBinding = (logger: pino.Logger, bindings: pino.Bindings) => {
     const currentBindings = loggerBindings.get(logger) || {};
@@ -59,6 +50,10 @@ const loggerManager = () => {
 
   const getBindings = (logger: pino.Logger): pino.Bindings => {
     return { ...loggerBindings.get(logger) } || {};
+  };
+
+  const getOriginalMethods = (logger: pino.Logger) => {
+    return loggerOriginalMethods.get(logger);
   };
 
   const getLogger = () => baseLogger;
@@ -103,7 +98,6 @@ const loggerManager = () => {
   }
 
   function overrideMethods(logger: Logger & BaseLogger) {
-    type t = Expand<Partial<{ [K in keyof BaseLogger]: LogFn }>>;
     // Keep references to the original Pino methods
     // Keep references to the original Pino methods
     const originalMethods: Partial<{ [K in keyof BaseLogger]: LogFn }> = {
@@ -111,7 +105,10 @@ const loggerManager = () => {
       info: logger.info.bind(logger),
       warn: logger.warn.bind(logger),
       error: logger.error.bind(logger),
+      fatal: logger.fatal.bind(logger),
     };
+
+    loggerOriginalMethods.set(logger, originalMethods);
 
     const originalChild = logger.child.bind(logger);
 
@@ -170,7 +167,7 @@ const loggerManager = () => {
     const childLogger = originalChild.bind(this)(bindings, options);
     loggerBindings.set(childLogger, {
       ...getBindings(this),
-      ...bindings,
+      // ...bindings,
     });
     overrideMethods(childLogger);
     return childLogger;
@@ -183,8 +180,9 @@ const loggerManager = () => {
     addBinding,
     removeBinding,
     getLogger,
+    getOriginalMethods,
   };
 };
 
-const manager = loggerManager();
+const manager = loggerManager(getBaseLogger());
 export const { addBinding, removeBinding, getLogger } = manager;
