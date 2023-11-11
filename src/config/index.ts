@@ -82,7 +82,7 @@ export default {
    * match the key that the `filebeat.yml` will place at the root level.
    *
    * E.g. If we put our test's name in the `testName` key, Filebeat will
-   * pull the `payload.testName` field out of 'payload' and put testName at the
+   * pull the `[nestedKey].testName` field out of [nestedKey] and put testName at the
    * root level, for improved searching/querying.
    */
   logger_testname_key: process.env.LOGGER_TESTNAME_KEY ?? "testName",

@@ -14,21 +14,19 @@ for template_file in "$TEMPLATE_DIR"/*.json; do
   # Extract the filename without the path and .json extension to use as the template name
   template_name=$(basename "$template_file" .json)
 
-  echo "Creating index template: $template_name"
+  echo "Checking if index template $template_name exists..."
 
-  # Send a PUT request to Elasticsearch to create the index template
-  response=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "$ELASTICSEARCH_HOST/_index_template/$template_name" \
-    -H 'Content-Type: application/json' \
-    -u "$ELASTICSEARCH_USERNAME:$ELASTICSEARCH_PASSWORD" \
-    -d @"$template_file")
+  # Send a GET request to Elasticsearch to check if the index template exists
+  response=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$ELASTICSEARCH_HOST/_index_template/$template_name" \
+    -u "$ELASTICSEARCH_USERNAME:$ELASTICSEARCH_PASSWORD")
 
-    if [ "$response" -eq 200 ]; then
+  if [ "$response" -eq 200 ]; then
     echo "Index template $template_name already exists."
     read -p "Do you want to overwrite it? [y/N]: " answer
     if [ "$answer" != "${answer#[Yy]}" ]; then
       echo "Overwriting index template $template_name..."
     else
-      echo "Skipping index template $template_name..."
+      echo "Skipping index template $template_name."
       continue
     fi
   elif [ "$response" -eq 404 ]; then
@@ -39,6 +37,7 @@ for template_file in "$TEMPLATE_DIR"/*.json; do
   fi
 
   # Send a PUT request to Elasticsearch to create or update the index template
+  echo "Creating/updating index template $template_name..."
   result=$(curl -s -X PUT "$ELASTICSEARCH_HOST/_index_template/$template_name" \
     -H 'Content-Type: application/json' \
     -u "$ELASTICSEARCH_USERNAME:$ELASTICSEARCH_PASSWORD" \

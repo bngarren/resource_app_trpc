@@ -2,6 +2,7 @@
   "index_patterns": ["arcane_prospector-test*"],
   "template": {
     "settings": {
+      "default_pipeline": "arcane-prospector-default-pipeline",
       "index": {
         "lifecycle": {
           "name": "filebeat"
@@ -26,7 +27,8 @@
       "numeric_detection": false,
       "properties": {
         "payload": {
-          "type": "flattened"
+          "type": "flattened",
+          "null_value": "null"
         }
       }
     },

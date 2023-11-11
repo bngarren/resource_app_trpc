@@ -90,16 +90,16 @@ services:
         FILEBEAT_VERSION: 8.10.4 # Can pull from env variable in the future
     env_file:
       - .env.common
+      - ./docker-filebeat/.env
     environment:
       - LOG_PATH=/app/logs/
-      - ELASTICSEARCH_HOST=elasticsearch:9200
-      - ELASTICSEARCH_USERNAME=elastic
-      - ELASTICSEARCH_PASSWORD=bng2113!
     volumes:
       - ./logs:/app/logs:ro # Map the logs directory
       - ./docker-filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro,Z
       - ./docker-filebeat/createIndexTemplates.sh:/usr/share/filebeat/createIndexTemplates.sh:ro,Z
       - ./docker-filebeat/index-templates:/usr/share/filebeat/index-templates:ro,Z
+      - ./docker-filebeat/createIngestPipelines.sh:/usr/share/filebeat/createIngestPipelines.sh:ro,Z
+      - ./docker-filebeat/ingest-pipelines:/usr/share/filebeat/ingest-pipelines:ro,Z
     networks:
       - elk
 

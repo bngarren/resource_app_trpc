@@ -43,14 +43,15 @@ processors:
   - rename:
       fields:
         - from: "${LOGGER_NESTED_KEY}.${LOGGER_TESTNAME_KEY}"
-          to: "testName"
+          to: "labels.testName"
       ignore_missing: true
       fail_on_error: false
+      
 
 output.elasticsearch:
   hosts: ["${ELASTICSEARCH_HOST}"]
   # Dynamically set the index name based on the environment field
-  index: "arcane_prospector-%{[node_env]}-logs-%{+yyyy.MM.dd}"
+  index: "arcane_prospector-%{[labels][node_env]}-logs-%{+yyyy.MM.dd}"
   username: ${ELASTICSEARCH_USERNAME}
   password: ${ELASTICSEARCH_PASSWORD}
 

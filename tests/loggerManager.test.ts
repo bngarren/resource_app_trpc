@@ -1,5 +1,9 @@
 import { Logger } from "pino";
-import { getLogger, loggerManager } from "../src/logger/loggerManager";
+import {
+  addBinding,
+  getLogger,
+  loggerManager,
+} from "../src/logger/loggerManager";
 
 describe("loggerManager", () => {
   let manager: ReturnType<typeof loggerManager>;
@@ -72,8 +76,6 @@ describe("loggerManager", () => {
       expect(methodSpies[method]).toHaveBeenCalledWith("Test message");
 
       expect(originalMethodSpies[method]).toHaveBeenCalledWith("Test message");
-
-      console.log(originalMethodSpies[method].mock);
     },
   );
 
@@ -112,5 +114,28 @@ describe("loggerManager", () => {
       expect.objectContaining({ key: "value" }),
       "Child logger test",
     );
+
+    manager.removeBinding(testLogger, "key");
+
+    const childLogger2 = testLogger.child({ app: "ARCANE_PROSPECTOR!" });
   });
+});
+
+it("should test app's logger", () => {
+  const logger = getLogger();
+
+  logger.info("Test info message");
+
+  const childLogger = logger.child({ childKey: "childKey" });
+  childLogger.info("Test info child logger message");
+
+  addBinding(logger, { customBinding: "customBinding" });
+
+  logger.info("Test info message with custom binding");
+
+  childLogger.info("Repeat info child logger message");
+
+  const childLogger2 = logger.child({ childKey2: "childKey2" });
+
+  childLogger2.info("Test info child logger 2 message with custom binding");
 });
