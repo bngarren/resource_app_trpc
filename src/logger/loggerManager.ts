@@ -58,17 +58,38 @@ export const getBaseLogger = (
   return baseLabels ? _logger.child({ labels: baseLabels }) : _logger;
 };
 
+type LoggerManagerOptions = {
+  /**
+   * The name of the key that child bindings will be nested under. If empty, null, or undefined,
+   * child bindings will appear at the root of the JSON log.
+   */
+  childNestedKey?: string;
+  /**
+   * Keys that are not allowed to be set through `child()`.
+   * If you set certain keys on the logger and do not want them later overwritten by a
+   * `child()` call, put those keys in this array. If a restricted key is included in the bindings
+   * object passed to child(), it will be ignored.
+   */
+  childRestrictedKeys?: string[];
+};
+
 /**
  * ### Logger manager
  *
  * #### Summary
  * The loggerManager wraps a single base logger instance (e.g. from Pino) and provides mechanisms
- * to add bindings to the logger instance (which will be nested under the 'nestedKey') and to create
- * child loggers whose bindings will be nested under the 'labels' key.
+ * to add bindings to the logger instance (which will be nested under the 'nestedKey' of the base logger) and to create
+ * child loggers whose bindings will be nested under the 'childNestedKey' key, if specified.
  *
  * #### Example
  * - In our testing environment, we can add a binding to the app's logger instance that includes
  * the test's name, i.e. `{testName: "/endpoint should return 200"}`.
+ *
+ * #### Child
+ * - When bindings are passed to child(), these will be placed at the root level (default for pino), or placed under
+ * the 'childNestedKey', if specified in the LoggerManagerOptions
+ * - If you would like some child bindings placed at the root level and all others within a nested key, consider
+ * adding these top level bindings on the base logger that is passed into loggerManager().
  *
  * #### Notes
  * - The loggerManager receives a single base logger instance and provides a `getLogger()` method to
@@ -82,12 +103,11 @@ export const getBaseLogger = (
  * and their original methods (loggerOriginalMethods). The latter is helpful to have for testing this code, i.e. to
  * spy on the original methods and make sure they are called with correct arguments.
  * - Bindings added to the base or child logger through `addBinding()` are nested under the [nestedKey], defined in the options
- * - When bindings are passed to child(), these are nested under the root-level 'labels' key
- *
- * @param baseLogger
- * @returns
  */
-export const loggerManager = (baseLogger: Logger) => {
+export const loggerManager = (
+  baseLogger: Logger,
+  opts?: LoggerManagerOptions,
+) => {
   const loggerBindings = new Map<Logger, Bindings>();
 
   type OriginalMethods = {
@@ -96,7 +116,7 @@ export const loggerManager = (baseLogger: Logger) => {
   const loggerOriginalMethods = new Map<Logger, OriginalMethods>();
 
   const originalChildFunction = (Object.create(baseLogger) as Logger).child;
-  const restrictedLabels = ["app", "node_env", "testName"];
+  const restrictedLabels = opts?.childRestrictedKeys || [];
 
   // ! FOR DEBUGGING
   const objectWeakMap = new WeakMap();
@@ -109,13 +129,11 @@ export const loggerManager = (baseLogger: Logger) => {
     return objectWeakMap.get(obj);
   }
 
-  console.log("baseLoggerId:", trackObject(baseLogger));
-
   /**
    * ### Adds a key/value pair to the JSON log
    * In pino, this will add a key/value to the 'mergedObject' passed to the log functions.
    *
-   * If a `nestedKey` option is set in LoggerOptions, then this binding will appear within this nestedKey.
+   * If a `nestedKey` option is set in the options of the base logger, then this binding will appear within this nestedKey.
    *
    * @param logger The logger to which you wish to add this custom binding
    * @param bindings This is an object of keys (strings) and values (any). Can have nested objects.
@@ -154,7 +172,7 @@ export const loggerManager = (baseLogger: Logger) => {
    * ### Shadows the pino logger methods and adds custom bindings
    *
    * This function will first get the custom bindings for the bound logger (this).
-   * Then it will inject any custom bindings into the mergedObject that is a
+   * Then it will inject any custom bindings into the 'mergedObject', which is a
    * param for the native/original log method.
    */
   function log(
@@ -276,35 +294,39 @@ export const loggerManager = (baseLogger: Logger) => {
     options: ChildOptions | undefined,
     originalChild: typeof baseLogger.child,
   ): pino.Logger<LoggerOptions & ChildOptions> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const labelsBindings: { [x: string]: any } = {};
+    let newChildBindings: pino.Bindings = {};
 
-    Object.entries(bindings).forEach(([k, v]) => {
-      if (restrictedLabels.includes(k)) {
-        console.warn(
-          `[loggerManager] Cannot use restricted key in child logger bindings. Ignoring key/value ({${k}: ${v}})`,
-        );
-      } else {
-        if (!k.startsWith("label.")) {
-          labelsBindings[`labels.${k}`] = v;
+    const childNestedKey = opts?.childNestedKey?.trim();
+
+    // If using a childNestedKey, place the child bindings under this key
+    if (childNestedKey) {
+      Object.entries(bindings).forEach(([k, v]) => {
+        if (restrictedLabels.includes(k)) {
+          console.warn(
+            `[loggerManager] Cannot use restricted key in child logger bindings. Ignoring key/value ({${k}: ${v}})`,
+          );
+        } else {
+          if (!k.startsWith(childNestedKey)) {
+            newChildBindings[`${childNestedKey}.${k}`] = v;
+          }
         }
-      }
-    });
+      });
+    } else {
+      newChildBindings = { ...bindings };
+    }
 
-    const childLogger = originalChild(labelsBindings, options);
+    const childLogger = originalChild(newChildBindings, options);
     loggerBindings.set(childLogger, {
       ...getBindings(this),
       // ...bindings,
     });
 
-    // console.log("thisLoggerId:", trackObject(this));
-    // console.log("childLoggerId:", trackObject(childLogger));
-
+    // Overriding log methods to incorporate our custom logic
     overrideMethods(childLogger);
     return childLogger;
   }
 
-  // Overriding specific log level methods
+  // Overriding log methods to incorporate our custom logic
   overrideMethods(baseLogger);
 
   return {
@@ -320,5 +342,9 @@ const manager = loggerManager(
     app: config.app_name,
     node_env: config.node_env,
   }),
+  {
+    childNestedKey: "labels",
+    childRestrictedKeys: ["app", "node_env", "testName"],
+  },
 );
 export const { addBinding, removeBinding, getLogger } = manager;
