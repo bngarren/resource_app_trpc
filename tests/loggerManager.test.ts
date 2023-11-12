@@ -116,8 +116,6 @@ describe("loggerManager", () => {
     );
 
     manager.removeBinding(testLogger, "key");
-
-    const childLogger2 = testLogger.child({ app: "ARCANE_PROSPECTOR!" });
   });
 });
 
@@ -138,4 +136,18 @@ it("should test app's logger", () => {
   const childLogger2 = logger.child({ childKey2: "childKey2" });
 
   childLogger2.info("Test info child logger 2 message with custom binding");
+
+  const childLogger3 = childLogger2.child({ childKey3: "childKey3" });
+
+  childLogger3.info(
+    "childLogger3 is a child of childLogger2 which is a child of logger!",
+  );
+});
+
+it("test second order child", () => {
+  const logger = getLogger();
+  const childLogger1 = logger.child({ childKey1: "1" });
+  childLogger1.info(`childLogger1 info`);
+  const childLogger2 = childLogger1.child({ childKey2: "2" });
+  childLogger2.info(`childLogger2 info`);
 });

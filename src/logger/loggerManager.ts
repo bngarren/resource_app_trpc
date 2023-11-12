@@ -1,6 +1,6 @@
 import ecsFormat from "@elastic/ecs-pino-format";
 import path from "path";
-import pino, { BaseLogger, Bindings, LogFn, Logger, LoggerOptions } from "pino";
+import pino, { Bindings, LogFn, Logger, LoggerOptions } from "pino";
 import config, { NodeEnvironment } from "../config";
 
 const logDirectory = path.join(process.cwd(), config.log_directory); // This points to the project root /logs
@@ -89,12 +89,27 @@ export const getBaseLogger = (
  */
 export const loggerManager = (baseLogger: Logger) => {
   const loggerBindings = new Map<Logger, Bindings>();
-  const loggerOriginalMethods = new Map<
-    Logger,
-    Partial<{ [K in keyof BaseLogger]: LogFn }>
-  >();
 
+  type OriginalMethods = {
+    [K in "debug" | "info" | "warn" | "error" | "fatal"]: LogFn;
+  };
+  const loggerOriginalMethods = new Map<Logger, OriginalMethods>();
+
+  const originalChildFunction = (Object.create(baseLogger) as Logger).child;
   const restrictedLabels = ["app", "node_env", "testName"];
+
+  // ! FOR DEBUGGING
+  const objectWeakMap = new WeakMap();
+  let idCounter = 0;
+
+  function trackObject(obj: any) {
+    if (!objectWeakMap.has(obj)) {
+      objectWeakMap.set(obj, ++idCounter);
+    }
+    return objectWeakMap.get(obj);
+  }
+
+  console.log("baseLoggerId:", trackObject(baseLogger));
 
   /**
    * ### Adds a key/value pair to the JSON log
@@ -183,11 +198,9 @@ export const loggerManager = (baseLogger: Logger) => {
    * logs through our `log()` function and child loggers are created with
    * our `customChild()` function.
    */
-  function overrideMethods(logger: Logger & BaseLogger) {
+  function overrideMethods(logger: Logger) {
     // Keep references to the original (e.g. pino.LogFn) methods
-    const originalMethods: {
-      [K in "debug" | "info" | "warn" | "error" | "fatal"]: LogFn;
-    } = {
+    const originalMethods: OriginalMethods = {
       debug: logger.debug.bind(logger),
       info: logger.info.bind(logger),
       warn: logger.warn.bind(logger),
@@ -197,8 +210,6 @@ export const loggerManager = (baseLogger: Logger) => {
 
     // Store the original methods for this logger. Helpful for testing (can spy on them)
     loggerOriginalMethods.set(logger, originalMethods);
-
-    const originalChild = logger.child.bind(logger);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     logger.debug = (objOrMsg?: unknown, ...args: any[]) => {
@@ -220,26 +231,35 @@ export const loggerManager = (baseLogger: Logger) => {
     logger.fatal = (objOrMsg?: unknown, ...args: any[]) => {
       log.call(logger, originalMethods.fatal, objOrMsg, ...args);
     };
-    logger.child = <ChildOptions extends pino.ChildLoggerOptions>(
-      bindings: pino.Bindings,
-      options?: ChildOptions | undefined,
-    ) => {
-      const customChildWithOptions: (
-        this: Logger,
-        bindings: pino.Bindings,
-        options: ChildOptions | undefined,
-        originalChild: (
-          bindings: pino.Bindings,
-          options?: ChildOptions,
-        ) => Logger<ChildOptions>,
-      ) => Logger<ChildOptions> = customChild;
 
-      return customChildWithOptions.call(
+    // eslint-disable-next-line @typescript-eslint/ban-types
+    logger.child = <ChildOptions extends pino.ChildLoggerOptions = {}>(
+      bindings: pino.Bindings,
+      options?: ChildOptions,
+    ) => {
+      /* The originalChild function is the stored original pino child function with our bound current logger */
+      const originalChild = originalChildFunction.bind(logger);
+
+      // console.log(
+      //   `The shadowed child() has been called on loggerId ${trackObject(
+      //     logger,
+      //   )} with:`,
+      //   {
+      //     bindings,
+      //     options,
+      //     loggerCurrentBindings: logger.bindings(),
+      //   },
+      // );
+
+      /* The result of overriding the logger.child is that when it is called, we will actually call
+      the customChild function with this logger bound, the bindings/options from a typical child() call, 
+      and the original child function that has our current logger bound. */
+      return customChild.call(
         logger,
         bindings,
         options,
         originalChild,
-      );
+      ) as pino.Logger<LoggerOptions & ChildOptions>;
     };
   }
 
@@ -254,11 +274,9 @@ export const loggerManager = (baseLogger: Logger) => {
     this: Logger,
     bindings: pino.Bindings,
     options: ChildOptions | undefined,
-    originalChild: (
-      bindings: pino.Bindings,
-      options?: ChildOptions,
-    ) => Logger<LoggerOptions & ChildOptions>,
-  ) {
+    originalChild: typeof baseLogger.child,
+  ): pino.Logger<LoggerOptions & ChildOptions> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const labelsBindings: { [x: string]: any } = {};
 
     Object.entries(bindings).forEach(([k, v]) => {
@@ -267,15 +285,21 @@ export const loggerManager = (baseLogger: Logger) => {
           `[loggerManager] Cannot use restricted key in child logger bindings. Ignoring key/value ({${k}: ${v}})`,
         );
       } else {
-        labelsBindings[`labels.${k}`] = v;
+        if (!k.startsWith("label.")) {
+          labelsBindings[`labels.${k}`] = v;
+        }
       }
     });
 
-    const childLogger = originalChild.bind(this)(labelsBindings, options);
+    const childLogger = originalChild(labelsBindings, options);
     loggerBindings.set(childLogger, {
       ...getBindings(this),
       // ...bindings,
     });
+
+    // console.log("thisLoggerId:", trackObject(this));
+    // console.log("childLoggerId:", trackObject(childLogger));
+
     overrideMethods(childLogger);
     return childLogger;
   }
