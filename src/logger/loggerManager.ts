@@ -118,7 +118,7 @@ export const loggerManager = (
   const originalChildFunction = (Object.create(baseLogger) as Logger).child;
   const restrictedLabels = opts?.childRestrictedKeys || [];
 
-  // ! FOR DEBUGGING
+  // ! FOR DEBUGGING -- --
   const objectWeakMap = new WeakMap();
   let idCounter = 0;
 
@@ -128,7 +128,7 @@ export const loggerManager = (
     }
     return objectWeakMap.get(obj);
   }
-
+  // ! -- --
   /**
    * ### Adds a key/value pair to the JSON log
    * In pino, this will add a key/value to the 'mergedObject' passed to the log functions.
@@ -258,6 +258,7 @@ export const loggerManager = (
       /* The originalChild function is the stored original pino child function with our bound current logger */
       const originalChild = originalChildFunction.bind(logger);
 
+      // -- DEBUG --
       // console.log(
       //   `The shadowed child() has been called on loggerId ${trackObject(
       //     logger,
@@ -284,7 +285,7 @@ export const loggerManager = (
   /**
    * ### Creates a Pino child logger instance
    *
-   * Any binding added through the child() will be nested under the `labels` key in order
+   * Any binding added through the child() will be nested under the `childNestedKey` key in order
    * to preserve ECS compatibility. In other words, we want to avoid our logger adding
    * root-level keys that could possibily conflict.
    */
@@ -294,26 +295,28 @@ export const loggerManager = (
     options: ChildOptions | undefined,
     originalChild: typeof baseLogger.child,
   ): pino.Logger<LoggerOptions & ChildOptions> {
-    let newChildBindings: pino.Bindings = {};
+    const newChildBindings: pino.Bindings = {};
 
     const childNestedKey = opts?.childNestedKey?.trim();
 
-    // If using a childNestedKey, place the child bindings under this key
-    if (childNestedKey) {
-      Object.entries(bindings).forEach(([k, v]) => {
+    Object.entries(bindings).forEach(([k, v]) => {
+      const stringifiedValue = JSON.stringify(v); // The value is always a string
+
+      // If using a childNestedKey, place the child bindings under this key
+      if (childNestedKey) {
         if (restrictedLabels.includes(k)) {
           console.warn(
-            `[loggerManager] Cannot use restricted key in child logger bindings. Ignoring key/value ({${k}: ${v}})`,
+            `[loggerManager] Cannot use restricted key in child logger bindings. Ignoring key/value ({${k}: ${stringifiedValue}})`,
           );
         } else {
           if (!k.startsWith(childNestedKey)) {
-            newChildBindings[`${childNestedKey}.${k}`] = v;
+            newChildBindings[`${childNestedKey}.${k}`] = stringifiedValue;
           }
         }
-      });
-    } else {
-      newChildBindings = { ...bindings };
-    }
+      } else {
+        newChildBindings[k] = stringifiedValue;
+      }
+    });
 
     const childLogger = originalChild(newChildBindings, options);
     loggerBindings.set(childLogger, {

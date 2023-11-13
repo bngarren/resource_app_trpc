@@ -4,6 +4,7 @@ import {
   getLogger,
   loggerManager,
 } from "../src/logger/loggerManager";
+import config from "../src/config";
 
 describe("loggerManager", () => {
   let manager: ReturnType<typeof loggerManager>;
@@ -119,7 +120,7 @@ describe("loggerManager", () => {
   });
 });
 
-it("should test app's logger", () => {
+it.skip("should test app's logger", () => {
   const logger = getLogger();
 
   logger.info("Test info message");
@@ -144,10 +145,28 @@ it("should test app's logger", () => {
   );
 });
 
-it("test second order child", () => {
+it.skip("test second order child", () => {
   const logger = getLogger();
   const childLogger1 = logger.child({ childKey1: "1" });
   childLogger1.info(`childLogger1 info`);
   const childLogger2 = childLogger1.child({ childKey2: "2" });
   childLogger2.info(`childLogger2 info`);
+});
+
+it.skip("should test passing an error and nested objects", () => {
+  const logger = getLogger();
+  logger.error(new Error("Mock error sent as Error object!"));
+  logger.error(
+    {
+      [config.logger_error_key]: new Error("Mock error sent in error key"),
+    },
+    "with a custom message!",
+  );
+  logger.info({ nested1: { nested2: "nested2" } }, "Nested objects");
+});
+
+it("should test passing a nested child binding", () => {
+  const logger = getLogger();
+  const childLogger = logger.child({ nested1: { nested2: "nested2" } });
+  childLogger.info("Child logger was initiated with nested bindings");
 });

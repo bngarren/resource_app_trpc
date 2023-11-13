@@ -16,6 +16,7 @@ import path from "path";
 
 export const TEST_USER = Object.freeze({
   email: "testUser@gmail.com",
+  firebase_uid: "aNYKOoPl8qeczPnZeNeuFiffxLf1",
 });
 
 export const getTestFilename = (filename: string) => {
@@ -456,7 +457,7 @@ export const transformQueryLog = (log: QueryLog) => {
   const params = JSON.parse(log.params);
 
   // Replace each placeholder variable with the corresponding parameter.
-  params.forEach((param, index) => {
+  params.forEach((param: string, index: number) => {
     const placeholder = `$${index + 1}`;
     transformedQuery = transformedQuery.replace(placeholder, `'${param}'`);
   });

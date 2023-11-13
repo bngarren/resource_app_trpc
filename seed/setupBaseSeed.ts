@@ -18,8 +18,8 @@ export const setupBaseSeed = async (_prisma: PrismaClient) => {
   // - - - - - Create test user - - - - -
   const testUser = await _prisma.user.create({
     data: {
-      email: "testUser@gmail.com",
-      firebase_uid: "aNYKOoPl8qeczPnZeNeuFiffxLf1",
+      email: TEST_USER.email,
+      firebase_uid: TEST_USER.firebase_uid,
     },
   });
 
@@ -139,7 +139,7 @@ export const setupBaseSeed = async (_prisma: PrismaClient) => {
   const durationSeedTime = endSeedTime - startSeedTime;
 
   if (config.should_log_seed_results) {
-    logSeedResults(_prisma, durationSeedTime);
+    await logSeedResults(_prisma, durationSeedTime);
   }
 };
 
