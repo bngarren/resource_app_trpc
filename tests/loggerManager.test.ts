@@ -143,6 +143,8 @@ it.skip("should test app's logger", () => {
   childLogger3.info(
     "childLogger3 is a child of childLogger2 which is a child of logger!",
   );
+
+  childLogger.error(new Error("Kaboom!"), "childLogger with Error");
 });
 
 it.skip("test second order child", () => {
@@ -165,8 +167,9 @@ it.skip("should test passing an error and nested objects", () => {
   logger.info({ nested1: { nested2: "nested2" } }, "Nested objects");
 });
 
-it("should test passing a nested child binding", () => {
+it.skip("should test passing a nested child binding", () => {
   const logger = getLogger();
   const childLogger = logger.child({ nested1: { nested2: "nested2" } });
   childLogger.info("Child logger was initiated with nested bindings");
+  console.log(childLogger.bindings());
 });

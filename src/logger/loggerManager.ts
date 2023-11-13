@@ -1,6 +1,6 @@
 import ecsFormat from "@elastic/ecs-pino-format";
 import path from "path";
-import pino, { Bindings, LogFn, Logger, LoggerOptions } from "pino";
+import pino, { Bindings, LogFn, Logger, LoggerOptions, symbols } from "pino";
 import config, { NodeEnvironment } from "../config";
 
 const logDirectory = path.join(process.cwd(), config.log_directory); // This points to the project root /logs
@@ -62,6 +62,18 @@ type LoggerManagerOptions = {
   /**
    * The name of the key that child bindings will be nested under. If empty, null, or undefined,
    * child bindings will appear at the root of the JSON log.
+   *
+   * Child bindings will appear in the JSON output as dot notation rather than grouped under a single
+   * key and object.
+   *
+   * _Example_
+   * ```
+   * {"childNestedKey.foo": "bar", "childNestedKey.baz": true}
+   * ```
+   *
+   * Processors in an Elasticsearch pipeline (ES, logstash, filebeat) can expand this dot notation into an object field.
+   *
+   * See: https://www.elastic.co/guide/en/elasticsearch/reference/current/dot-expand-processor.html
    */
   childNestedKey?: string;
   /**
@@ -88,6 +100,8 @@ type LoggerManagerOptions = {
  * #### Child
  * - When bindings are passed to child(), these will be placed at the root level (default for pino), or placed under
  * the 'childNestedKey', if specified in the LoggerManagerOptions
+ *   - If 'childNestedKey' is used, the key/values will appear in the JSON output as 'dot notation', e.g.
+ * `{"childNestedKey.foo": "bar", "childNestedKey.baz": true}`
  * - If you would like some child bindings placed at the root level and all others within a nested key, consider
  * adding these top level bindings on the base logger that is passed into loggerManager().
  *
@@ -183,15 +197,22 @@ export const loggerManager = (
     ...args: any[]
   ): void {
     const bindings = getBindings(this);
+
+    const errorKeySym = symbols.errorKeySym;
     /* Since the pino log fn's are overloaded, i.e. can either have an obj or string
     as the first parameter, we have to figure out if the first parameter is an object... */
-    const isObj = typeof objOrMsg === "object" && objOrMsg !== null;
+    const isObj = objOrMsg !== null && typeof objOrMsg === "object";
     if (isObj) {
       // We put an Error object on the "errorKey" so that we can also add any
       // custom bindings as well
       if (objOrMsg instanceof Error) {
         originalMethod(
-          { [config.logger_error_key]: objOrMsg, ...bindings },
+          {
+            // ! Weird way I've had to type the logger instance to access a symbol property...
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            [(this as Record<any, any>)[errorKeySym as any]]: objOrMsg,
+            ...bindings,
+          },
           ...args,
         );
       } else {
@@ -300,7 +321,7 @@ export const loggerManager = (
     const childNestedKey = opts?.childNestedKey?.trim();
 
     Object.entries(bindings).forEach(([k, v]) => {
-      const stringifiedValue = JSON.stringify(v); // The value is always a string
+      const stringifiedValue = typeof v === "string" ? v : JSON.stringify(v); // The value is always a string
 
       // If using a childNestedKey, place the child bindings under this key
       if (childNestedKey) {
