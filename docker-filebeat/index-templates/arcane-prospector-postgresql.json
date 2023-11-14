@@ -1,8 +1,7 @@
 {
-  "index_patterns": ["arcane-prospector-test*"],
+  "index_patterns": ["arcane-prospector-postgresql*"],
   "template": {
     "settings": {
-      "default_pipeline": "arcane-prospector-default-pipeline",
       "index": {
         "lifecycle": {
           "name": "filebeat"
@@ -24,13 +23,7 @@
       ],
       "dynamic_templates": [],
       "date_detection": true,
-      "numeric_detection": false,
-      "properties": {
-        "payload": {
-          "type": "flattened",
-          "null_value": "null"
-        }
-      }
+      "numeric_detection": false
     },
     "aliases": {}
   },

@@ -65,7 +65,7 @@ services:
   db_testing:
     container_name: db_testing
     image: postgres:14
-    command: postgres -c log_min_messages=info -c log_statement=all
+    command: postgres -c logging_collector=on -c log_destination='csvlog' -c log_min_messages=info -c log_statement=all -c log_line_prefix='%m [%p] %q%u@%d ' -c log_filename='ap-postgresql-log.%a' -c log_rotation_age=1440 -c log_truncate_on_rotation=on -c log_timezone='America/New_York'
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -82,6 +82,7 @@ services:
       - 5435:5432
     volumes:
       - dbdata_testing:/var/lib/postgresql/data
+      - ./logs/postgresql:/var/lib/postgresql/data/log
   filebeat:
     container_name: filebeat
     build:
@@ -96,6 +97,7 @@ services:
     volumes:
       - ./logs:/app/logs:ro # Map the logs directory
       - ./docker-filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro,Z
+      - ./docker-filebeat/postgresql.yml:/usr/share/filebeat/modules.d/postgresql.yml:ro,Z
       - ./docker-filebeat/createIndexTemplates.sh:/usr/share/filebeat/createIndexTemplates.sh:ro,Z
       - ./docker-filebeat/index-templates:/usr/share/filebeat/index-templates:ro,Z
       - ./docker-filebeat/createIngestPipelines.sh:/usr/share/filebeat/createIngestPipelines.sh:ro,Z
