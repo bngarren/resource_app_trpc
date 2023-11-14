@@ -5,7 +5,7 @@ import {
 } from "./../types/index";
 import { ItemType, Prisma } from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 
 /**
  * ### Creates a new ResourceUserInventoryItem
@@ -230,7 +230,7 @@ export const prisma_upsertResourceUserInventoryItem = async (
   data: OmitItemType<Prisma.ResourceUserInventoryItemUncheckedCreateInput>,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<UserInventoryItemWithItem<"RESOURCE">> => {
-  logger.debug(data, `prisma_upsertResourceUserInventoryItem()`);
+  logger.debug({ data }, `prisma_upsertResourceUserInventoryItem()`);
 
   const safeUpdateData: Prisma.ResourceUserInventoryItemUpdateInput &
     Prisma.ResourceUserInventoryItemCreateInput = {

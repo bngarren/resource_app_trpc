@@ -1,6 +1,5 @@
 import { router } from "../trpc/trpc";
 import { TRPCError } from "@trpc/server";
-import { logger } from "../logger/logger";
 import { logScanResult } from "../logger/loggerHelper";
 import { scanRequestSchema } from "../schema";
 import { handleScan } from "../services/scanService";
@@ -16,10 +15,11 @@ export const scanRouter = router({
         logScanResult(res);
         return res;
       } catch (err) {
-        logger.error(err);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Problem with handleScan..." + err,
+          message:
+            "Problem with handleScan..." +
+            (err instanceof Error && err.message),
         });
       }
     }),

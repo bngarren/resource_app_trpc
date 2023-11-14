@@ -1,4 +1,3 @@
-import { logger } from "./../logger/logger";
 import {
   ResourceWithRarity,
   SpawnRegionWithSpawnedResourcesPartial,
@@ -313,7 +312,7 @@ export const prisma_updateSpawnedResourcesForSpawnRegionTransaction = async (
     !allowedEnv.includes(config.node_env)
   ) {
     throw new Error(
-      `Cannot use forcedSpawnedResourceModels while in ${config.node_env} environment`,
+      `Cannot use forcedSpawnedResourceModels while in '${config.node_env}' environment`,
     );
   }
 
@@ -368,7 +367,7 @@ export const prisma_updateSpawnedResourcesForSpawnRegionTransaction = async (
       trxResult = await prisma.$transaction(async (trx) => {
         // * - - - - - - - START TRANSACTION - - - - - - - -
 
-        logger.debug(`SpawnRegion ${spawnRegion.id} is stale`);
+        // logger.debug(`SpawnRegion ${spawnRegion.id} is stale`);
 
         /* We do not delete stale SpawnedResources (as done previously) as they may still 
         be used as a foreign key in other tables, e.g. HarvestOperations that have not ended
@@ -428,7 +427,9 @@ export const prisma_updateSpawnedResourcesForSpawnRegionTransaction = async (
         );
 
         if (!res_3) {
-          throw new Error("Modifying spawn region's resetDate failed");
+          throw new Error(
+            `Modifying spawn region's (id=${spawnRegion.id}) resetDate failed`,
+          );
         }
 
         /* The SpawnRegion WAS stale/overdue, so we updated the resources.

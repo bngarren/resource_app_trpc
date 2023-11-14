@@ -18,7 +18,16 @@ read answer
 if [ "$answer" != "${answer#[Yy]}" ] ;then
     printf "${PREFIX}${LIGHT_BLUE}Rebuilding Docker images...${NC}\n"
     docker-compose down
-    docker-compose build app_testing
+    docker-compose build app_testing filebeat
+fi
+
+printf "${PREFIX}${LIGHT_BLUE}Run with Filebeat container? [y/n]${NC} "
+
+read answer2
+
+if [ "$answer2" != "${answer2#[Yy]}" ] ;then
+    printf "${PREFIX}${LIGHT_BLUE}Starting Filebeat...${NC}\n"
+    docker-compose up -d filebeat
 fi
 
 printf "\n${PREFIX}${LIGHT_BLUE}Starting app_testing container...${NC}\n\n"
@@ -59,7 +68,7 @@ while true; do
             printf "${PREFIX}${LIGHT_BLUE}See ya! Docker-compose down...${NC}\n\n"
             docker-compose down --remove-orphans
             printf "${PREFIX}${LIGHT_BLUE}Clearing app_testing.log...${NC}\n\n"
-            rm -i ./logs/app_testing.log
+            rm -i ./logs/app_test.log
             break
             ;;
     esac

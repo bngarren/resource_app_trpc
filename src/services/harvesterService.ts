@@ -36,7 +36,7 @@ import config from "../config";
 import { getSpawnRegionsAround } from "../util/getSpawnRegionsAround";
 import { prisma_getSpawnedResourcesForSpawnRegion } from "../queries/queryResource";
 import { getDistanceBetweenCells } from "../util/getDistanceBetweenCells";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 import { getResource } from "./resourceService";
 import {
   addMilliseconds,
@@ -170,6 +170,7 @@ export const handleDeploy = async (
   try {
     harvester = await getHarvester(harvesterId);
   } catch (error) {
+    logger.error({ [config.logger_error_key]: error, harvesterId });
     throw new TRPCError({
       message: `harvesterId: ${harvesterId} not found`,
       code: "NOT_FOUND",
@@ -246,7 +247,7 @@ export const handleDeploy = async (
 
   // ! DEBUG
   logger.debug(
-    harvestOperations,
+    { harvestOperations },
     `Created ${harvestOperations?.length} harvest operations within handleDeploy()`,
   );
 
@@ -350,7 +351,7 @@ const updateHarvestOperationsForHarvester = async (
       energyEndTime: pdate(energyEndTime),
       energyStartTime: pdate(energyStartTime),
     },
-    `updateHarvestOperationsForHarvester() - begin.
+    `[func updateHarvestOperationsForHarvester] - begin.
     Harvest operations = ${harvestOperations.length} incomplete / ${totalHarvestOperations} total`,
   );
 
@@ -372,10 +373,10 @@ const updateHarvestOperationsForHarvester = async (
         );
       }
 
-      logger.debug(
-        { harvestOperation, resetDate: pdate(spawnRegionResetDate) },
-        `Updating HarvestOperation #${index + 1}...(this is pre):`,
-      );
+      // logger.debug(
+      //   { harvestOperation, resetDate: pdate(spawnRegionResetDate) },
+      //   `Updating HarvestOperation #${index + 1}...(this is pre):`,
+      // );
 
       // Calculate the amount harvested for this prior period
       const amountHarvested = getAmountHarvestedByHarvestOperation(
@@ -413,7 +414,10 @@ const updateHarvestOperationsForHarvester = async (
         } else {
           // Or is it because energy is 0? thus, energyEndTime has passed. But resource remains...
           logger.warn(
-            `HarvestOperation startTime=null. Is energy zero? Ensure not an error!`,
+            {
+              updatedHarvestOperation,
+            },
+            `HarvestOperation startTime=null. Is the harvester's energy at zero? Ensure this is not an error!`,
           );
         }
       } else {
@@ -432,11 +436,11 @@ const updateHarvestOperationsForHarvester = async (
   );
 
   if (res != null) {
-    logger.debug(res, `Updated HarvestOperations:`);
+    // logger.debug(res, `Updated HarvestOperations`);
     return res;
   } else {
     throw new Error(
-      "Unexpected problem within updateHarvestOperationsForHarvester()",
+      `Unexpected problem within updateHarvestOperationsForHarvester() for harvesterId=${harvesterId}`,
     );
   }
 };
@@ -496,6 +500,7 @@ export const verifyArcaneEnergyResource = async (resourceId: string) => {
   try {
     resource = await getResource(resourceId);
   } catch (error) {
+    logger.error(error);
     throw new TRPCError({
       message: `Couldn't find Resource with id=${resourceId}.`,
       code: "NOT_FOUND",
@@ -586,6 +591,7 @@ export const handleTransferEnergy = async (
     try {
       harvester = await getHarvester(_harvester);
     } catch (error) {
+      logger.error(error);
       throw new TRPCError({
         message: `harvester: ${_harvester}`,
         code: "NOT_FOUND",
@@ -655,9 +661,9 @@ export const handleTransferEnergy = async (
   */
   const newEnergyStartTime = atTime || new Date();
 
-  logger.info(
+  logger.debug(
     { energyStartTime: pdate(newEnergyStartTime) },
-    `handleTransferEnergy() - begin (${verb.toUpperCase()})`,
+    `[func handleTransferEnergy] - begin (${verb.toUpperCase()})`,
   );
 
   // If harvester already had energy prior to this new modify, calculate the remaining amount
@@ -690,7 +696,7 @@ export const handleTransferEnergy = async (
 
   if (newInitialEnergy < 0) {
     throw new TRPCError({
-      message: `Resulting newInitialEnergy should not be negative! (${newInitialEnergy})`,
+      message: `Resulting newInitialEnergy should not be negative! (is ${newInitialEnergy})`,
       code: "CONFLICT",
     });
   }
@@ -862,18 +868,19 @@ export const handleCollect = async (
   harvesterId: string,
   atTime?: Date,
 ) => {
+  logger.debug({ userId, harvesterId, atTime }, `[func handleCollect]`);
+
   // - - - - - Get the Harvester - - - - -
   let harvester: Harvester;
   try {
     harvester = await getHarvester(harvesterId);
   } catch (error) {
+    logger.error(error);
     throw new TRPCError({
       message: `harvesterId: ${harvesterId}`,
       code: "NOT_FOUND",
     });
   }
-
-  logger.debug(`userId (${userId}) handleCollect()`);
 
   // - - - - - Saga setup - - - - -
   // Get the harvest operations for this harvester
@@ -1101,6 +1108,7 @@ const newHarvestOperationsForHarvester = async (
   if (res === null) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
+      message: `Failed to create new harvest operations for harvesterId=${harvesterId}`,
     });
   } else {
     return res;

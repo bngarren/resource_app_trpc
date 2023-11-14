@@ -11,7 +11,19 @@ import * as ScanService from "../src/services/scanService";
 import * as QueryResource from "../src/queries/queryResource";
 import { Coordinate } from "../src/types";
 import { Prisma } from "@prisma/client";
-import { logger } from "../src/logger/logger";
+import { logger } from "../src/main";
+import path from "path";
+
+export const TEST_USER = Object.freeze({
+  email: "testUser@gmail.com",
+  firebase_uid: "aNYKOoPl8qeczPnZeNeuFiffxLf1",
+});
+
+export const getTestFilename = (filename: string) => {
+  const fullPath = path.resolve(filename);
+  const fileNameFull = fullPath.split("tests/")[1];
+  return fileNameFull; // .split(".test")[0]; to remove the file extensions
+};
 
 /**
  * ### Helper function to extract data from a TRPC response
@@ -288,6 +300,11 @@ export const mockScan = async (
       );
     });
 
+  logger.debug(
+    { harvestRegion, scanLocation, numberOfSpawnedResources },
+    `Performing mockScan`,
+  );
+
   // Perform the scan request
   const s = await authenticatedRequest(server, "POST", "/scan", idToken, {
     userLocation: scanLocation,
@@ -395,8 +412,6 @@ export const resetPrisma = async () => {
   // - - - - - - - - - NEXT, re-seed our test data - - - - - - - -
 
   await setupBaseSeed(prisma);
-
-  logger.debug(`Prisma/Database Reset complete.`);
 };
 
 /**
@@ -442,7 +457,7 @@ export const transformQueryLog = (log: QueryLog) => {
   const params = JSON.parse(log.params);
 
   // Replace each placeholder variable with the corresponding parameter.
-  params.forEach((param, index) => {
+  params.forEach((param: string, index: number) => {
     const placeholder = `$${index + 1}`;
     transformedQuery = transformedQuery.replace(placeholder, `'${param}'`);
   });

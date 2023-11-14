@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 import { getSpawnRegionParentOfSpawnedResource } from "../services/spawnRegionService";
 import {
   HarvestOperationWithResetDate,
@@ -190,7 +190,9 @@ export const prisma_updateHarvestOperationsTransaction = async (
           const { id: harvestOperationId, ...partialModel } = harvestOperation;
 
           if (harvestOperationId == null) {
-            throw new Error("Missing id for harvest operation");
+            throw new Error(
+              `Missing id for harvest operation (id=${harvestOperation.id})`,
+            );
           }
 
           return prisma_updateHarvestOperationById(

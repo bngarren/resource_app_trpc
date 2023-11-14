@@ -1,0 +1,31 @@
+{
+  "index_patterns": ["arcane-prospector-postgresql*"],
+  "template": {
+    "settings": {
+      "index": {
+        "lifecycle": {
+          "name": "filebeat"
+        },
+        "routing": {
+          "allocation": {
+            "include": {
+              "_tier_preference": "data_hot"
+            }
+          }
+        }
+      }
+    },
+    "mappings": {
+      "dynamic": "true",
+      "dynamic_date_formats": [
+        "strict_date_optional_time",
+        "yyyy/MM/dd HH:mm:ss Z||yyyy/MM/dd Z"
+      ],
+      "dynamic_templates": [],
+      "date_detection": true,
+      "numeric_detection": false
+    },
+    "aliases": {}
+  },
+  "data_stream": {}
+}

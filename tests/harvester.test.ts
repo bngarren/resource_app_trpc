@@ -15,6 +15,7 @@ import { TestSingleton } from "./TestSingleton";
 import {
   AuthenticatedRequester,
   getDataFromTRPCResponse,
+  getTestFilename,
   harvestRegion,
   mockScan,
   resetPrisma,
@@ -23,7 +24,7 @@ import {
   transformQueryLog,
 } from "./testHelpers";
 import { Server } from "http";
-import { logger } from "../src/logger/logger";
+import { logger } from "../src/main";
 import { prisma } from "../src/prisma";
 import { Harvester, HarvesterUserInventoryItem, User } from "@prisma/client";
 import {
@@ -71,7 +72,10 @@ describe("/harvester", () => {
   let requester: AuthenticatedRequester;
 
   beforeAll(() => {
-    logger.info("Starting test suite: /harvester");
+    logger.info(
+      `Starting test suite located at: ${getTestFilename(__filename)}`,
+    );
+
     server = TestSingleton.getInstance().server;
     idToken = TestSingleton.getInstance().idToken;
     userUid = TestSingleton.getInstance().userId;

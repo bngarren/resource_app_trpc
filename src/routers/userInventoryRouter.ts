@@ -17,7 +17,10 @@ export const userInventoryRouter = router({
       try {
         user = await getUserByUid(input.userUid);
       } catch (error) {
-        throw new TRPCError({ code: "NOT_FOUND" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: (error instanceof Error && error.message) || "",
+        });
       }
 
       // OK if returns empty []

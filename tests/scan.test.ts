@@ -4,6 +4,7 @@ import { TestSingleton } from "./TestSingleton";
 import {
   AuthenticatedRequester,
   extractDataFromTRPCResponse,
+  getTestFilename,
   harvestRegion,
   resetPrisma,
   translateLatitude,
@@ -15,7 +16,7 @@ import * as SpawnRegionService from "../src/services/spawnRegionService";
 import * as ResourceService from "../src/services/resourceService";
 import { scanRequestSchema } from "../src/schema";
 import { ScanRequestOutput } from "../src/types/trpcTypes";
-import { logger } from "../src/logger/logger";
+import { logger } from "../src/main";
 
 describe("/scan", () => {
   let server: Server;
@@ -23,7 +24,9 @@ describe("/scan", () => {
   let requester: AuthenticatedRequester;
 
   beforeAll(() => {
-    logger.info("Starting test suite: /scan");
+    logger.info(
+      `Starting test suite located at: ${getTestFilename(__filename)}`,
+    );
 
     server = TestSingleton.getInstance().server;
     idToken = TestSingleton.getInstance().idToken;
@@ -156,7 +159,7 @@ describe("/scan", () => {
     );
 
     spy_handleCreateSpawnRegions.mockImplementation(() =>
-      Promise.reject(new Error("create error")),
+      Promise.reject(new Error("Error from mocked implementation")),
     );
 
     // Since the database should be empty, we expect SpawnRegions should be created (and not reused)
@@ -189,7 +192,7 @@ describe("/scan", () => {
     );
 
     spy_updateSpawnRegion.mockImplementation(() =>
-      Promise.reject(new Error("mock - updateSpawnRegion error")),
+      Promise.reject(new Error("Error from mocked implementation")),
     );
 
     const response = await await requester.send(
@@ -235,7 +238,7 @@ describe("/scan", () => {
     );
 
     spy_getRandomResource.mockImplementation(() =>
-      Promise.reject(new Error("mock - getRandomResource Error")),
+      Promise.reject(new Error("Error from mocked implementation")),
     );
 
     const response = await requester.send(

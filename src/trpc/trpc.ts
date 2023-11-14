@@ -1,6 +1,6 @@
 import { TRPCError, inferAsyncReturnType, initTRPC } from "@trpc/server";
 import * as trpcExpress from "@trpc/server/adapters/express";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 import { Request } from "express";
 import { decodeAndVerifyJwtToken } from "../auth/firebaseAuth";
 import config from "../config";
@@ -71,7 +71,10 @@ function createProtectedRouter() {
     } else {
       // We are using protectedRoutes, so let's throw Error if unauthorized user...
       if (!ctx.user) {
-        throw new TRPCError({ code: "UNAUTHORIZED" });
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: `This is a protected endpoint! Ensure that the request is authenticated!`,
+        });
       }
     }
     return next({

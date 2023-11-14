@@ -1,0 +1,38 @@
+{
+  "index_patterns": ["arcane-prospector-test*"],
+  "template": {
+    "settings": {
+      "default_pipeline": "arcane-prospector-default-pipeline",
+      "index": {
+        "lifecycle": {
+          "name": "filebeat"
+        },
+        "routing": {
+          "allocation": {
+            "include": {
+              "_tier_preference": "data_hot"
+            }
+          }
+        }
+      }
+    },
+    "mappings": {
+      "dynamic": "true",
+      "dynamic_date_formats": [
+        "strict_date_optional_time",
+        "yyyy/MM/dd HH:mm:ss Z||yyyy/MM/dd Z"
+      ],
+      "dynamic_templates": [],
+      "date_detection": true,
+      "numeric_detection": false,
+      "properties": {
+        "payload": {
+          "type": "flattened",
+          "null_value": "null"
+        }
+      }
+    },
+    "aliases": {}
+  },
+  "data_stream": {}
+}

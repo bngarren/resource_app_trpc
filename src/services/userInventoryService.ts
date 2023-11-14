@@ -15,7 +15,7 @@ import {
   UserInventoryItemWithAnyItem,
   UserInventoryItemWithItem,
 } from "../types";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 import {
   prisma_getUserInventoryItemByItemId,
   prisma_getAllUserInventoryItems,
@@ -262,7 +262,7 @@ export const updateCreateOrRemoveUserInventoryItemWithNewQuantity = async <
       userId,
     );
     logger.debug(
-      removed,
+      { removedUserInventoryItem: removed },
       `User inventory item removed due to quantity=0 after update`,
     );
     return removed;

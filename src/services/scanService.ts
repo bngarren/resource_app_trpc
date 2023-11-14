@@ -13,7 +13,7 @@ import {
 } from "../types";
 import config from "../config";
 import { v4 as uuid } from "uuid";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 import { getDistanceBetweenCells } from "../util/getDistanceBetweenCells";
 import { getSpawnRegionsAround } from "../util/getSpawnRegionsAround";
 import { SpawnRegion } from "@prisma/client";
@@ -55,7 +55,8 @@ export const handleScan = async (
 
   if (missingRegionsIndexes.length !== 0) {
     logger.debug(
-      `Need to create new SpawnRegions (${missingRegionsIndexes.length}): ${missingRegionsIndexes}`,
+      { missingRegionsIndexes },
+      `Need to create new SpawnRegions (${missingRegionsIndexes.length} missing)`,
     );
   }
 
@@ -77,13 +78,13 @@ export const handleScan = async (
   // the number of regions we now have (existing + newly created)
   if (spawnRegions.length !== h3Group.length) {
     throw new Error(
-      "Did not match h3 indices with SpawnRegions in the database",
+      `The number of h3 indices in the scan group (${h3Group.length}) does not match the number of existing + new SpawnRegions. (${spawnRegions.length})`,
     );
   }
 
-  // logger.info(`SpawnRegions: ${spawnRegions.map(s => s.)}`);
+  // - - - - - Update Each SpawnRegion - - - - -
 
-  // * - - - - - Update each region - - - - -
+  // TODO: Switch the getAllSettled to a Promise.allSettled so that we can log the errors
   /**
    * A `SpawnRegionWithResource[]` array that contains the updated SpawnRegions
    */
@@ -180,7 +181,9 @@ export const handleScan = async (
       if (i.id) {
         return i.id;
       } else {
-        throw Error("Interactable should have id before sending to client");
+        throw Error(
+          `In sortedCanInteractableIds, each interactable should have 'id' before sending to client.`,
+        );
       }
     });
 

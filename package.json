@@ -27,11 +27,12 @@
     "start:staging": "NODE_ENV=STAGING node dist/src/main.js",
     "start:dev": "NODE_ENV=DEVELOPMENT ts-node-dev --respawn --clear --transpile-only --debounce 1000 ./src/main.ts",
     "test": "NODE_ENV=TEST jest --detectOpenHandles --runInBand --verbose",
-    "test:fresh": "rm -f ./logs/app_testing.log && NODE_ENV=TEST jest --detectOpenHandles --runInBand --verbose"
+    "test:fresh": "rm -f ./logs/app_test.log && NODE_ENV=TEST jest --detectOpenHandles --runInBand --verbose"
   },
   "author": "Ben Garren",
   "license": "ISC",
   "dependencies": {
+    "@elastic/ecs-pino-format": "^1.5.0",
     "@prisma/client": "^4.14.1",
     "@trpc/server": "^10.28.0",
     "cors": "^2.8.5",
@@ -41,6 +42,7 @@
     "firebase-admin": "^11.9.0",
     "h3-js": "^4.1.0",
     "pino": "^8.14.1",
+    "pino-socket": "^7.3.0",
     "uuid": "^9.0.0",
     "zod": "^3.21.4"
   },

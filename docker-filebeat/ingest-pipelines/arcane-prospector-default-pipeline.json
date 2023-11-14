@@ -1,0 +1,16 @@
+{
+  "description": "Default pipeline for Arcane Prospector logs. Assimilates all 'labels.*' named fields as key/values under the 'labels' key. Creates a new 'all_labels' field.",
+  "processors": [
+    {
+        "script": {
+          "source": "// Create a new 'labels' object if it doesn't exist\n          if (ctx.labels == null) {\n            ctx.labels = new HashMap();\n          }\n\n          // Iterate over the document's fields\n          def keysToRemove = [];\n          for (String key : ctx.keySet()) {\n            if (key.startsWith('labels.')) {\n              // Extract the sub-key and move the value\n              String subKey = key.substring('labels.'.length());\n              ctx.labels[subKey] = ctx[key];\n              keysToRemove.add(key);\n            }\n          }\n\n          // Clean up the original 'labels.*' fields\n          for (String key : keysToRemove) {\n            ctx.remove(key);\n          }"
+        }
+    },
+    {
+      "script": {
+        "source": "if (ctx.containsKey('labels')) {\n        ArrayList keyValuePairs = new ArrayList();\n        for (entry in ctx.labels.entrySet()) {\n          String keyValue = '[' + entry.getKey() + ': ' + (entry.getValue() != null ? entry.getValue().toString() : 'null') + ']';\n          keyValuePairs.add(keyValue);\n        }\n        ctx.all_labels = String.join(' ', keyValuePairs);\n      }"
+      }
+    }
+  ]
+}
+

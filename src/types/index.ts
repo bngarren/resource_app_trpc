@@ -23,7 +23,7 @@ relations, e.g. SpawnedResourceWithResource.
 
 /** A dev type that helps me to see to full type structure of my types
  */
-type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
+export type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
 
 // - - - - - Resource - - - - -
 

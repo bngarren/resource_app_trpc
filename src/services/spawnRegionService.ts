@@ -7,7 +7,7 @@ import {
 import { Prisma } from "@prisma/client";
 import { prisma_updateSpawnedResourcesForSpawnRegionTransaction } from "../queries/queryResource";
 import { SpawnRegionWithSpawnedResources } from "../types";
-import { logger } from "../logger/logger";
+import { logger } from "../main";
 
 // TODO: Probably not the best to just re-export a database method.
 export { prisma_getSpawnRegionsFromH3Indices as getRegionsFromH3Array } from "../queries/querySpawnRegion";
@@ -55,7 +55,9 @@ export const updateSpawnRegion = async (
   try {
     // Get an updated SpawnRegion (only a partial because it does not include all the Resource models)
     const _updatedSpawnRegion =
-      await prisma_updateSpawnedResourcesForSpawnRegionTransaction(spawnRegionId);
+      await prisma_updateSpawnedResourcesForSpawnRegionTransaction(
+        spawnRegionId,
+      );
 
     // Re-query to get all the resources included
     const updatedSpawnRegion = await prisma_getSpawnRegionWithResources(
@@ -65,7 +67,8 @@ export const updateSpawnRegion = async (
     return updatedSpawnRegion;
   } catch (err) {
     logger.error(
-      `Error within spawnRegionService's updateSpawnRegion() for spawnRegionId=${spawnRegionId}, error: ${err}`,
+      { err, spawnRegionId },
+      `During spawnRegionService's updateSpawnRegion(), returning NULL`,
     );
     // Transaction did not go through
     return null;

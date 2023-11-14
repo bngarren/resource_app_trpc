@@ -3,6 +3,7 @@ import pino from "pino";
 import config from "../config";
 import path from "path";
 import * as pretty from "pino-pretty";
+import { ecsFormat } from "@elastic/ecs-pino-format";
 
 const devLogger = () =>
   pino({
@@ -26,14 +27,18 @@ const devLogger = () =>
  */
 const testLogger = () => {
   const logDirectory = path.join(process.cwd(), "/logs"); // This points to the project root /logs
-  const testLogPath = path.join(logDirectory, `app_testing.log`);
+  const testLogPath = path.join(logDirectory, `app_test.log`);
 
   // Creates the directory if it doesn't exist.
   fs.mkdirSync(logDirectory, { recursive: true });
 
   // Stream where the logs will be written.
-  const writeStream = fs.createWriteStream(testLogPath, {
+  const stream = fs.createWriteStream(testLogPath, {
     flags: "a", // 'a' means appending (old data will be preserved)
+  });
+
+  const destination = pino.destination({
+    dest: testLogPath,
   });
 
   const prettyStream = pretty.default({
@@ -45,15 +50,17 @@ const testLogger = () => {
     ignore: "hostname,pid",
   });
 
-  const logger = pino(
+  return pino(
     {
-      level: "debug", // previously, config.log_level,
+      ...ecsFormat({ convertErr: false }),
+      level: "debug",
       sync: true,
+      timestamp: () => `,"time":"${new Date().toISOString()}"`,
+      nestedKey: "payload",
+      errorKey: "error",
     },
-    prettyStream,
+    destination,
   );
-
-  return logger;
 };
 
 const stagingLogger = () => {
@@ -97,4 +104,7 @@ const getLogger = () => {
   }
 };
 
-export const logger = getLogger();
+export const logger = getLogger().child({
+  app: config.app_name,
+  node_env: config.node_env,
+});

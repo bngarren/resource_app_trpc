@@ -4,7 +4,6 @@ import express from "express";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import cors from "cors";
 import { createContext } from "./trpc/trpc";
-import { logger } from "./logger/logger";
 import { prisma } from "./prisma";
 import https from "https";
 import http, { Server } from "http";
@@ -12,6 +11,9 @@ import fs from "fs";
 import { scanRouter } from "./routers/scanRouter";
 import { userInventoryRouter } from "./routers/userInventoryRouter";
 import { harvesterRouter } from "./routers/harvesterRouter";
+import { getLogger } from "./logger/loggerManager";
+
+export const logger = getLogger();
 
 const appRouter = router({
   greeting: publicProcedure.query(async () => {
@@ -24,16 +26,16 @@ const appRouter = router({
     } catch (error) {
       // If an error was thrown, the database is not healthy
       isHealthy = false;
-      logger.error(`Database connection failed: ${error}`);
+      logger.error(error, `Database health check failed`);
     }
 
-    logger.info(`Received greeting from client. API isHealthy: ${isHealthy}`);
+    logger.info(`Received greeting from client. API is healthy?: ${isHealthy}`);
     return {
       isHealthy: isHealthy,
     };
   }),
   protectedGreeting: protectedProcedure.query(async () => {
-    return "You have received an authenticated endpoint!";
+    return "You have received a response from an authenticated endpoint!";
   }),
   scan: scanRouter.scan,
   userInventory: userInventoryRouter,
@@ -44,14 +46,15 @@ const appRouter = router({
 // NOT the router itself.
 export type AppRouter = typeof appRouter;
 
-const message = `
+// - - - - - Startup message strings - - - - -
+const consoleStartupMessage = `
 
 
 
 
 
 
-Resource App
+${config.app_name}
     Server v${process.env.npm_package_version} 
 --------------------------------------------------------------------------------------
 
@@ -64,6 +67,9 @@ Resource App
 
 
 `;
+const logStartupMessage = `${config.app_name} - Port=${
+  config.server_port
+}  Log level=${logger.level.toUpperCase()}  Node env=${config.node_env}`;
 /*
 - - - - Create the Express app and add our TRPC router - - - -
 
@@ -78,19 +84,13 @@ app.use(
     router: appRouter,
     createContext,
     onError({ error }) {
-      logger.error(
-        {
-          code: error.code,
-        },
-        error.stack,
-      );
+      logger.error(error, "Caught by the Express router's onError");
     },
   }),
 );
 
 /*
  - - - - Create the HTTPS server - - - - 
-
 - For local development/testing/etc, we will use a self-signed certificate and handle the
 HTTPS server ourselves
 
@@ -100,25 +100,27 @@ app will just listen on the port that Heroku provides
   to get a signed cert from a trusted authority to use here...
 
 */
-let server: Server;
-if (!config.shouldCreateHTTPSServer) {
-  // In a remotely deployed setting, rely on the platform (like Heroku) to handle HTTPS,
-  // therefore, only make a basic HTTP server and don't worry about certs
-  server = http.createServer(app);
-} else {
-  // In local development, use a self-signed certificate for HTTPS
-  const privateKey = fs.readFileSync("resource_app_trpc_https.key");
-  const certificate = fs.readFileSync("resource_app_trpc_https.cert");
-  const credentials = { key: privateKey, cert: certificate };
-  server = https.createServer(credentials, app);
-}
-
-if (
-  (["staging", "production"] as NodeEnvironment[]).includes(config.node_env)
-) {
-  logger.info(message);
-  console.info(message);
-}
+const createServer = () => {
+  let server: Server;
+  if (!config.shouldCreateHTTPSServer) {
+    // In a remotely deployed setting, rely on the platform (like Heroku) to handle HTTPS,
+    // therefore, only make a basic HTTP server and don't worry about certs
+    server = http.createServer(app);
+    logger.info(
+      `Created HTTP server. The config var 'shouldCreateHTTPSServer' is ${config.shouldCreateHTTPSServer}.`,
+    );
+  } else {
+    // In local development, use a self-signed certificate for HTTPS
+    const privateKey = fs.readFileSync("resource_app_trpc_https.key");
+    const certificate = fs.readFileSync("resource_app_trpc_https.cert");
+    const credentials = { key: privateKey, cert: certificate };
+    server = https.createServer(credentials, app);
+    logger.info(
+      `Created HTTPS server. The config var 'shouldCreateHTTPSServer' is ${config.shouldCreateHTTPSServer}.`,
+    );
+  }
+  return server;
+};
 
 async function main() {
   // We can turn protected routes off for API testing, debugging, etc.
@@ -128,22 +130,33 @@ async function main() {
     );
 
     if (config.node_env === "production") {
-      logger.error("Can't run production with protected routes OFF.");
-      return;
+      logger.error(
+        new Error("Can't run production with protected routes OFF."),
+      );
+      process.exit(1);
     }
   }
 
-  const startTime = new Date();
+  const serverStartTime = new Date();
+
+  const server = createServer();
+
+  if (
+    (["staging", "production"] as NodeEnvironment[]).includes(config.node_env)
+  ) {
+    console.info(consoleStartupMessage);
+  }
+  logger.info(logStartupMessage);
 
   // The server_port in our config must distinguish our node environment
   // Usually HTTPS traffic is on 443
   server.listen(config.server_port, () => {
     logger.info(
-      `Server start: ${startTime.toLocaleDateString()} at ${startTime.toLocaleTimeString(
+      {
+        timeZone: "America/New_York",
+      },
+      `Server start: ${serverStartTime.toLocaleDateString()} at ${serverStartTime.toLocaleTimeString(
         "en-US",
-        {
-          timeZone: "America/New_York",
-        },
       )}`,
     );
   });
