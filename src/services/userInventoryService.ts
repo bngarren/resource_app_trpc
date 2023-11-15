@@ -20,6 +20,7 @@ import {
   prisma_getUserInventoryItemByItemId,
   prisma_getAllUserInventoryItems,
 } from "../queries/queryUserInventoryItem";
+import { prefixedError } from "../util/prefixedError";
 
 /**
  * ### Adds a new Resource item to the user's inventory
@@ -117,7 +118,7 @@ export const getUserInventoryItemWithItemId = async <T extends ItemType>(
  * @returns a `UserInventoryDict`
  */
 export const getUserInventoryItems = async (userId: string) => {
-  return await prisma_getAllUserInventoryItems(userId);
+  return prisma_getAllUserInventoryItems(userId);
 };
 
 /**
@@ -133,7 +134,7 @@ export const getResourceUserInventoryItemByUrl = async (
   resourceUrl: string,
   userId: string,
 ): Promise<UserInventoryItemWithItem<"RESOURCE">> => {
-  return await prisma_getResourceUserInventoryItemByUrl(resourceUrl, userId);
+  return prisma_getResourceUserInventoryItemByUrl(resourceUrl, userId);
 };
 
 type UpsertResourceInput = Omit<
@@ -171,19 +172,20 @@ export const upsertUserInventoryItem = async (
   switch (data.itemType) {
     case ItemType.RESOURCE:
       if (isResourceInput(data)) {
-        return await prisma_upsertResourceUserInventoryItem({
+        return prisma_upsertResourceUserInventoryItem({
           ...data,
           resourceId: itemId,
         });
       }
-
+      throw new Error(`Failed isResourceInput()`);
     case ItemType.HARVESTER:
       if (isHarvesterInput(data)) {
-        return await prisma_upsertHarvesterUserInventoryItem({
+        return prisma_upsertHarvesterUserInventoryItem({
           ...data,
           harvesterId: itemId,
         });
       }
+      throw new Error(`Failed isHarvesterInput()`);
     default:
       throw new Error(`Invalid itemType (${data.itemType}`);
   }
@@ -204,6 +206,7 @@ export const removeUserInventoryItemByItemId = async <T extends ItemType>(
 ) => {
   let removedUserInventoryItem: UserInventoryItemWithItem<T>;
 
+  // TODO: If return await, need to try/catch the await
   switch (itemType) {
     case ItemType.RESOURCE:
       removedUserInventoryItem = (await prisma_deleteResourceUserInventoryItem(
@@ -269,11 +272,19 @@ export const updateCreateOrRemoveUserInventoryItemWithNewQuantity = async <
   }
 
   // Otherwise, upsert (update or create) the inventory item with this new quantity
-  return (await upsertUserInventoryItem(itemId, {
-    itemType,
-    quantity: newQuantity,
-    userId,
-  })) as UserInventoryItemWithItem<T>;
+  try {
+    const upsertedUserInventoryItem = (await upsertUserInventoryItem(itemId, {
+      itemType,
+      quantity: newQuantity,
+      userId,
+    })) as UserInventoryItemWithItem<T>;
+    return upsertedUserInventoryItem;
+  } catch (err) {
+    throw prefixedError(
+      err,
+      `during [await upsertUserInventoryItem] for itemId=${itemId}, itemType=${itemType}, userId=${userId}`,
+    );
+  }
 };
 
 /**

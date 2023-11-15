@@ -36,7 +36,7 @@ export const prisma_createResources = async (
   models: Prisma.ResourceCreateManyInput[],
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  await prismaClient.resource.createMany({
+  return prismaClient.resource.createMany({
     data: models,
     skipDuplicates: true,
   });
@@ -50,7 +50,7 @@ export const prisma_createSpawnedResource = async (
   model: Prisma.SpawnedResourceCreateInput,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<SpawnedResource> => {
-  return await prismaClient.spawnedResource.create({
+  return prismaClient.spawnedResource.create({
     data: model,
   });
 };
@@ -68,7 +68,7 @@ export const prisma_getResourceById = async (
   resourceId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.resource.findUniqueOrThrow({
+  return prismaClient.resource.findUniqueOrThrow({
     where: { id: resourceId },
   });
 };
@@ -87,7 +87,7 @@ export const prisma_getResourceByIdWithRarity = async (
   resourceId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<ResourceWithRarity> => {
-  return await prismaClient.resource.findUniqueOrThrow({
+  return prismaClient.resource.findUniqueOrThrow({
     where: { id: resourceId },
     include: {
       resourceRarity: true,
@@ -108,7 +108,7 @@ export const prisma_getResourceByUrl = async (
   resourceUrl: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.resource.findUniqueOrThrow({
+  return prismaClient.resource.findUniqueOrThrow({
     where: { url: resourceUrl },
   });
 };
@@ -127,7 +127,7 @@ export const prisma_getResourceByUrlWithRarity = async (
   resourceUrl: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.resource.findUniqueOrThrow({
+  return prismaClient.resource.findUniqueOrThrow({
     where: { url: resourceUrl },
     include: {
       resourceRarity: true,
@@ -147,7 +147,7 @@ export const prisma_getResourceByUrlWithRarity = async (
 export const prisma_getResources = async (
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.resource.findMany({
+  return prismaClient.resource.findMany({
     include: {
       resourceRarity: true,
     },
@@ -161,7 +161,7 @@ export const prisma_getResourcesByIds = async (
   resourceIds: string[],
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.resource.findMany({
+  return prismaClient.resource.findMany({
     where: {
       id: {
         in: resourceIds,
@@ -183,7 +183,7 @@ export const prisma_getSpawnedResourceById = async (
   spawnedResourceId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.spawnedResource.findUniqueOrThrow({
+  return prismaClient.spawnedResource.findUniqueOrThrow({
     where: { id: spawnedResourceId },
   });
 };
@@ -202,7 +202,7 @@ export const prisma_getSpawnedResourceByIdWithResource = async (
   spawnedResourceId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<SpawnedResourceWithResource> => {
-  return await prismaClient.spawnedResource.findUniqueOrThrow({
+  return prismaClient.spawnedResource.findUniqueOrThrow({
     where: { id: spawnedResourceId },
     include: {
       resource: true,
@@ -225,17 +225,15 @@ export const prisma_getSpawnedResourcesWithResourceForSpawnRegion = async (
   includeInactive = false,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  const res: SpawnedResourceWithResource[] =
-    await prismaClient.spawnedResource.findMany({
-      where: {
-        spawnRegionId: spawnRegionId,
-        ...(!includeInactive && { isActive: true }), // conditionally filter if includeActive is false (default)
-      },
-      include: {
-        resource: true,
-      },
-    });
-  return res;
+  return prismaClient.spawnedResource.findMany({
+    where: {
+      spawnRegionId: spawnRegionId,
+      ...(!includeInactive && { isActive: true }), // conditionally filter if includeActive is false (default)
+    },
+    include: {
+      resource: true,
+    },
+  });
 };
 
 /**
@@ -252,7 +250,7 @@ export const prisma_getSpawnedResourcesForSpawnRegion = async (
   includeInactive = false,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.spawnedResource.findMany({
+  return prismaClient.spawnedResource.findMany({
     where: {
       spawnRegionId: spawnRegionId,
       ...(!includeInactive && { isActive: true }),
@@ -270,7 +268,7 @@ export const prisma_updateSpawnedResources = async (
   partialModel: Prisma.SpawnedResourceUpdateManyMutationInput,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.spawnedResource.updateMany({
+  return prismaClient.spawnedResource.updateMany({
     where: {
       id: {
         in: spawnedResourceIds,
@@ -317,12 +315,21 @@ export const prisma_updateSpawnedResourcesForSpawnRegionTransaction = async (
   }
 
   // Get the spawn region and its active (prior to function call) resources
-  const { spawnedResources: _priorResources, ...rest } =
-    await prisma_getSpawnRegionWithResources(spawnRegionId);
-  const priorResources = _priorResources.map((pr) =>
-    pruneSpawnedResourceWithResource(pr),
-  );
-  const spawnRegion: SpawnRegion = rest;
+  let priorResources: SpawnedResource[];
+  let spawnRegion: SpawnRegion;
+  try {
+    const res = await prisma_getSpawnRegionWithResources(spawnRegionId);
+    const { spawnedResources: _priorResources, ...rest } = res;
+    priorResources = _priorResources.map((pr) =>
+      pruneSpawnedResourceWithResource(pr),
+    );
+    spawnRegion = rest;
+  } catch (error) {
+    throw prefixedError(
+      error,
+      "attemping to get the spawn region and its active resources",
+    );
+  }
 
   /* If a SpawnRegion's `reset_date` is stale/overdue, then repopulate a fresh
       set of spawned resources.
@@ -357,7 +364,10 @@ export const prisma_updateSpawnedResourcesForSpawnRegionTransaction = async (
           throw new Error("Unexpected error, 0 spawnedResourceModels returned");
         }
       } catch (err) {
-        throw err;
+        throw prefixedError(
+          err,
+          "attempting to make new spawned resource models",
+        );
       }
     }
 
@@ -468,7 +478,7 @@ export const prisma_deleteSpawnedResourcesForSpawnRegion = async (
   spawnRegionId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.spawnedResource.deleteMany({
+  return prismaClient.spawnedResource.deleteMany({
     where: {
       spawnRegionId: spawnRegionId,
     },

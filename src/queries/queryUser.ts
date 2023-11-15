@@ -10,7 +10,7 @@ export const prisma_getUserByFirebaseUid = async (
   uid: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.user.findUniqueOrThrow({
+  return prismaClient.user.findUniqueOrThrow({
     where: {
       firebase_uid: uid,
     },

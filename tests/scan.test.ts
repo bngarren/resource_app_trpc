@@ -158,7 +158,7 @@ describe("/scan", () => {
       "handleCreateSpawnRegions",
     );
 
-    spy_handleCreateSpawnRegions.mockImplementation(() =>
+    spy_handleCreateSpawnRegions.mockImplementation(async () =>
       Promise.reject(new Error("Error from mocked implementation")),
     );
 
@@ -175,7 +175,7 @@ describe("/scan", () => {
 
     // Should not have any SpawnRegions in the database
 
-    expect(prisma.spawnRegion.findFirst()).resolves.toBeNull();
+    await expect(prisma.spawnRegion.findFirst()).resolves.toBeNull();
 
     // Remove the spy
     spy_handleCreateSpawnRegions.mockRestore();
@@ -191,11 +191,11 @@ describe("/scan", () => {
       "updateSpawnRegion",
     );
 
-    spy_updateSpawnRegion.mockImplementation(() =>
+    spy_updateSpawnRegion.mockImplementation(async () =>
       Promise.reject(new Error("Error from mocked implementation")),
     );
 
-    const response = await await requester.send(
+    const response = await requester.send(
       "POST",
       "/scan",
       getValidRequestBody(),
@@ -217,7 +217,7 @@ describe("/scan", () => {
     regions.forEach((r) => expect(r.resetDate).toBeFalsy());
 
     // Should not have any spawned resources in the database if our updateSpawnRegion's all failed
-    expect(prisma.spawnedResource.findMany()).resolves.toHaveLength(0);
+    await expect(prisma.spawnedResource.findMany()).resolves.toHaveLength(0);
 
     // Remove the spy
     spy_updateSpawnRegion.mockRestore();
@@ -237,7 +237,7 @@ describe("/scan", () => {
       "getRandomResource",
     );
 
-    spy_getRandomResource.mockImplementation(() =>
+    spy_getRandomResource.mockImplementation(async () =>
       Promise.reject(new Error("Error from mocked implementation")),
     );
 

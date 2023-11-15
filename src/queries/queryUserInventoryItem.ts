@@ -1,11 +1,13 @@
 import {
   OmitItemType,
   UserInventoryDict,
+  UserInventoryItemWithAnyItem,
   UserInventoryItemWithItem,
 } from "./../types/index";
 import { ItemType, Prisma } from "@prisma/client";
 import { PrismaClientOrTransaction, prisma } from "../prisma";
 import { logger } from "../main";
+import { prefixedError } from "../util/prefixedError";
 
 /**
  * ### Creates a new ResourceUserInventoryItem
@@ -16,10 +18,10 @@ import { logger } from "../main";
 export const prisma_createResourceUserInventoryItem = async (
   model: OmitItemType<Prisma.ResourceUserInventoryItemCreateInput>,
 ): Promise<UserInventoryItemWithItem<"RESOURCE">> => {
-  return (await prisma.resourceUserInventoryItem.create({
+  return prisma.resourceUserInventoryItem.create({
     data: model,
     include: { item: true },
-  })) as UserInventoryItemWithItem<"RESOURCE">;
+  }) as Promise<UserInventoryItemWithItem<"RESOURCE">>;
 };
 
 /**
@@ -31,10 +33,10 @@ export const prisma_createResourceUserInventoryItem = async (
 export const prisma_createHarvesterUserInventoryItem = async (
   model: OmitItemType<Prisma.HarvesterUserInventoryItemCreateInput>,
 ): Promise<UserInventoryItemWithItem<"HARVESTER">> => {
-  return (await prisma.harvesterUserInventoryItem.create({
+  return prisma.harvesterUserInventoryItem.create({
     data: model,
     include: { item: true },
-  })) as UserInventoryItemWithItem<"HARVESTER">;
+  }) as Promise<UserInventoryItemWithItem<"HARVESTER">>;
 };
 
 /**
@@ -48,9 +50,12 @@ export const prisma_getUserInventoryItemByItemId = async <T extends ItemType>(
   userId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<UserInventoryItemWithItem<T>> => {
+  /* Note: the complex casting and return types used below is done in order
+  to first tell typescript what we expect from the prisma query and then tell
+  it that it is a more generic form of UserInventoryItemWithItem<T> type */
   switch (itemType) {
     case "RESOURCE":
-      return (await prismaClient.resourceUserInventoryItem.findUniqueOrThrow({
+      return prismaClient.resourceUserInventoryItem.findUniqueOrThrow({
         where: {
           userId_resourceId: {
             userId,
@@ -60,9 +65,11 @@ export const prisma_getUserInventoryItemByItemId = async <T extends ItemType>(
         include: {
           item: true,
         },
-      })) as UserInventoryItemWithItem<T>;
+      }) as Promise<UserInventoryItemWithAnyItem> as Promise<
+        UserInventoryItemWithItem<T>
+      >;
     case "HARVESTER":
-      return (await prismaClient.harvesterUserInventoryItem.findUniqueOrThrow({
+      return prismaClient.harvesterUserInventoryItem.findUniqueOrThrow({
         where: {
           userId_harvesterId: {
             userId,
@@ -72,7 +79,9 @@ export const prisma_getUserInventoryItemByItemId = async <T extends ItemType>(
         include: {
           item: true,
         },
-      })) as UserInventoryItemWithItem<T>;
+      }) as Promise<UserInventoryItemWithAnyItem> as Promise<
+        UserInventoryItemWithItem<T>
+      >;
     default:
       throw new Error(`Unexpected value: ${itemType}`);
   }
@@ -87,7 +96,7 @@ export const prisma_getResourceUserInventoryItemByResourceId = async (
   userId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return (await prismaClient.resourceUserInventoryItem.findFirstOrThrow({
+  return prismaClient.resourceUserInventoryItem.findFirstOrThrow({
     where: {
       userId: userId,
       resourceId: resourceId,
@@ -95,7 +104,7 @@ export const prisma_getResourceUserInventoryItemByResourceId = async (
     include: {
       item: true,
     },
-  })) as UserInventoryItemWithItem<"RESOURCE">;
+  }) as Promise<UserInventoryItemWithItem<"RESOURCE">>;
 };
 
 /**
@@ -111,7 +120,7 @@ export const prisma_getResourceUserInventoryItemByUrl = async (
   userId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<UserInventoryItemWithItem<"RESOURCE">> => {
-  return (await prismaClient.resourceUserInventoryItem.findFirstOrThrow({
+  return prismaClient.resourceUserInventoryItem.findFirstOrThrow({
     where: {
       userId: userId,
       item: {
@@ -121,7 +130,7 @@ export const prisma_getResourceUserInventoryItemByUrl = async (
     include: {
       item: true,
     },
-  })) as UserInventoryItemWithItem<"RESOURCE">;
+  }) as Promise<UserInventoryItemWithItem<"RESOURCE">>;
 };
 
 /**
@@ -133,7 +142,7 @@ export const prisma_getHarvesterUserInventoryItemByHarvesterId = async (
   userId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return (await prismaClient.harvesterUserInventoryItem.findFirstOrThrow({
+  return prismaClient.harvesterUserInventoryItem.findFirstOrThrow({
     where: {
       userId: userId,
       harvesterId: harvesterId,
@@ -141,7 +150,7 @@ export const prisma_getHarvesterUserInventoryItemByHarvesterId = async (
     include: {
       item: true,
     },
-  })) as UserInventoryItemWithItem<"HARVESTER">;
+  }) as Promise<UserInventoryItemWithItem<"HARVESTER">>;
 };
 
 /**
@@ -161,26 +170,33 @@ export const prisma_getAllUserInventoryItems = async (
   userId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<UserInventoryDict> => {
-  const resources = (await prismaClient.resourceUserInventoryItem.findMany({
-    where: {
-      userId,
-    },
-    include: {
-      item: true,
-    },
-  })) as UserInventoryItemWithItem<"RESOURCE">[];
-  const harvesters = (await prismaClient.harvesterUserInventoryItem.findMany({
-    where: {
-      userId,
-    },
-    include: {
-      item: true,
-    },
-  })) as UserInventoryItemWithItem<"HARVESTER">[];
-  return {
-    resources,
-    harvesters,
-  };
+  try {
+    const resources = (await prismaClient.resourceUserInventoryItem.findMany({
+      where: {
+        userId,
+      },
+      include: {
+        item: true,
+      },
+    })) as UserInventoryItemWithItem<"RESOURCE">[];
+    const harvesters = (await prismaClient.harvesterUserInventoryItem.findMany({
+      where: {
+        userId,
+      },
+      include: {
+        item: true,
+      },
+    })) as UserInventoryItemWithItem<"HARVESTER">[];
+    return {
+      resources,
+      harvesters,
+    };
+  } catch (err) {
+    throw prefixedError(
+      err,
+      "attemping to find items in prisma_getAllUserInventoryItems",
+    );
+  }
 };
 
 /**
@@ -191,14 +207,14 @@ export const prisma_getResourceUserInventoryItems = async (
   userId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<UserInventoryItemWithItem<"RESOURCE">[]> => {
-  return (await prismaClient.resourceUserInventoryItem.findMany({
+  return prismaClient.resourceUserInventoryItem.findMany({
     where: {
       userId,
     },
     include: {
       item: true,
     },
-  })) as UserInventoryItemWithItem<"RESOURCE">[];
+  }) as Promise<UserInventoryItemWithItem<"RESOURCE">[]>;
 };
 
 /**
@@ -209,14 +225,14 @@ export const prisma_getHarvesterUserInventoryItems = async (
   userId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<UserInventoryItemWithItem<"HARVESTER">[]> => {
-  return (await prismaClient.harvesterUserInventoryItem.findMany({
+  return prismaClient.harvesterUserInventoryItem.findMany({
     where: {
       userId,
     },
     include: {
       item: true,
     },
-  })) as UserInventoryItemWithItem<"HARVESTER">[];
+  }) as Promise<UserInventoryItemWithItem<"HARVESTER">[]>;
 };
 
 /**
@@ -247,7 +263,7 @@ export const prisma_upsertResourceUserInventoryItem = async (
     quantity: data.quantity,
   };
 
-  return (await prismaClient.resourceUserInventoryItem.upsert({
+  return prismaClient.resourceUserInventoryItem.upsert({
     where: {
       userId_resourceId: {
         userId: data.userId,
@@ -259,7 +275,7 @@ export const prisma_upsertResourceUserInventoryItem = async (
     include: {
       item: true,
     },
-  })) as UserInventoryItemWithItem<"RESOURCE">;
+  }) as Promise<UserInventoryItemWithItem<"RESOURCE">>;
 };
 
 /**
@@ -273,19 +289,36 @@ export const prisma_upsertHarvesterUserInventoryItem = async (
   data: OmitItemType<Prisma.HarvesterUserInventoryItemUncheckedCreateInput>,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<UserInventoryItemWithItem<"HARVESTER">> => {
-  return (await prismaClient.harvesterUserInventoryItem.upsert({
+  logger.debug({ data }, `prisma_upsertHarvesterUserInventoryItem()`);
+
+  const safeUpdateData: Prisma.HarvesterUserInventoryItemUpdateInput &
+    Prisma.HarvesterUserInventoryItemCreateInput = {
+    user: {
+      connect: {
+        id: data.userId,
+      },
+    },
+    item: {
+      connect: {
+        id: data.harvesterId,
+      },
+    },
+    quantity: data.quantity,
+  };
+
+  return prismaClient.harvesterUserInventoryItem.upsert({
     where: {
       userId_harvesterId: {
         userId: data.userId,
         harvesterId: data.harvesterId,
       },
     },
-    update: data,
-    create: data,
+    update: safeUpdateData,
+    create: safeUpdateData,
     include: {
       item: true,
     },
-  })) as UserInventoryItemWithItem<"HARVESTER">;
+  }) as Promise<UserInventoryItemWithItem<"HARVESTER">>;
 };
 
 /**
@@ -298,7 +331,7 @@ export const prisma_deleteResourceUserInventoryItem = async (
   userId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<UserInventoryItemWithItem<"RESOURCE">> => {
-  return (await prismaClient.resourceUserInventoryItem.delete({
+  return prismaClient.resourceUserInventoryItem.delete({
     where: {
       userId_resourceId: {
         userId,
@@ -308,7 +341,7 @@ export const prisma_deleteResourceUserInventoryItem = async (
     include: {
       item: true,
     },
-  })) as UserInventoryItemWithItem<"RESOURCE">;
+  }) as Promise<UserInventoryItemWithItem<"RESOURCE">>;
 };
 
 /**
@@ -321,7 +354,7 @@ export const prisma_deleteHarvesterUserInventoryItem = async (
   userId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<UserInventoryItemWithItem<"HARVESTER">> => {
-  return (await prismaClient.harvesterUserInventoryItem.delete({
+  return prismaClient.harvesterUserInventoryItem.delete({
     where: {
       userId_harvesterId: {
         userId,
@@ -331,5 +364,5 @@ export const prisma_deleteHarvesterUserInventoryItem = async (
     include: {
       item: true,
     },
-  })) as UserInventoryItemWithItem<"HARVESTER">;
+  }) as Promise<UserInventoryItemWithItem<"HARVESTER">>;
 };

@@ -4,6 +4,7 @@ import {
   SpawnRegionWithSpawnedResources,
   SpawnedResourceWithResource,
 } from "../types";
+import { prefixedError } from "../util/prefixedError";
 
 /**
  * ### Creates a new SpawnRegion
@@ -12,7 +13,7 @@ export const prisma_createSpawnRegion = async (
   model: Prisma.SpawnRegionCreateInput,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<SpawnRegion> => {
-  return await prismaClient.spawnRegion.create({
+  return prismaClient.spawnRegion.create({
     data: model,
   });
 };
@@ -24,20 +25,27 @@ export const prisma_createSpawnRegions = async (
   models: Prisma.SpawnRegionCreateManyInput[],
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<SpawnRegion[]> => {
-  await prismaClient.spawnRegion.createMany({
-    data: models,
-    skipDuplicates: true,
-  });
+  try {
+    await prismaClient.spawnRegion.createMany({
+      data: models,
+      skipDuplicates: true,
+    });
 
-  const h3Indices = models.map((m) => m.h3Index);
+    const h3Indices = models.map((m) => m.h3Index);
 
-  return await prismaClient.spawnRegion.findMany({
-    where: {
-      h3Index: {
-        in: h3Indices,
+    return await prismaClient.spawnRegion.findMany({
+      where: {
+        h3Index: {
+          in: h3Indices,
+        },
       },
-    },
-  });
+    });
+  } catch (err) {
+    throw prefixedError(
+      err,
+      "attempting to create and return new spawn regions in prisma_createSpawnRegions",
+    );
+  }
 };
 
 /**
@@ -47,16 +55,21 @@ export const prisma_createSpawnRegions = async (
 export const prisma_getSpawnRegionBySpawnedResourceId = async (
   spawnedResourceId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
-) => {
-  const res = await prismaClient.spawnedResource.findUniqueOrThrow({
-    where: {
-      id: spawnedResourceId,
-    },
-    select: {
-      spawnRegion: true,
-    },
-  });
-  return res.spawnRegion;
+): Promise<SpawnRegion> => {
+  try {
+    const { spawnRegion } =
+      await prismaClient.spawnedResource.findUniqueOrThrow({
+        where: {
+          id: spawnedResourceId,
+        },
+        select: {
+          spawnRegion: true,
+        },
+      });
+    return spawnRegion as SpawnRegion;
+  } catch (err) {
+    throw prefixedError(err, "attemping to find unique spawnedResource");
+  }
 };
 
 /**
@@ -67,15 +80,13 @@ export const prisma_getSpawnRegionsFromH3Indices = async (
   h3Indices: string[],
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<SpawnRegion[]> => {
-  const regions = await prismaClient.spawnRegion.findMany({
+  return prismaClient.spawnRegion.findMany({
     where: {
       h3Index: {
         in: h3Indices,
       },
     },
   });
-
-  return regions;
 };
 
 /**
@@ -88,7 +99,7 @@ export const prisma_getSpawnRegion = async (
   id: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.spawnRegion.findUniqueOrThrow({
+  return prismaClient.spawnRegion.findUniqueOrThrow({
     where: { id },
   });
 };
@@ -123,16 +134,23 @@ export const prisma_getSpawnRegionWithResources = async (
   includeInactive = false,
   prismaClient: PrismaClientOrTransaction = prisma,
 ): Promise<SpawnRegionWithSpawnedResources> => {
-  const spawnRegion = await prismaClient.spawnRegion.findUnique({
-    where: { id },
-    include: {
-      spawnedResources: {
-        include: {
-          resource: true,
+  const spawnRegion = await prismaClient.spawnRegion
+    .findUnique({
+      where: { id },
+      include: {
+        spawnedResources: {
+          include: {
+            resource: true,
+          },
         },
       },
-    },
-  });
+    })
+    .catch((err) => {
+      throw prefixedError(
+        err,
+        "attemping to find spawnRegion in prisma_getSpawnRegionWithResources. This is more egregious than simply not found.",
+      );
+    });
 
   if (!spawnRegion) {
     throw new Error(`No spawn region found with id: ${id}`);
@@ -175,7 +193,7 @@ export const prisma_updateSpawnRegion = async (
   partialModel: Prisma.SpawnRegionUpdateInput,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.spawnRegion.update({
+  return prismaClient.spawnRegion.update({
     where: {
       id: id,
     },

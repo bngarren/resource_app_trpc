@@ -58,7 +58,7 @@ import { ArcaneEnergyResource, UserInventoryItemWithItem } from "../types";
  * @returns
  */
 export const getHarvester = async (harvesterId: string) => {
-  return await prisma_getHarvesterById(harvesterId);
+  return prisma_getHarvesterById(harvesterId);
 };
 
 /**
@@ -68,7 +68,7 @@ export const getHarvester = async (harvesterId: string) => {
  * @returns
  */
 export const getHarvestersForUser = async (userId: string) => {
-  return await prisma_getHarvestersByUserId(userId);
+  return prisma_getHarvestersByUserId(userId);
 };
 
 /**
@@ -107,7 +107,7 @@ export const isHarvesterDeployed = (harvester: Harvester) => {
  * use `getHarvestOperationsWithSpawnedResourceForHarvester()`
  */
 export const getHarvestOperationsForHarvester = async (harvesterId: string) => {
-  return await prisma_getHarvestOperationsForHarvesterId(harvesterId);
+  return prisma_getHarvestOperationsForHarvesterId(harvesterId);
 };
 
 /**
@@ -121,7 +121,7 @@ export const getHarvestOperationsForHarvester = async (harvesterId: string) => {
 export const getHarvestOperationsWithSpawnedResourceForHarvester = async (
   harvesterId: string,
 ) => {
-  return await prisma_getHarvestOperationsWithSpawnedResourceForHarvesterId(
+  return prisma_getHarvestOperationsWithSpawnedResourceForHarvesterId(
     harvesterId,
   );
 };
@@ -137,9 +137,7 @@ export const getHarvestOperationsWithSpawnedResourceForHarvester = async (
 export const getHarvestOperationsWithResetDateForHarvester = async (
   harvesterId: string,
 ) => {
-  return await prisma_getHarvestOperationsWithResetDateForHarvesterId(
-    harvesterId,
-  );
+  return prisma_getHarvestOperationsWithResetDateForHarvesterId(harvesterId);
 };
 
 /**
@@ -150,7 +148,7 @@ export const getHarvestOperationsWithResetDateForHarvester = async (
 export const removeHarvestOperationsForHarvester = async (
   harvesterId: string,
 ) => {
-  return await prisma_deleteHarvestOperationsForHarvesterId(harvesterId);
+  return prisma_deleteHarvestOperationsForHarvesterId(harvesterId);
 };
 
 /**
@@ -431,9 +429,8 @@ const updateHarvestOperationsForHarvester = async (
 
   const newHarvestOperations = await Promise.all(newHarvestOperationsPromises);
 
-  const res = await prisma_updateHarvestOperationsTransaction(
-    newHarvestOperations,
-  );
+  const res =
+    await prisma_updateHarvestOperationsTransaction(newHarvestOperations);
 
   if (res != null) {
     // logger.debug(res, `Updated HarvestOperations`);
@@ -836,7 +833,7 @@ export const handleTransferEnergy = async (
     return sagaResult[1] as Harvester; // output from the second step
   } catch (error) {
     // TODO: how should we handle any error thrown from the saga? It may or may not have been rolled back successfully...
-    throw error;
+    throw prefixedError(error, "within saga");
   }
 };
 
@@ -926,26 +923,22 @@ export const handleCollect = async (
     },
   );
 
+  // form an array of promises that will get the ResourceUserInventoryItem for each harvested op (if exists)
+  const harvestedOpResourcePromises = harvestedOps.map((harvestedOp) => {
+    return getResourceUserInventoryItemByUrl(
+      harvestedOp.spawnedResource.resource.url,
+      userId,
+    );
+  });
+
   // Store the user's current inventory items for these resources (if they exist), in case we roll back
   const orig_resourceUserInventoryItems: UserInventoryItemWithItem<"RESOURCE">[] =
-    [];
-
-  for (const harvestedOp of harvestedOps) {
-    try {
-      const res = await getResourceUserInventoryItemByUrl(
-        harvestedOp.spawnedResource.resource.url,
-        userId,
-      );
-      orig_resourceUserInventoryItems.push(res);
-    } catch (err) {
-      // Handle or log the error here if needed
-    }
-  }
+    await Promise.all(harvestedOpResourcePromises);
 
   const handleCollectSaga = new SagaBuilder("handleCollect")
     .withLogger()
     // handleCollectSaga STEP 1
-    .invoke(async () => {
+    .invoke(() => {
       // Update ResourceUserInventoryItems
       const updatePromises = harvestedOps.map((harvestedOp) => {
         const resource = harvestedOp.spawnedResource.resource;
@@ -958,7 +951,7 @@ export const handleCollect = async (
         );
       });
 
-      return await Promise.all(updatePromises);
+      return Promise.all(updatePromises);
     }, "update user inventory items")
     .withCompensation(async () => {
       // Remove previously added
@@ -996,7 +989,7 @@ export const handleCollect = async (
     return sagaResult[0] as UserInventoryItemWithItem<"RESOURCE">[]; // output from the first step
   } catch (error) {
     // TODO: how should we handle any error thrown from the saga? It may or may not have been rolled back successfully...
-    throw error;
+    throw prefixedError(error, "within saga");
   }
 };
 

@@ -6,6 +6,7 @@ import {
   HarvestOperationWithResetDate,
   HarvestOperationWithSpawnedResourceWithResource,
 } from "../types";
+import { prefixedError } from "../util/prefixedError";
 
 /**
  * ### Creates a new Harvest Operation
@@ -14,7 +15,7 @@ export const prisma_createHarvestOperation = async (
   partialModel: Prisma.HarvestOperationCreateInput,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.harvestOperation.create({
+  return prismaClient.harvestOperation.create({
     data: partialModel,
   });
 };
@@ -44,9 +45,8 @@ export const prisma_createHarvestOperationsTransaction = async (
       return await Promise.all(
         input.spawnedResourceIds.map(async (spawnedResourceId) => {
           // get the parent spawn region of this resource so we can get the reset_date
-          const spawnRegion = await getSpawnRegionParentOfSpawnedResource(
-            spawnedResourceId,
-          );
+          const spawnRegion =
+            await getSpawnRegionParentOfSpawnedResource(spawnedResourceId);
 
           return await prisma_createHarvestOperation(
             {
@@ -85,7 +85,7 @@ export const prisma_getHarvestOperationsForHarvesterId = async (
   harvesterId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.harvestOperation.findMany({
+  return prismaClient.harvestOperation.findMany({
     where: {
       harvesterId: harvesterId,
     },
@@ -105,7 +105,7 @@ export const prisma_getHarvestOperationsWithSpawnedResourceForHarvesterId =
     harvesterId: string,
     prismaClient: PrismaClientOrTransaction = prisma,
   ): Promise<HarvestOperationWithSpawnedResourceWithResource[]> => {
-    return await prismaClient.harvestOperation.findMany({
+    return prismaClient.harvestOperation.findMany({
       where: {
         harvesterId: harvesterId,
       },
@@ -131,30 +131,37 @@ export const prisma_getHarvestOperationsWithResetDateForHarvesterId = async (
   harvesterId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  const res = await prismaClient.harvestOperation.findMany({
-    where: {
-      harvesterId: harvesterId,
-    },
-    include: {
-      spawnedResource: {
-        include: {
-          spawnRegion: {
-            select: {
-              resetDate: true,
+  try {
+    const res = await prismaClient.harvestOperation.findMany({
+      where: {
+        harvesterId: harvesterId,
+      },
+      include: {
+        spawnedResource: {
+          include: {
+            spawnRegion: {
+              select: {
+                resetDate: true,
+              },
             },
           },
         },
       },
-    },
-  });
-  const harvestOperationsWithResetDate = res.map((ho) => {
-    const { spawnedResource, ...harvestOperation } = ho;
-    return {
-      ...harvestOperation,
-      resetDate: ho.spawnedResource?.spawnRegion?.resetDate || null,
-    };
-  });
-  return harvestOperationsWithResetDate as HarvestOperationWithResetDate[];
+    });
+    const harvestOperationsWithResetDate = res.map((ho) => {
+      const { spawnedResource, ...harvestOperation } = ho;
+      return {
+        ...harvestOperation,
+        resetDate: ho.spawnedResource?.spawnRegion?.resetDate || null,
+      };
+    });
+    return harvestOperationsWithResetDate as HarvestOperationWithResetDate[];
+  } catch (err) {
+    throw prefixedError(
+      err,
+      "in prisma_getHarvestOperationsWithResetDateForHarvesterId",
+    );
+  }
 };
 
 /**
@@ -165,7 +172,7 @@ export const prisma_updateHarvestOperationById = async (
   partialModel: Prisma.HarvestOperationUpdateInput,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.harvestOperation.update({
+  return prismaClient.harvestOperation.update({
     where: {
       id: harvestOperationId,
     },
@@ -218,7 +225,7 @@ export const prisma_deleteHarvestOperationsForHarvesterId = async (
   harvesterId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
 ) => {
-  return await prismaClient.harvestOperation.deleteMany({
+  return prismaClient.harvestOperation.deleteMany({
     where: {
       harvesterId: harvesterId,
     },
