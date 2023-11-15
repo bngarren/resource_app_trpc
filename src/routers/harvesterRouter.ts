@@ -85,7 +85,7 @@ export const harvesterRouter = router({
 
       // ! For now, we are just performing the UserInventoryItem update portion...
 
-      const collectResult = handleCollect(user.id, harvester.id);
+      const collectResult = await handleCollect(user.id, harvester.id);
     }),
   /**
    * ### /harvester.reclaim
