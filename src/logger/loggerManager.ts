@@ -85,6 +85,13 @@ type LoggerManagerOptions = {
   childRestrictedKeys?: string[];
 };
 
+export type LoggerManagerLogFnKey =
+  | "debug"
+  | "info"
+  | "warn"
+  | "error"
+  | "fatal";
+
 /**
  * ### Logger manager
  *
@@ -125,17 +132,21 @@ export const loggerManager = (
   const loggerBindings = new Map<Logger, Bindings>();
 
   type OriginalMethods = {
-    [K in "debug" | "info" | "warn" | "error" | "fatal"]: LogFn;
+    [K in LoggerManagerLogFnKey]: LogFn;
   };
   const loggerOriginalMethods = new Map<Logger, OriginalMethods>();
 
-  const originalChildFunction = (Object.create(baseLogger) as Logger).child;
+  const originalChildFunction = (
+    Object.create(baseLogger) as Logger
+  ).child.bind(baseLogger);
+
   const restrictedLabels = opts?.childRestrictedKeys || [];
 
   // ! FOR DEBUGGING -- --
   const objectWeakMap = new WeakMap();
   let idCounter = 0;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function trackObject(obj: any) {
     if (!objectWeakMap.has(obj)) {
       objectWeakMap.set(obj, ++idCounter);

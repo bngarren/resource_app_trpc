@@ -1,5 +1,6 @@
 import { Logger } from "pino";
 import {
+  LoggerManagerLogFnKey,
   addBinding,
   getLogger,
   loggerManager,
@@ -70,7 +71,13 @@ describe("loggerManager", () => {
     Object.values(methodSpies).forEach((spy) => spy.mockRestore());
   });
 
-  it.each(["debug", "info", "warn", "error", "fatal"])(
+  it.each([
+    "debug",
+    "info",
+    "warn",
+    "error",
+    "fatal",
+  ] as LoggerManagerLogFnKey[])(
     "should call %s method correctly with string argument",
     (method) => {
       testLogger[method]("Test message");
@@ -80,7 +87,13 @@ describe("loggerManager", () => {
     },
   );
 
-  it.each(["debug", "info", "warn", "error", "fatal"])(
+  it.each([
+    "debug",
+    "info",
+    "warn",
+    "error",
+    "fatal",
+  ] as LoggerManagerLogFnKey[])(
     "should call %s method correctly with obj argument",
     (method) => {
       testLogger[method]({ foo: "bar" });
@@ -93,7 +106,13 @@ describe("loggerManager", () => {
     },
   );
 
-  it.each(["debug", "info", "warn", "error", "fatal"])(
+  it.each([
+    "debug",
+    "info",
+    "warn",
+    "error",
+    "fatal",
+  ] as LoggerManagerLogFnKey[])(
     "should call a child logger %s method correctly with string argument",
     (method) => {
       const childTestLogger = testLogger.child({ child: true });
