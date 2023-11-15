@@ -105,7 +105,7 @@ export const throwIfBadStatus = (response: Response) => {
  * @param idToken The authenticated user idToken (i.e. Firebase)
  * @param input Input object that will be passed as query param (GET) or JSON body (POST)
  */
-export const authenticatedRequest = <T extends Zod.ZodType<any>>(
+export const authenticatedRequest = <T extends Zod.ZodType<unknown>>(
   api: Server,
   type: "GET" | "POST",
   endpoint: string,
@@ -142,7 +142,7 @@ export class AuthenticatedRequester {
     private readonly idToken: string,
   ) {}
 
-  send<T extends Zod.ZodType<any>>(
+  send<T extends Zod.ZodType<unknown>>(
     method: "POST" | "GET",
     endpoint: string,
     input?: Zod.infer<T>,
@@ -221,7 +221,7 @@ export const mockScan = async (
   const orig_handleScan = ScanService.handleScan;
   const spy_handleScan = jest
     .spyOn(ScanService, "handleScan")
-    .mockImplementationOnce((fromLocation: Coordinate) => {
+    .mockImplementationOnce(async (fromLocation: Coordinate) => {
       return orig_handleScan(fromLocation, 1);
     });
 
@@ -292,7 +292,7 @@ export const mockScan = async (
       // We use the special `forcedSpawnedResourceModels` parameter
       // If it's the Spawn region of interest, pass the models, if not just [] so that
       // all other spawn regions do not spawn any resources (better for testing)
-      return orig_prisma_updateSpawnedResourcesForSpawnRegionTransaction(
+      return await orig_prisma_updateSpawnedResourcesForSpawnRegionTransaction(
         spawnRegionId,
         spawnRegionId === centralSpawnRegion.id
           ? forcedSpawnedResourceModels.slice(0, numberOfSpawnedResources) // if 0, get []. if 1, get first element, etc.
