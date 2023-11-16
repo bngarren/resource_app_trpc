@@ -67,7 +67,7 @@ export const prisma_createSpawnedResource = async (
 export const prisma_getResourceById = async (
   resourceId: string,
   prismaClient: PrismaClientOrTransaction = prisma,
-) => {
+): Promise<Resource> => {
   return prismaClient.resource.findUniqueOrThrow({
     where: { id: resourceId },
   });

@@ -9,8 +9,10 @@ describe("saga", () => {
     );
   });
 
-  it("should throw error if build() is called with zero invoke() called", async () => {
-    expect(new SagaBuilder("test saga").withLogger().build).toThrow();
+  it("should throw error if build() is called with zero invoke() called", () => {
+    expect(() => {
+      new SagaBuilder("test saga").withLogger().build();
+    }).toThrow();
   });
 
   it("should correctly invoke a saga step", async () => {
@@ -26,7 +28,7 @@ describe("saga", () => {
     } catch (error) {
       logger.error(error);
     } finally {
-      expect(testFunction1).toBeCalledTimes(1);
+      expect(testFunction1).toHaveBeenCalledTimes(1);
     }
   });
 
@@ -49,9 +51,9 @@ describe("saga", () => {
     } catch (error) {
       logger.error(error);
     } finally {
-      expect(testFunction1).toBeCalledTimes(1);
-      expect(testFunction2).toBeCalledTimes(1);
-      expect(testFunction3).toBeCalledTimes(1);
+      expect(testFunction1).toHaveBeenCalledTimes(1);
+      expect(testFunction2).toHaveBeenCalledTimes(1);
+      expect(testFunction3).toHaveBeenCalledTimes(1);
 
       expect(result).toEqual([1, 2, 3]);
     }
@@ -76,8 +78,8 @@ describe("saga", () => {
     } catch (error) {
       // Ignore. We expect an error for this test
     } finally {
-      expect(testFunction1).toBeCalledTimes(1);
-      expect(compensationFunction1).toBeCalledTimes(1);
+      expect(testFunction1).toHaveBeenCalledTimes(1);
+      expect(compensationFunction1).toHaveBeenCalledTimes(1);
       expect(result.length).toBe(0);
     }
   });
@@ -96,14 +98,14 @@ describe("saga", () => {
     );
     const compensationFunction1 = jest.fn(async () => {
       testDatabase = testDatabase.filter((el) => el.id !== "one");
-      Promise.resolve();
+      return Promise.resolve();
     });
     const testFunction2 = jest.fn(async () =>
       Promise.resolve(testDatabase.push({ id: "two" })),
     );
     const compensationFunction2 = jest.fn(async () => {
       testDatabase = testDatabase.filter((el) => el.id !== "two");
-      Promise.resolve();
+      return Promise.resolve();
     });
 
     // The 3rd invokeFn will fail here to initiate the rollback
@@ -113,7 +115,7 @@ describe("saga", () => {
 
     const compensationFunction3 = jest.fn(async () => {
       testDatabase = testDatabase.filter((el) => el.id !== "three");
-      Promise.resolve();
+      return Promise.resolve();
     });
 
     const saga = new SagaBuilder("test saga")
@@ -131,12 +133,12 @@ describe("saga", () => {
     } catch (error) {
       // Ignore. We expect an error for this test
     } finally {
-      expect(testFunction1).toBeCalledTimes(1);
-      expect(testFunction2).toBeCalledTimes(1);
-      expect(testFunction3).toBeCalledTimes(1);
-      expect(compensationFunction1).toBeCalledTimes(1);
-      expect(compensationFunction2).toBeCalledTimes(1);
-      expect(compensationFunction3).toBeCalledTimes(1);
+      expect(testFunction1).toHaveBeenCalledTimes(1);
+      expect(testFunction2).toHaveBeenCalledTimes(1);
+      expect(testFunction3).toHaveBeenCalledTimes(1);
+      expect(compensationFunction1).toHaveBeenCalledTimes(1);
+      expect(compensationFunction2).toHaveBeenCalledTimes(1);
+      expect(compensationFunction3).toHaveBeenCalledTimes(1);
 
       // Our simple "database" should look like it did BEFORE the saga started
       expect(testDatabase).toEqual(orig_testDatabase);
@@ -162,21 +164,21 @@ describe("saga", () => {
         );
         const compensationFunction1 = jest.fn(async () => {
           testDatabase = testDatabase.filter((el) => el.id !== "one");
-          Promise.resolve();
+          return Promise.resolve();
         });
         const testFunction2 = jest.fn(async () =>
           Promise.resolve(testDatabase.push({ id: "two" })),
         );
         const compensationFunction2 = jest.fn(async () => {
           testDatabase = testDatabase.filter((el) => el.id !== "two");
-          Promise.resolve();
+          return Promise.resolve();
         });
         const testFunction3 = jest.fn(async () =>
           Promise.resolve(testDatabase.push({ id: "three" })),
         );
         const compensationFunction3 = jest.fn(async () => {
           testDatabase = testDatabase.filter((el) => el.id !== "three");
-          Promise.resolve();
+          return Promise.resolve();
         });
         // Make this testFunction4 fail so that all are rolled back
         const testFunction4 = jest.fn(async () =>
@@ -184,7 +186,7 @@ describe("saga", () => {
         );
         const compensationFunction4 = jest.fn(async () => {
           testDatabase = testDatabase.filter((el) => el.id !== "four");
-          Promise.resolve();
+          return Promise.resolve();
         });
 
         const saga = new SagaBuilder(`test saga, with predicate #${i + 1}`)
@@ -208,14 +210,14 @@ describe("saga", () => {
         } catch (error) {
           // Ignore. We expect an error for this test
         } finally {
-          expect(testFunction1).toBeCalledTimes(1);
-          expect(testFunction2).toBeCalledTimes(0); // should have skipped
-          expect(testFunction3).toBeCalledTimes(1);
-          expect(testFunction4).toBeCalledTimes(1);
-          expect(compensationFunction1).toBeCalledTimes(1);
-          expect(compensationFunction2).toBeCalledTimes(0); // should have skipped
-          expect(compensationFunction3).toBeCalledTimes(1);
-          expect(compensationFunction4).toBeCalledTimes(1);
+          expect(testFunction1).toHaveBeenCalledTimes(1);
+          expect(testFunction2).toHaveBeenCalledTimes(0); // should have skipped
+          expect(testFunction3).toHaveBeenCalledTimes(1);
+          expect(testFunction4).toHaveBeenCalledTimes(1);
+          expect(compensationFunction1).toHaveBeenCalledTimes(1);
+          expect(compensationFunction2).toHaveBeenCalledTimes(0); // should have skipped
+          expect(compensationFunction3).toHaveBeenCalledTimes(1);
+          expect(compensationFunction4).toHaveBeenCalledTimes(1);
 
           // Our simple "database" should look like it did BEFORE the saga started
           expect(testDatabase).toEqual(orig_testDatabase);

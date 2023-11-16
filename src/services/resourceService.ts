@@ -41,18 +41,12 @@ export const getResource = async <T extends boolean = false>(
   withRarity: T = false as T, // typescript needs to know default value is type T
 ) => {
   /* We use a generic T to help return the correct type based on the withRarity boolean.
-  
-  Have to return each of these casted as `any` because Typescript can't determine
-  the actual type at that location; however, the callers of this function will receive
-  the correct type due to the return type in the function signature.
-  */
+   */
   if (withRarity) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return prisma_getResourceByIdWithRarity(resourceId) as Promise<
       T extends true ? ResourceWithRarity : Resource
     >;
   } else {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return prisma_getResourceById(resourceId) as Promise<
       T extends true ? ResourceWithRarity : Resource
     >;
@@ -74,11 +68,13 @@ export const getResourceWithUrl = async <T extends boolean = false>(
 ) => {
   // For typescript explanation, see `getResource()`
   if (withRarity) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (await prisma_getResourceByUrlWithRarity(resourceUrl)) as any;
+    return prisma_getResourceByUrlWithRarity(resourceUrl) as Promise<
+      T extends true ? ResourceWithRarity : Resource
+    >;
   } else {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (await prisma_getResourceByUrl(resourceUrl)) as any;
+    return prisma_getResourceByUrl(resourceUrl) as Promise<
+      T extends true ? ResourceWithRarity : Resource
+    >;
   }
 };
 
@@ -257,21 +253,20 @@ export const generateSpawnedResourceModelsForSpawnRegion = async (
 export const getSpawnedResource = async <T extends boolean = true>(
   spawnedResourceId: string,
   withResource: T = true as T, // typescript needs to know default value is type T
-): Promise<T extends true ? SpawnedResourceWithResource : SpawnedResource> => {
+) => {
   /* We use a generic T to help return the correct type based on the withResource boolean.
   
-  Have to return each of these casted as `any` because Typescript can't determine
-  the actual type at that location; however, the callers of this function will receive
-  the correct type due to the return type in the function signature.
   */
   if (withResource) {
-    return (await prisma_getSpawnedResourceByIdWithResource(
+    return prisma_getSpawnedResourceByIdWithResource(
       spawnedResourceId,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    )) as any;
+    ) as Promise<
+      T extends true ? SpawnedResourceWithResource : SpawnedResource
+    >;
   } else {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (await prisma_getSpawnedResourceById(spawnedResourceId)) as any;
+    return prisma_getSpawnedResourceById(spawnedResourceId) as Promise<
+      T extends true ? SpawnedResourceWithResource : SpawnedResource
+    >;
   }
 };
 

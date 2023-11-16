@@ -236,7 +236,7 @@ describe("/userInventory", () => {
       // Expect that our returned player inventory does not contain the other user's inventory item
       expect(playerInventory.items).not.toBe(
         expect.arrayContaining(
-          expect.objectContaining(anotherUserInventoryItem),
+          expect.objectContaining(anotherUserInventoryItem) as any[],
         ),
       );
     });

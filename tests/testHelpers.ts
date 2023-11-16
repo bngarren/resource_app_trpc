@@ -13,6 +13,7 @@ import { Coordinate } from "../src/types";
 import { Prisma } from "@prisma/client";
 import { logger } from "../src/main";
 import path from "path";
+import { prefixedError } from "../src/util/prefixedError";
 
 export const TEST_USER = Object.freeze({
   email: "testUser@gmail.com",
@@ -60,17 +61,17 @@ export async function extractDataFromTRPCResponse<T>(
  * at `response.body.result.data`. This is where TRPC puts the response payload.
  */
 export const getDataFromTRPCResponse = <T>(response: SuperAgentResponse): T => {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   if (!response.body.result.data) {
     throw new Error("no data in response");
   }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   return response.body?.result?.data as T;
 };
 
 export const throwIfBadStatus = (response: Response) => {
   if (!response.ok) {
-    throw new Error(`Bad API response: ${response.error}
-    ${response.text}
-    `);
+    throw prefixedError(response.error, "Bad status in response");
   }
 };
 
@@ -120,19 +121,37 @@ export const authenticatedRequest = <T extends Zod.ZodType<unknown>>(
         .get(endpoint)
         .set("Authorization", `Bearer ${idToken}`);
       if (input) {
-        req.query({
-          input: JSON.stringify(input),
-        });
+        return req
+          .query({
+            input: JSON.stringify(input),
+          })
+          .then(() => req)
+          .catch((err) => {
+            throw prefixedError(
+              err,
+              `Could not stringify input of request: ${req.method} ${req.url}`,
+            );
+          });
+      } else {
+        return req;
       }
-      return req;
     case "POST":
       req = request(api)
         .post(endpoint)
         .set("Authorization", `Bearer ${idToken}`);
       if (input) {
-        req.send(input);
+        return req
+          .send(input)
+          .then(() => req)
+          .catch((err) => {
+            throw prefixedError(
+              err,
+              `Couldn't attach body of POST request: ${req.method} ${req.url}`,
+            );
+          });
+      } else {
+        return req;
       }
-      return req;
   }
 };
 
@@ -454,7 +473,7 @@ export const transformQueryLog = (log: QueryLog) => {
   let transformedQuery = log.query.replace(/"public"\./g, "");
 
   // Parse the params string to get an array of parameters.
-  const params = JSON.parse(log.params);
+  const params: string[] = JSON.parse(log.params);
 
   // Replace each placeholder variable with the corresponding parameter.
   params.forEach((param: string, index: number) => {

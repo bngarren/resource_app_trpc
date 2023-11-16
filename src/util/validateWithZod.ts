@@ -20,7 +20,7 @@ export const validateWithZod = <T>(
   const result = schema.safeParse(data);
   if (!result.success) {
     throw new Error(
-      `Invalid ${context ? context + " " : ""}data: ${result.error}`,
+      `Invalid ${context ? context + " " : ""}data: ${result.error.toString()}`,
     );
   }
   return result.data;

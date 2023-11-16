@@ -210,7 +210,7 @@ class Saga {
    * @returns If successful, will return an array containing the output from each step
    */
   async execute(): Promise<any[]> {
-    const executedData: any[] = [];
+    const executedData: unknown[] = [];
 
     this.sagaLog.log("info", {
       sagaName: this.name,

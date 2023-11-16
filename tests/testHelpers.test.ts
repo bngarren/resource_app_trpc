@@ -45,14 +45,14 @@ describe("testHelpers", () => {
     expect(postScan_spawnRegions).toHaveLength(7);
     expect(postScan_spawnedResources).toHaveLength(numberOfSpawnedResources);
 
-    postScan_spawnedResources.forEach((spawnedResource) => {
+    for (const spawnedResource of postScan_spawnedResources) {
       // the spawnedResource's spawnRegion should have the expected h3index
-      expect(
+      await expect(
         prisma.spawnRegion.findUnique({
           where: { id: spawnedResource.spawnRegionId },
         }),
       ).resolves.toMatchObject({ h3Index: "892a3064093ffff" });
       expect(h3.getResolution(spawnedResource.h3Index)).toBe(11); // resolution 11 for each resource
-    });
+    }
   });
 });

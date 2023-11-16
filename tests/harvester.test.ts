@@ -1850,7 +1850,7 @@ describe("/harvester", () => {
         );
         throwIfBadStatus(res1);
 
-        const res2 = requester.send(
+        const res2 = await requester.send(
           "POST",
           "/harvester.transferEnergy",
           {
@@ -1869,7 +1869,7 @@ describe("/harvester", () => {
             },
           });
 
-        await res2.expect(409);
+        expect(res2.statusCode).toBe(409);
 
         expect(post_removeEnergyHarvester.initialEnergy).toBeCloseTo(amountAdd);
       });

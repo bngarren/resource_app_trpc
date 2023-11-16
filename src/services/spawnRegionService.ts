@@ -8,26 +8,24 @@ import { Prisma } from "@prisma/client";
 import { prisma_updateSpawnedResourcesForSpawnRegionTransaction } from "../queries/queryResource";
 import { SpawnRegionWithSpawnedResources } from "../types";
 import { logger } from "../main";
-
-// TODO: Probably not the best to just re-export a database method.
-export { prisma_getSpawnRegionsFromH3Indices as getRegionsFromH3Array } from "../queries/querySpawnRegion";
+import config from "../config";
 
 export const getSpawnRegionParentOfSpawnedResource = async (
   spawnedResourceId: string,
 ) => {
-  return await prisma_getSpawnRegionBySpawnedResourceId(spawnedResourceId);
+  return prisma_getSpawnRegionBySpawnedResourceId(spawnedResourceId);
 };
 
 export const handleCreateSpawnRegion = async (
   spawnRegionModel: Prisma.SpawnRegionCreateInput,
 ) => {
-  return await prisma_createSpawnRegion(spawnRegionModel);
+  return prisma_createSpawnRegion(spawnRegionModel);
 };
 
 export const handleCreateSpawnRegions = async (
   spawnRegionModels: Prisma.SpawnRegionCreateManyInput[],
 ) => {
-  return await prisma_createSpawnRegions(spawnRegionModels);
+  return prisma_createSpawnRegions(spawnRegionModels);
 };
 
 /**
@@ -48,7 +46,7 @@ export const updateSpawnRegion = async (
   spawnRegionId: string,
 ): Promise<SpawnRegionWithSpawnedResources | null> => {
   if (spawnRegionId === null) {
-    console.error(`Couldn't find SpawnRegion (id=${spawnRegionId}) to update.`);
+    console.error(`Couldn't find SpawnRegion (id=null) to update.`);
     return null;
   }
 
@@ -67,7 +65,7 @@ export const updateSpawnRegion = async (
     return updatedSpawnRegion;
   } catch (err) {
     logger.error(
-      { err, spawnRegionId },
+      { [config.logger_error_key]: err, spawnRegionId },
       `During spawnRegionService's updateSpawnRegion(), returning NULL`,
     );
     // Transaction did not go through
