@@ -39,7 +39,7 @@ export const createResources = async (
 export const getResource = async <T extends boolean = false>(
   resourceId: string,
   withRarity: T = false as T, // typescript needs to know default value is type T
-): Promise<T extends true ? ResourceWithRarity : Resource> => {
+) => {
   /* We use a generic T to help return the correct type based on the withRarity boolean.
   
   Have to return each of these casted as `any` because Typescript can't determine
@@ -48,10 +48,14 @@ export const getResource = async <T extends boolean = false>(
   */
   if (withRarity) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (await prisma_getResourceByIdWithRarity(resourceId)) as any;
+    return prisma_getResourceByIdWithRarity(resourceId) as Promise<
+      T extends true ? ResourceWithRarity : Resource
+    >;
   } else {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (await prisma_getResourceById(resourceId)) as any;
+    return prisma_getResourceById(resourceId) as Promise<
+      T extends true ? ResourceWithRarity : Resource
+    >;
   }
 };
 

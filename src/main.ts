@@ -34,7 +34,7 @@ const appRouter = router({
       isHealthy: isHealthy,
     };
   }),
-  protectedGreeting: protectedProcedure.query(async () => {
+  protectedGreeting: protectedProcedure.query(() => {
     return "You have received a response from an authenticated endpoint!";
   }),
   scan: scanRouter.scan,
@@ -60,8 +60,8 @@ ${config.app_name}
 
     Running on port: ${config.server_port}
     Log level: "${logger.level.toUpperCase()}" [${Object.keys(
-  logger.levels.values,
-)}]
+      logger.levels.values,
+    ).toString()}]
     NODE_ENV: "${config.node_env}"
 
 
@@ -122,7 +122,7 @@ const createServer = () => {
   return server;
 };
 
-async function main() {
+function main() {
   // We can turn protected routes off for API testing, debugging, etc.
   if (!config.use_protected_routes) {
     logger.warn(

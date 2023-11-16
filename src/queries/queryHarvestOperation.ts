@@ -197,13 +197,23 @@ export const prisma_updateHarvestOperationsTransaction = async (
           const { id: harvestOperationId, ...partialModel } = harvestOperation;
 
           if (harvestOperationId == null) {
+            throw new Error(`Cannot update harvestOperation with missing id`);
+          }
+
+          // Convert to string (from prisma's `string | Prisma.StringFieldUpdateOperationsInput | undefined`)
+          const harvestOperationIdString =
+            typeof harvestOperationId === "string"
+              ? harvestOperationId
+              : harvestOperationId.set?.toString() ?? "unknown";
+
+          if (harvestOperationId == null) {
             throw new Error(
-              `Missing id for harvest operation (id=${harvestOperation.id})`,
+              `Missing id for harvest operation (id=${harvestOperationIdString})`,
             );
           }
 
           return prisma_updateHarvestOperationById(
-            harvestOperationId as string,
+            harvestOperationIdString,
             partialModel,
             trx,
           );

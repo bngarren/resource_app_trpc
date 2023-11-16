@@ -9,7 +9,9 @@ Firebase Admin SDK needs to be initialized with a service account.
 A service account is an account associated with your Firebase project that is used to authenticate
 these server-to-server interactions.
 */
-const serviceAccount = JSON.parse(config.firebase_service_acct_key || "");
+const serviceAccount = JSON.parse(
+  config.firebase_service_acct_key || "",
+) as string;
 
 export const fbAdmin = initializeApp({
   credential: cert(serviceAccount),

@@ -27,6 +27,6 @@ export const userInventoryRouter = router({
       const userInventoryItems = await getUserInventoryItems(user.id);
 
       // Now convert to a PlayerInventory (which is client facing)
-      return await getPlayerInventoryFromUserInventoryItems(userInventoryItems);
+      return getPlayerInventoryFromUserInventoryItems(userInventoryItems);
     }),
 });

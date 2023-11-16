@@ -66,7 +66,7 @@ export const prisma_getSpawnRegionBySpawnedResourceId = async (
           spawnRegion: true,
         },
       });
-    return spawnRegion as SpawnRegion;
+    return spawnRegion;
   } catch (err) {
     throw prefixedError(err, "attemping to find unique spawnedResource");
   }

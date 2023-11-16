@@ -356,8 +356,8 @@ const updateHarvestOperationsForHarvester = async (
   // Loop through the incomplete (still had resource) harvest operations to get their spawn region's reset_date
   // to compare with the energyEndTime
   // We create an array of Promises then later await it
-  const newHarvestOperationsPromises = [...harvestOperations].map(
-    async (harvestOperation, index) => {
+  const newHarvestOperations = [...harvestOperations].map(
+    (harvestOperation) => {
       /* To determine the new endTime, we compare the SpawnedResource's SpawnRegion's
       `resetDate` and the energyEndTime of the harvester, picking the earlier of the two */
 
@@ -426,8 +426,6 @@ const updateHarvestOperationsForHarvester = async (
       return updatedHarvestOperation as HarvestOperation;
     },
   );
-
-  const newHarvestOperations = await Promise.all(newHarvestOperationsPromises);
 
   const res =
     await prisma_updateHarvestOperationsTransaction(newHarvestOperations);

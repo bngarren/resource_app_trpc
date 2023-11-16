@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */ // Disabled because we spread "...args" (as any[]) alot to work with pino
 import ecsFormat from "@elastic/ecs-pino-format";
 import path from "path";
 import pino, { Bindings, LogFn, Logger, LoggerOptions, symbols } from "pino";
@@ -143,11 +144,11 @@ export const loggerManager = (
   const restrictedLabels = opts?.childRestrictedKeys || [];
 
   // ! FOR DEBUGGING -- --
-  const objectWeakMap = new WeakMap();
+  const objectWeakMap = new WeakMap<object, number>();
   let idCounter = 0;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function trackObject(obj: any) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, unused-imports/no-unused-vars
+  function trackObject(obj: object) {
     if (!objectWeakMap.has(obj)) {
       objectWeakMap.set(obj, ++idCounter);
     }
@@ -221,7 +222,8 @@ export const loggerManager = (
           {
             // ! Weird way I've had to type the logger instance to access a symbol property...
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            [(this as Record<any, any>)[errorKeySym as any]]: objOrMsg,
+            [(this as Record<any, any>)[errorKeySym as unknown as string]]:
+              objOrMsg,
             ...bindings,
           },
           ...args,
