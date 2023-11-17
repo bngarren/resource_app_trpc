@@ -18,7 +18,8 @@
     "prisma:reset": "dotenv -e .env.${NODE_ENV} -- npx prisma migrate reset",
     "heroku:prisma:migrate:deploy": "npx prisma migrate deploy",
     "lint": "eslint './**/*.ts'",
-    "lint:fix": "eslint --fix 'src/**/*.ts'",
+    "lint:fix": "eslint --fix './**/*.ts'",
+    "prettier:fix": "prettier --write --ignore-unknown",
     "build": "rm -rf dist && tsc",
     "heroku-postbuild": "echo heroku-postbuild",
     "deploy:dev": "git push heroku development:main",
@@ -27,7 +28,8 @@
     "start:staging": "NODE_ENV=STAGING node dist/src/main.js",
     "start:dev": "NODE_ENV=DEVELOPMENT ts-node-dev --respawn --clear --transpile-only --debounce 1000 ./src/main.ts",
     "test": "NODE_ENV=TEST jest --detectOpenHandles --runInBand --verbose",
-    "test:fresh": "rm -f ./logs/app_test.log && NODE_ENV=TEST jest --detectOpenHandles --runInBand --verbose"
+    "test:fresh": "rm -f ./logs/app_test.log && npm run test",
+    "prepare": "husky install"
   },
   "author": "Ben Garren",
   "license": "ISC",
@@ -59,11 +61,12 @@
     "eslint-config-node": "^4.1.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-prettier": "^5.0.1",
     "eslint-plugin-unused-imports": "^3.0.0",
     "firebase": "^9.23.0",
+    "husky": "^8.0.3",
     "jest": "^29.5.0",
     "jest-mock-extended": "^3.0.4",
+    "lint-staged": "^15.1.0",
     "pino-pretty": "^10.0.0",
     "prettier": "^3.1.0",
     "prisma": "^5.6.0",
@@ -71,5 +74,9 @@
     "ts-jest": "^29.1.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.0.4"
+  },
+  "lint-staged": {
+    "*": "npm run prettier:fix",
+    "*.ts": "npm run lint"
   }
 }
