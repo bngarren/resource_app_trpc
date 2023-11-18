@@ -7,7 +7,7 @@ module.exports = {
     "eslint:recommended",
     "plugin:@typescript-eslint/recommended",
     "plugin:@typescript-eslint/recommended-type-checked", // Uses the recommended rules from the @typescript-eslint/eslint-plugin
-    "prettier", // Enables eslint-config-prettier
+    "prettier", // Enables eslint-config-prettier, disables style rules so these aren't handled by eslint
   ],
   parserOptions: {
     project: "./tsconfig*.json",
@@ -15,7 +15,7 @@ module.exports = {
     ecmaVersion: "latest", // Allows for the parsing of modern ECMAScript features
     sourceType: "module", // Allows for the use of imports
   },
-  ignorePatterns: ["/*.js", "/*.ts"],
+  ignorePatterns: ["/*.js", "/*.ts"], // Don't lint root level files
   rules: {
     // Ignores unused vars when in the context of destructuring or names preceded with _
     "@typescript-eslint/no-unused-vars": "off",

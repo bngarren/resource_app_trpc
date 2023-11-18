@@ -76,7 +76,6 @@
     "typescript": "^5.0.4"
   },
   "lint-staged": {
-    "*": "npm run prettier:fix",
-    "*.ts": "npm run lint"
+    "*.ts": ["npm run prettier:fix", "npm run lint"]
   }
 }
