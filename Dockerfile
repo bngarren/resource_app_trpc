@@ -18,6 +18,9 @@ WORKDIR /app
 COPY package*.json ./
 # Install global dependencies
 RUN npm install -g dotenv-cli
+# Prevent Husky from installing in Docker environment
+#  See: https://typicode.github.io/husky/guide.html#disable-husky-in-ci-docker-prod
+RUN npm pkg delete scripts.prepare
 # Install only production dependencies
 RUN npm ci --omit=dev
 
