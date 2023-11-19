@@ -15,20 +15,41 @@ describe("saga", () => {
     }).toThrow();
   });
 
-  it("should correctly invoke a saga step", async () => {
-    const testFunction1 = jest.fn(async () => Promise.resolve());
+  it("should correctly execute a saga step that with an invoke() that returns a Promise", async () => {
+    const testFunction1 = jest.fn(async () => Promise.resolve(true));
 
     const saga = new SagaBuilder("test saga")
       .withLogger()
       .invoke(testFunction1)
       .build();
 
+    let res: unknown;
     try {
-      await saga.execute();
+      res = await saga.execute();
     } catch (error) {
       logger.error(error);
     } finally {
       expect(testFunction1).toHaveBeenCalledTimes(1);
+      expect(res).toEqual([true]);
+    }
+  });
+
+  it("should correctly execute a saga step that with an invoke() that returns a value", async () => {
+    const testFunction1 = jest.fn(() => 1);
+
+    const saga = new SagaBuilder("test saga")
+      .withLogger()
+      .invoke(testFunction1)
+      .build();
+
+    let res: unknown;
+    try {
+      res = await saga.execute();
+    } catch (error) {
+      logger.error(error);
+    } finally {
+      expect(testFunction1).toHaveBeenCalledTimes(1);
+      expect(res).toEqual([1]);
     }
   });
 
@@ -44,10 +65,9 @@ describe("saga", () => {
       .invoke(testFunction3)
       .build();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let result: any[] = [];
+    let res: unknown;
     try {
-      result = await saga.execute();
+      res = await saga.execute();
     } catch (error) {
       logger.error(error);
     } finally {
@@ -55,7 +75,7 @@ describe("saga", () => {
       expect(testFunction2).toHaveBeenCalledTimes(1);
       expect(testFunction3).toHaveBeenCalledTimes(1);
 
-      expect(result).toEqual([1, 2, 3]);
+      expect(res).toEqual([1, 2, 3]);
     }
   });
 
@@ -71,8 +91,7 @@ describe("saga", () => {
       .withCompensation(compensationFunction1)
       .build();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let result: any[] = [];
+    let result: unknown[] = [];
     try {
       result = await saga.execute();
     } catch (error) {

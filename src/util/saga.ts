@@ -9,8 +9,8 @@ import { prefixedError } from "./prefixedError";
 import { logger } from "../main";
 import config from "../config";
 
-type InvokeFnType<T> = (...args: any[]) => Promise<T>;
-type CompensationFnType<T, K> = (data: T, ...args: any[]) => Promise<K>;
+type InvokeFnType<T> = (...args: any[]) => T | Promise<T>;
+type CompensationFnType<T, K> = (data: T, ...args: any[]) => K | Promise<K>;
 
 /**
  * ### A step (local transaction) in the Saga
@@ -32,17 +32,16 @@ class SagaStep<T = any, K = any> {
     this.wasInvoked = false;
   }
 
-  async invoke(...args: unknown[]): Promise<T> {
+  async invoke(...args: unknown[]) {
     this.wasInvoked = true;
-    this.invokeResult = await this.invokeFn(...args);
-    return this.invokeResult;
+    return this.invokeFn(...args);
   }
 
-  async compensate(...args: unknown[]): Promise<K> {
+  async compensate(...args: unknown[]) {
     if (this.wasInvoked) {
-      return await this.compensationFn(this.invokeResult, ...args);
+      return this.compensationFn(this.invokeResult, ...args);
     }
-    return Promise.resolve(null as K);
+    return null;
   }
 
   setInvokeFn(newInvokeFn: InvokeFnType<T>) {
@@ -134,11 +133,9 @@ export class SagaBuilder {
     return this;
   }
 
-  invoke<T>(invokeFn: () => Promise<T>, stepName?: string): this {
+  invoke<T>(invokeFn: () => T | Promise<T>, stepName?: string): this {
     if (this.shouldAddNextStep) {
-      this.steps.push(
-        new SagaStep<T>(stepName ?? "", invokeFn, () => Promise.resolve()),
-      );
+      this.steps.push(new SagaStep<T>(stepName ?? "", invokeFn, () => null));
       this.lastStepSkipped = false;
     } else {
       this.lastStepSkipped = true;
@@ -149,7 +146,7 @@ export class SagaBuilder {
   }
 
   withCompensation<T, K>(
-    compensationFn: (data: T, ...args: any[]) => Promise<K>,
+    compensationFn: (data: T, ...args: any[]) => K | Promise<K>,
   ): this {
     // Only set the compensation function on the last step if the last step was not skipped
     if (!this.lastStepSkipped) {

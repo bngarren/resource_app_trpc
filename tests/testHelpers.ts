@@ -105,6 +105,7 @@ export const throwIfBadStatus = (response: Response) => {
  * @param endpoint The TRPC procedure
  * @param idToken The authenticated user idToken (i.e. Firebase)
  * @param input Input object that will be passed as query param (GET) or JSON body (POST)
+ * @param _withSchema Zod schema used for this endpoint to allow the 'input' param to be type checked (compile time)
  */
 export const authenticatedRequest = <T extends Zod.ZodType<unknown>>(
   api: Server,
@@ -112,7 +113,7 @@ export const authenticatedRequest = <T extends Zod.ZodType<unknown>>(
   endpoint: string,
   idToken: string,
   input?: Zod.infer<T>,
-  withSchema?: T,
+  _withSchema?: T,
 ) => {
   let req: Test;
   switch (type) {
@@ -155,6 +156,10 @@ export const authenticatedRequest = <T extends Zod.ZodType<unknown>>(
   }
 };
 
+/**
+ * An AuthenticatedRequester instance is used to send authenticated requests to a specific
+ * server (API) with an 'idToken' for Bearer authorization.
+ */
 export class AuthenticatedRequester {
   constructor(
     private readonly server: Server,
