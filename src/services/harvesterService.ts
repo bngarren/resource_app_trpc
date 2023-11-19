@@ -1,4 +1,4 @@
-import { SpawnedResourceWithResource, isFulfilled } from "./../types/index";
+import { HarvestedOp, isFulfilled } from "./../types/index";
 import {
   prisma_getHarvestOperationsWithResetDateForHarvesterId,
   prisma_getHarvestOperationsWithSpawnedResourceForHarvesterId,
@@ -265,7 +265,7 @@ export const handleDeploy = async (
  * @param asOf
  * @returns Amount of resource (can be decimal/float)
  */
-const getAmountHarvestedByHarvestOperation = (
+export const getAmountHarvestedByHarvestOperation = (
   harvestOperation: HarvestOperation,
   asOf = new Date(),
 ) => {
@@ -883,13 +883,6 @@ export const handleCollect = async (
   const orig_harvestOperationsWithSpawnedResource =
     await getHarvestOperationsWithSpawnedResourceForHarvester(harvester.id);
 
-  // A HarvestedOp stores info about a completed HarvestOperation
-  type HarvestedOp = {
-    harvestOperationId: string;
-    spawnedResource: SpawnedResourceWithResource;
-    harvestedAmount: number;
-  };
-
   /**
    * An array of our HarvestOperation id's along with the SpawnedResource they harvested and the amount
    */
@@ -993,6 +986,11 @@ export const handleCollect = async (
         ),
       );
     })
+    // handleCollectSaga STEP 2
+    .invoke(() => {
+      // Delete Harvest Operations
+    })
+    .withCompensation(() => {})
     .build();
 
   // - - - - - Execute Saga to make database updates - - - - -

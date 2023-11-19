@@ -35,6 +35,10 @@ export const isRejected = <T>(
   p: PromiseSettledResult<T>,
 ): p is PromiseRejectedResult => p.status === "rejected";
 
+/** A dev type that helps me to see to full type structure of my types
+ */
+export type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
+
 /*
 
 We create variations of the Prisma generated types according to Prisma doc's suggested
@@ -46,10 +50,6 @@ expected type that would return from using this query. This allows us to create 
 relations, e.g. SpawnedResourceWithResource.
 
 */
-
-/** A dev type that helps me to see to full type structure of my types
- */
-export type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
 
 // - - - - - Resource - - - - -
 
@@ -152,6 +152,14 @@ export type HarvestOperationWithSpawnedResourceWithResource = Omit<
   >,
   "spawnedResourceId" | "spawnedResource"
 > & { spawnedResource: SpawnedResourceWithResource };
+
+/** A HarvestedOp stores info about a completed HarvestOperation
+ */
+export type HarvestedOp = {
+  harvestOperationId: string;
+  spawnedResource: SpawnedResourceWithResource;
+  harvestedAmount: number;
+};
 
 export type ArcaneEnergyResource = Resource & {
   resourceType: "ARCANE_ENERGY";

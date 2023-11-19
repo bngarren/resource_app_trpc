@@ -1,3 +1,4 @@
+import { throwExpression } from "./../src/util/throwExpression";
 import { getResourceUserInventoryItemByUrl } from "./../src/services/userInventoryService";
 import {
   harvesterCollectRequestSchema,
@@ -8,6 +9,7 @@ import {
 } from "./../src/schema/index";
 import {
   calculatePeriodHarvested,
+  getAmountHarvestedByHarvestOperation,
   verifyArcaneEnergyResource,
 } from "./../src/services/harvesterService";
 import * as h3 from "h3-js";
@@ -64,6 +66,7 @@ import {
   prisma_getSpawnedResourcesForSpawnRegion,
   prisma_updateSpawnedResources,
 } from "../src/queries/queryResource";
+import { HarvestedOp, SpawnedResourceWithResource } from "../src/types";
 
 describe("/harvester", () => {
   let server: Server;
@@ -549,7 +552,7 @@ describe("/harvester", () => {
         t_0 = parseISO(energyStartTime);
       });
 
-      it.only("should add correct amount of the resources collected from the harvester since startTime and reset the harvest operations", async () => {
+      it("should add correct amount of the resources collected from the harvester since startTime and reset the harvest operations", async () => {
         /* For this test to work, we are relying on a correct setup. i.e. check preceding beforeEach()
         
         We assume that we have just scanned the mockScan location and deployed our harvester there.
@@ -559,7 +562,12 @@ describe("/harvester", () => {
         */
 
         // Verify that mockScan (from beforeEach()) gave us 3 spawned resources
-        const spawnedResources = await prisma.spawnedResource.findMany();
+        const spawnedResources: SpawnedResourceWithResource[] =
+          await prisma.spawnedResource.findMany({
+            include: {
+              resource: true,
+            },
+          });
 
         expect(spawnedResources).toHaveLength(3);
 
@@ -592,8 +600,66 @@ describe("/harvester", () => {
           testUser.id,
         );
 
-        console.log(preCollect_userInventory);
-        console.log(postCollect_userInventory);
+        // Calculate what we expect the amounts harvested to be
+        const harvestOperations = await prisma.harvestOperation.findMany({
+          where: {
+            harvesterId: testHarvester.id,
+            spawnedResourceId: {
+              in: spawnedResources.map((sr) => sr.id),
+            },
+          },
+        });
+        const harvestedOps: HarvestedOp[] = [];
+
+        for (const harvestOperation of harvestOperations) {
+          harvestedOps.push({
+            harvestOperationId: harvestOperation.id,
+            harvestedAmount: getAmountHarvestedByHarvestOperation(
+              harvestOperation,
+              t_plus_6,
+            ),
+            spawnedResource:
+              spawnedResources.find(
+                (sr) => sr.id === harvestOperation.spawnedResourceId,
+              ) ?? throwExpression(`spawnedResource is null!`),
+          });
+        }
+
+        const expectedPostCollect_userInventoryResources = harvestedOps.map(
+          (harvestedOp) => {
+            const resource = harvestedOp.spawnedResource.resource;
+            // If some resource was already in the user's inventory, we add to this amount
+            const priorQuantity = preCollect_userInventory.resources.find(
+              (r) => r.resourceId === resource.id,
+            )?.quantity;
+            const newQuantity =
+              priorQuantity != null
+                ? priorQuantity + harvestedOp.harvestedAmount
+                : harvestedOp.harvestedAmount;
+
+            return {
+              resourceId: resource.id,
+              quantity: newQuantity,
+            };
+          },
+        );
+
+        /* This says: For every resource in the user's inventory after the /handle.collect request,
+        we expect it to match the 'calculated' result stored in expectedPostCollect_userInventoryResources. 
+        
+        Since the shape of each element in expectedPostCollect_userInventoryResources is a subset of the objects
+        in postCollect_userInventory.resources, we can use the jest expect.objectContaining() function.
+        */
+        for (const postCollect_userInventoryResource of postCollect_userInventory.resources) {
+          expect(postCollect_userInventoryResource).toMatchObject(
+            expect.objectContaining(
+              expectedPostCollect_userInventoryResources.find(
+                (e) =>
+                  e.resourceId === postCollect_userInventoryResource.resourceId,
+              ) ?? throwExpression("unexpected error with jest test"),
+            ),
+          );
+        }
 
         spy_handleCollect.mockRestore();
       });
@@ -1001,6 +1067,7 @@ describe("/harvester", () => {
         expect(check).toBe(true);
       });
 
+      // TODO: THIS TEST IS FLAKY!! near the isSameSecond call...
       it("should correctly add energy to a harvester that already has energy", async () => {
         // choose the energy resource
         const _arcaneQuanta = await prisma_getResourceByUrl("arcane_quanta"); // from base seed
