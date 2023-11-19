@@ -1,4 +1,4 @@
-import { SpawnedResourceWithResource } from "./../types/index";
+import { SpawnedResourceWithResource, isFulfilled } from "./../types/index";
 import {
   prisma_getHarvestOperationsWithResetDateForHarvesterId,
   prisma_getHarvestOperationsWithSpawnedResourceForHarvesterId,
@@ -24,6 +24,7 @@ import {
   validateUserInventoryItemTransfer,
   removeUserInventoryItemByItemId,
   getResourceUserInventoryItemByUrl,
+  addResourceToUserInventory,
 } from "./userInventoryService";
 import { TRPCError } from "@trpc/server";
 import {
@@ -862,7 +863,7 @@ export const handleCollect = async (
   userId: string,
   harvesterId: string,
   atTime?: Date,
-) => {
+): Promise<UserInventoryItemWithItem<"RESOURCE">[]> => {
   logger.debug({ userId, harvesterId, atTime }, `[func handleCollect]`);
 
   // - - - - - Get the Harvester - - - - -
@@ -921,7 +922,7 @@ export const handleCollect = async (
     },
   );
 
-  // form an array of promises that will get the ResourceUserInventoryItem for each harvested op (if exists)
+  // Form an array of promises that will get the ResourceUserInventoryItem for each harvested op (if exists)
   const harvestedOpResourcePromises = harvestedOps.map((harvestedOp) => {
     return getResourceUserInventoryItemByUrl(
       harvestedOp.spawnedResource.resource.url,
@@ -929,9 +930,17 @@ export const handleCollect = async (
     );
   });
 
+  // Use promise all settled. If a ResourceUserInventoryItem doesn't exist,
+  // we will ignore it (i.e. the rejected promise it returns)
+  const fulfilledValues = (
+    await Promise.allSettled(harvestedOpResourcePromises)
+  )
+    .filter(isFulfilled)
+    .map((p) => p.value);
+
   // Store the user's current inventory items for these resources (if they exist), in case we roll back
   const orig_resourceUserInventoryItems: UserInventoryItemWithItem<"RESOURCE">[] =
-    await Promise.all(harvestedOpResourcePromises);
+    fulfilledValues;
 
   const handleCollectSaga = new SagaBuilder("handleCollect")
     .withLogger()
@@ -941,11 +950,20 @@ export const handleCollect = async (
       const updatePromises = harvestedOps.map((harvestedOp) => {
         const resource = harvestedOp.spawnedResource.resource;
 
+        // If some resource was already in the user's inventory, we add to this amount
+        const priorQuantity = orig_resourceUserInventoryItems.find(
+          (r) => r.resourceId === resource.id,
+        )?.quantity;
+        const newQuantity =
+          priorQuantity != null
+            ? priorQuantity + harvestedOp.harvestedAmount
+            : harvestedOp.harvestedAmount;
+
         return updateCreateOrRemoveUserInventoryItemWithNewQuantity(
           resource.id,
           "RESOURCE",
           userId,
-          harvestedOp.harvestedAmount,
+          newQuantity,
         );
       });
 
@@ -953,7 +971,6 @@ export const handleCollect = async (
     }, "update user inventory items")
     .withCompensation(async () => {
       // Remove previously added
-      /*
       await Promise.all(
         harvestedOps.map((harvestedOp) => {
           return removeUserInventoryItemByItemId(
@@ -965,7 +982,7 @@ export const handleCollect = async (
       );
 
       // Recreate the original items
-      return await Promise.all(
+      await Promise.all(
         orig_resourceUserInventoryItems.map(
           (orig_resourceUserInventoryItem) => {
             const { item: _item, ...resourceUserInventoryItem } =
@@ -975,7 +992,6 @@ export const handleCollect = async (
           },
         ),
       );
-      */
     })
     .build();
 

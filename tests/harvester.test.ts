@@ -549,7 +549,7 @@ describe("/harvester", () => {
         t_0 = parseISO(energyStartTime);
       });
 
-      it.skip("should add correct amount of the resources collected from the harvester since startTime and reset the harvest operations", async () => {
+      it.only("should add correct amount of the resources collected from the harvester since startTime and reset the harvest operations", async () => {
         /* For this test to work, we are relying on a correct setup. i.e. check preceding beforeEach()
         
         We assume that we have just scanned the mockScan location and deployed our harvester there.
@@ -563,6 +563,11 @@ describe("/harvester", () => {
 
         expect(spawnedResources).toHaveLength(3);
 
+        // Save the user inventory state BEFORE collect
+        const preCollect_userInventory = await getUserInventoryItems(
+          testUser.id,
+        );
+
         const t_plus_6 = addHours(t_0, 6);
 
         // Now we mock the handleCollect to 'occur' at t_plus_6 hours
@@ -574,6 +579,7 @@ describe("/harvester", () => {
           });
 
         // Collect
+
         const res = await requester.send(
           "POST",
           "/harvester.collect",
@@ -586,6 +592,7 @@ describe("/harvester", () => {
           testUser.id,
         );
 
+        console.log(preCollect_userInventory);
         console.log(postCollect_userInventory);
 
         spy_handleCollect.mockRestore();

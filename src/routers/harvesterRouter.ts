@@ -79,11 +79,8 @@ export const harvesterRouter = router({
         });
       }
 
-      // TODO: experimental. Skipping steps for now
       // - Calculate the amount of resources collected
       // - Add resources to user's inventory, i.e. update each applicable row of UserInventoryItem based on user.id
-
-      // ! For now, we are just performing the UserInventoryItem update portion...
 
       const collectResult = await handleCollect(user.id, harvester.id);
     }),

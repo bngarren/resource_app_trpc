@@ -1,9 +1,16 @@
 import { Server } from "http";
 import { logger } from "../src/main";
 import { TestSingleton } from "./TestSingleton";
-import { getTestFilename, mockScan, resetPrisma } from "./testHelpers";
+import {
+  AuthenticatedRequester,
+  getTestFilename,
+  mockScan,
+  resetPrisma,
+  throwIfBadStatus,
+} from "./testHelpers";
 import { prisma } from "../src/prisma";
 import * as h3 from "h3-js";
+import { scanRequestSchema } from "../src/schema";
 
 describe("testHelpers", () => {
   let server: Server;
@@ -54,5 +61,31 @@ describe("testHelpers", () => {
       ).resolves.toMatchObject({ h3Index: "892a3064093ffff" });
       expect(h3.getResolution(spawnedResource.h3Index)).toBe(11); // resolution 11 for each resource
     }
+  });
+
+  it("should use AuthenticatedRequester to send an authenticated GET and POST request", async () => {
+    expect.assertions(2);
+
+    const requester = new AuthenticatedRequester(server, idToken);
+
+    const res = await requester.send("GET", "/protectedGreeting");
+    throwIfBadStatus(res);
+
+    expect(res.statusCode).toBe(200);
+
+    const res2 = await requester.send(
+      "POST",
+      "/scan",
+      {
+        userLocation: {
+          latitude: 10,
+          longitude: 10,
+        },
+      },
+      scanRequestSchema,
+    );
+    throwIfBadStatus(res2);
+
+    expect(res2.statusCode).toBe(200);
   });
 });

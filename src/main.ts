@@ -83,8 +83,13 @@ app.use(
   trpcExpress.createExpressMiddleware({
     router: appRouter,
     createContext,
-    onError({ error }) {
-      logger.error(error, "Caught by the Express router's onError");
+    onError(opts) {
+      const { error, req, ...rest } = opts;
+      logger.error(
+        { [config.logger_error_key]: error, ...rest },
+        "Caught by the Express router's onError",
+      );
+      return error;
     },
   }),
 );

@@ -107,7 +107,7 @@ export const throwIfBadStatus = (response: Response) => {
  * @param input Input object that will be passed as query param (GET) or JSON body (POST)
  * @param _withSchema Zod schema used for this endpoint to allow the 'input' param to be type checked (compile time)
  */
-export const authenticatedRequest = <T extends Zod.ZodType<unknown>>(
+export const authenticatedRequest = async <T extends Zod.ZodType<unknown>>(
   api: Server,
   type: "GET" | "POST",
   endpoint: string,
@@ -122,17 +122,16 @@ export const authenticatedRequest = <T extends Zod.ZodType<unknown>>(
         .get(endpoint)
         .set("Authorization", `Bearer ${idToken}`);
       if (input) {
-        return req
-          .query({
+        try {
+          return req.query({
             input: JSON.stringify(input),
-          })
-          .then(() => req)
-          .catch((err) => {
-            throw prefixedError(
-              err,
-              `Could not stringify input of request: ${req.method} ${req.url}`,
-            );
           });
+        } catch (error) {
+          throw prefixedError(
+            error,
+            `Could not stringify input of request: ${req.method} ${req.url}`,
+          );
+        }
       } else {
         return req;
       }
@@ -141,15 +140,14 @@ export const authenticatedRequest = <T extends Zod.ZodType<unknown>>(
         .post(endpoint)
         .set("Authorization", `Bearer ${idToken}`);
       if (input) {
-        return req
-          .send(input)
-          .then(() => req)
-          .catch((err) => {
-            throw prefixedError(
-              err,
-              `Couldn't attach body of POST request: ${req.method} ${req.url}`,
-            );
-          });
+        try {
+          return req.send(input);
+        } catch (error) {
+          throw prefixedError(
+            error,
+            `Couldn't attach body of POST request: ${req.method} ${req.url}`,
+          );
+        }
       } else {
         return req;
       }
@@ -166,7 +164,7 @@ export class AuthenticatedRequester {
     private readonly idToken: string,
   ) {}
 
-  send<T extends Zod.ZodType<unknown>>(
+  async send<T extends Zod.ZodType<unknown>>(
     method: "POST" | "GET",
     endpoint: string,
     input?: Zod.infer<T>,

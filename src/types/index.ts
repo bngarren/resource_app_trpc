@@ -9,6 +9,32 @@ import {
   Harvester,
 } from "@prisma/client";
 
+// - - - - - Utility Types - - - - -
+
+/**
+ * Type guard for a PromiseSettledResult that is fulfilled
+ *
+ * @example
+ * const results = await Promise.allSettled(...);
+ * const fulfilledValues = results.filter(isFulfilled).map(p => p.value);
+ * const rejectedReasons = results.filter(isRejected).map(p => p.reason);
+ */
+export const isFulfilled = <T>(
+  p: PromiseSettledResult<T>,
+): p is PromiseFulfilledResult<T> => p.status === "fulfilled";
+
+/**
+ * Type guard for a PromiseSettledResult that is rejected
+ *
+ * @example
+ * const results = await Promise.allSettled(...);
+ * const fulfilledValues = results.filter(isFulfilled).map(p => p.value);
+ * const rejectedReasons = results.filter(isRejected).map(p => p.reason);
+ */
+export const isRejected = <T>(
+  p: PromiseSettledResult<T>,
+): p is PromiseRejectedResult => p.status === "rejected";
+
 /*
 
 We create variations of the Prisma generated types according to Prisma doc's suggested
@@ -169,8 +195,8 @@ export type UserInventoryItem =
 export type UserInventoryItemWithItem<T extends ItemType> = T extends "RESOURCE"
   ? ResourceUserInventoryItem & { item: Resource; itemType: "RESOURCE" }
   : T extends "HARVESTER"
-  ? HarvesterUserInventoryItem & { item: Harvester; itemType: "HARVESTER" }
-  : never;
+    ? HarvesterUserInventoryItem & { item: Harvester; itemType: "HARVESTER" }
+    : never;
 
 export type UserInventoryItemWithAnyItem = UserInventoryItemWithItem<
   "RESOURCE" | "HARVESTER"
