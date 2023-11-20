@@ -98,6 +98,38 @@ export const isHarvesterDeployed = (harvester: Harvester) => {
 };
 
 /**
+ * ### Creates new HarvestOperations for a Harvester based on given SpawnedResources
+ * @param harvesterId
+ * @param spawnedResourceIds
+ */
+const newHarvestOperationsForHarvester = async (
+  harvesterId: string,
+  spawnedResourceIds: string[],
+) => {
+  // Ensure there is at least 1 SpawnedResource to make 1 HarvestOperation
+  if (spawnedResourceIds.length < 1) {
+    logger.warn(
+      `Cannot make new HarvestOperations with ${spawnedResourceIds.length} spawnedResources.`,
+    );
+    return [];
+  }
+
+  const res = await prisma_createHarvestOperationsTransaction({
+    harvesterId,
+    spawnedResourceIds,
+  });
+
+  if (res === null) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: `Failed to create new harvest operations for harvesterId=${harvesterId}`,
+    });
+  } else {
+    return res;
+  }
+};
+
+/**
  * ### Returns all HarvestOperations for a harvester
  * - May return empty []
  * ---
@@ -842,9 +874,9 @@ export const handleTransferEnergy = async (
  * - Find the HarvestOperations associated with this Harvester
  * - Calculate the amount of resources harvested
  * - Saga
- *   - Update the UserInventoryItem table
- *   - Create new harvest operations based on same spawned resources
- *   - Remove old harvest operations
+ *   - [X] Update the UserInventoryItem table
+ *   - [] Create new harvest operations based on same spawned resources
+ *   - [] Remove old harvest operations
  * - Return user inventory items that were added
  *
  * ---
@@ -988,7 +1020,7 @@ export const handleCollect = async (
     })
     // handleCollectSaga STEP 2
     .invoke(() => {
-      // Delete Harvest Operations
+      // Add new HarvestOperations
     })
     .withCompensation(() => {})
     .build();
@@ -1086,36 +1118,4 @@ export const handleReclaim = async (harvesterId: string) => {
   // Finally, remove all harvest operations for this harvester
   // *Make sure that resources have been collected first (as this relies on the harvest operations!)
   await removeHarvestOperationsForHarvester(harvesterId);
-};
-
-/**
- * ### Creates new HarvestOperations for a Harvester based on given SpawnedResources
- * @param harvesterId
- * @param spawnedResourceIds
- */
-const newHarvestOperationsForHarvester = async (
-  harvesterId: string,
-  spawnedResourceIds: string[],
-) => {
-  // Ensure there is at least 1 SpawnedResource to make 1 HarvestOperation
-  if (spawnedResourceIds.length < 1) {
-    logger.warn(
-      `Cannot make new HarvestOperations with ${spawnedResourceIds.length} spawnedResources.`,
-    );
-    return [];
-  }
-
-  const res = await prisma_createHarvestOperationsTransaction({
-    harvesterId,
-    spawnedResourceIds,
-  });
-
-  if (res === null) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: `Failed to create new harvest operations for harvesterId=${harvesterId}`,
-    });
-  } else {
-    return res;
-  }
 };
