@@ -319,6 +319,7 @@ class SagaLog {
 
     const { data, ...sagaLogMessage } = { ...sagaLogItem };
 
+    /* If the data is an Error, put in under the `errorKey` defined in the config */
     const sagaLogData =
       data instanceof Error
         ? { [config.logger_error_key]: data }

@@ -60,6 +60,7 @@ import {
 } from "date-fns";
 import * as HarvesterService from "../src/services/harvesterService";
 import * as QueryHarvester from "../src/queries/queryHarvester";
+import * as QueryHarvestOperation from "../src/queries/queryHarvestOperation";
 import { prisma_updateHarvesterById } from "../src/queries/queryHarvester";
 import {
   prisma_getResourceByUrl,
@@ -456,21 +457,22 @@ describe("/harvester", () => {
         });
 
         // deploy the test harvester
-        await requester.send(
+        const res = await requester.send(
           "POST",
           "/harvester.deploy",
           { harvesterId: testHarvester.id, harvestRegion },
           harvesterDeployRequestSchema,
         );
+        throwIfBadStatus(res);
 
         // attempt request with wrong user + harvester
-        const res = await requester.send(
+        const res2 = await requester.send(
           "POST",
           "/harvester.collect",
           { userUid: anotherUser.firebase_uid, harvesterId: testHarvester.id },
           harvesterCollectRequestSchema,
         );
-        expect(res.statusCode).toBe(403);
+        expect(res2.statusCode).toBe(403);
       });
 
       it("should return status code 409 (Conflict) if harvester is not deployed", async () => {
@@ -578,28 +580,6 @@ describe("/harvester", () => {
 
         const t_plus_6 = addHours(t_0, 6);
 
-        // Now we mock the handleCollect to 'occur' at t_plus_6 hours
-        const orig_handleCollect = HarvesterService.handleCollect;
-        const spy_handleCollect = jest
-          .spyOn(HarvesterService, "handleCollect")
-          .mockImplementation(async (userId: string, harvesterId: string) => {
-            return orig_handleCollect(userId, harvesterId, t_plus_6);
-          });
-
-        // Collect
-
-        const res = await requester.send(
-          "POST",
-          "/harvester.collect",
-          { userUid: userUid, harvesterId: testHarvester.id },
-          harvesterCollectRequestSchema,
-        );
-        throwIfBadStatus(res);
-
-        const postCollect_userInventory = await getUserInventoryItems(
-          testUser.id,
-        );
-
         // Calculate what we expect the amounts harvested to be
         const harvestOperations = await prisma.harvestOperation.findMany({
           where: {
@@ -625,6 +605,28 @@ describe("/harvester", () => {
           });
         }
 
+        // Now we mock the handleCollect to 'occur' at t_plus_6 hours
+        const orig_handleCollect = HarvesterService.handleCollect;
+        const spy_handleCollect = jest
+          .spyOn(HarvesterService, "handleCollect")
+          .mockImplementation(async (userId: string, harvesterId: string) => {
+            return orig_handleCollect(userId, harvesterId, t_plus_6);
+          });
+
+        // Collect
+
+        const res = await requester.send(
+          "POST",
+          "/harvester.collect",
+          { userUid: userUid, harvesterId: testHarvester.id },
+          harvesterCollectRequestSchema,
+        );
+        throwIfBadStatus(res);
+
+        const postCollect_userInventory = await getUserInventoryItems(
+          testUser.id,
+        );
+
         const expectedPostCollect_userInventoryResources = harvestedOps.map(
           (harvestedOp) => {
             const resource = harvestedOp.spawnedResource.resource;
@@ -644,6 +646,15 @@ describe("/harvester", () => {
           },
         );
 
+        // console.log({ t_0, t_plus_6 });
+        // console.log({ harvestOperations });
+        // console.log({ harvestedOps });
+        // console.log({
+        //   "postCollect_userInventory.resources":
+        //     postCollect_userInventory.resources,
+        // });
+        // console.log({ expectedPostCollect_userInventoryResources });
+
         /* This says: For every resource in the user's inventory after the /handle.collect request,
         we expect it to match the 'calculated' result stored in expectedPostCollect_userInventoryResources. 
         
@@ -662,6 +673,113 @@ describe("/harvester", () => {
         }
 
         spy_handleCollect.mockRestore();
+      });
+
+      // Tests that the handleCollect saga will rollback inventory and harvest operation changes if a step fails
+      it("should correctly not modify (rollback) the original user inventory and harvest operations when the logic fails", async () => {
+        // Verify that mockScan (from beforeEach()) gave us 3 spawned resources
+        const spawnedResources: SpawnedResourceWithResource[] =
+          await prisma.spawnedResource.findMany({
+            include: {
+              resource: true,
+            },
+          });
+
+        // Save the user inventory state BEFORE collect
+        const preCollect_userInventory = await getUserInventoryItems(
+          testUser.id,
+        );
+
+        // Save the harvest operations BEFORE collect
+        const preCollect_harvestOperations =
+          await prisma.harvestOperation.findMany({
+            where: {
+              harvesterId: testHarvester.id,
+              spawnedResourceId: {
+                in: spawnedResources.map((sr) => sr.id),
+              },
+            },
+          });
+
+        const preCollect_harvestOperationsCount =
+          await prisma.harvestOperation.count({
+            where: {
+              harvesterId: testHarvester.id,
+            },
+          });
+
+        const t_plus_6 = addHours(t_0, 6);
+
+        // Now we mock the handleCollect to 'occur' at t_plus_6 hours
+        const orig_handleCollect = HarvesterService.handleCollect;
+        const spy_handleCollect = jest
+          .spyOn(HarvesterService, "handleCollect")
+          .mockImplementation(async (userId: string, harvesterId: string) => {
+            return orig_handleCollect(userId, harvesterId, t_plus_6);
+          });
+
+        // Mock an internal prisma function to make the logic fail!
+        const orig_prisma_createHarvestOperationsTransaction =
+          QueryHarvestOperation.prisma_createHarvestOperationsTransaction;
+        const spy_prisma_createHarvestOperationsTransaction = jest
+          .spyOn(
+            QueryHarvestOperation,
+            "prisma_createHarvestOperationsTransaction",
+          )
+          .mockImplementation(async (models) => {
+            await orig_prisma_createHarvestOperationsTransaction(models);
+            throw new Error("mock error!"); // Throw an error after the harvest operations were created
+          });
+
+        // Collect
+
+        const res = await requester.send(
+          "POST",
+          "/harvester.collect",
+          { userUid: userUid, harvesterId: testHarvester.id },
+          harvesterCollectRequestSchema,
+        );
+
+        expect(res.ok).toBe(false);
+
+        const postCollect_harvestOperationsCount =
+          await prisma.harvestOperation.count({
+            where: {
+              harvesterId: testHarvester.id,
+            },
+          });
+
+        const postCollect_userInventory = await getUserInventoryItems(
+          testUser.id,
+        );
+
+        const postCollect_harvestOperations =
+          await prisma.harvestOperation.findMany({
+            where: {
+              harvesterId: testHarvester.id,
+              spawnedResourceId: {
+                in: spawnedResources.map((sr) => sr.id),
+              },
+            },
+          });
+
+        expect(
+          spy_prisma_createHarvestOperationsTransaction,
+        ).toHaveBeenCalledTimes(1);
+
+        // ensure no extra harvest operations were created and left dangling
+        expect(preCollect_harvestOperationsCount).toEqual(
+          postCollect_harvestOperationsCount,
+        );
+
+        // ensure the user inventory was rolled back
+        expect(postCollect_userInventory).toEqual(preCollect_userInventory);
+        expect(postCollect_harvestOperations).toEqual(
+          preCollect_harvestOperations,
+        );
+
+        spy_handleCollect.mockRestore();
+        spy_prisma_createHarvestOperationsTransaction.mockRestore();
       });
     });
   });

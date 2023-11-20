@@ -237,9 +237,6 @@ export const removeUserInventoryItemByItemId = async <T extends ItemType>(
  * UserInventoryItem, if a new one needs to be created
  *
  * @param itemId The resourceId, componentId, or harvesterId
- * @param itemType
- * @param userId
- * @param newQuantity
  * @returns UserInventoryItem - updated, created, or the item that was removed
  */
 export const updateCreateOrRemoveUserInventoryItemWithNewQuantity = async <
@@ -282,7 +279,7 @@ export const updateCreateOrRemoveUserInventoryItemWithNewQuantity = async <
   } catch (err) {
     throw prefixedError(
       err,
-      `during [await upsertUserInventoryItem] for itemId=${itemId}, itemType=${itemType}, userId=${userId}`,
+      `during [upsertUserInventoryItem] for itemId=${itemId}, itemType=${itemType}, userId=${userId}`,
     );
   }
 };

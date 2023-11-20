@@ -82,7 +82,15 @@ export const harvesterRouter = router({
       // - Calculate the amount of resources collected
       // - Add resources to user's inventory, i.e. update each applicable row of UserInventoryItem based on user.id
 
-      const collectResult = await handleCollect(user.id, harvester.id);
+      try {
+        const collectResult = await handleCollect(user.id, harvester.id);
+        return collectResult;
+      } catch (err) {
+        throw new TRPCError({
+          message: `Could not complete the collect operation on harvester (id=${input.harvesterId})`,
+          code: "INTERNAL_SERVER_ERROR",
+        });
+      }
     }),
   /**
    * ### /harvester.reclaim

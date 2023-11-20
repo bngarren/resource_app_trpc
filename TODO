@@ -1,0 +1,18 @@
+
+⌥ + D   Mark todo as DONE/undo
+⌥ + C   Mark todo as cancelled
+⌥ + S   Mark todo as started
+Run`Todo: Archive` to archive finished todos
+
+
+Refactoring:
+  ☐ Create an internal/app Error type to be thrown within service layer. @est(1 day)
+  Need to be able to throw some customized errors within the app logic. All errors should be caught at the route level and handled,
+  then thrown to the client as TRPCError? Versus a custom ?ApiToClientError that extends TRPCError with some meta about whether retry should be attempted...
+  ☐ Refactor transactions to return a Promise rather than the awaited result. @est(15 minutes)
+  This will pass the error handling to the caller of the function and not have to check for null.
+  See `prisma_createHarvestOperationsTransaction()` for example
+  Fix: prisma_updateHarvestOperationsTransaction, prisma_updateSpawnedResourcesForSpawnRegionTransaction
+
+
+Archive:

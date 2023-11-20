@@ -31,50 +31,48 @@ export type CreateHarvestOperationsTransactionInput = {
 /**
  * ### Creates new HarvestOperations for a given harvester and spawned resources
  * @param input containing the harvesterId and the spawnedResources that can be harvested
- * @returns
  */
 export const prisma_createHarvestOperationsTransaction = async (
   input: CreateHarvestOperationsTransactionInput,
 ) => {
-  let trxResult;
-  try {
-    trxResult = await prisma.$transaction(async (trx) => {
-      // * - - - - - - - START TRANSACTION - - - - - - - -
+  return prisma.$transaction(async (trx) => {
+    // * - - - - - - - START TRANSACTION - - - - - - - -
 
-      // Loop through each spawned resource and create a HarvestOperation
-      return await Promise.all(
-        input.spawnedResourceIds.map(async (spawnedResourceId) => {
-          // get the parent spawn region of this resource so we can get the reset_date
-          const spawnRegion =
-            await getSpawnRegionParentOfSpawnedResource(spawnedResourceId);
+    // Loop through each spawned resource and create a HarvestOperation
+    return await Promise.all(
+      input.spawnedResourceIds.map(async (spawnedResourceId) => {
+        // get the parent spawn region of this resource so we can get the reset_date
+        const spawnRegion =
+          await getSpawnRegionParentOfSpawnedResource(spawnedResourceId);
 
-          return await prisma_createHarvestOperation(
-            {
-              harvester: {
-                connect: {
-                  id: input.harvesterId,
-                },
+        return await prisma_createHarvestOperation(
+          {
+            harvester: {
+              connect: {
+                id: input.harvesterId,
               },
-              spawnedResource: {
-                connect: {
-                  id: spawnedResourceId,
-                },
-              },
-              endTime: spawnRegion.resetDate,
             },
-            trx, // pass in the transaction client
-          );
-        }),
-      );
-    });
-    return trxResult; // Returns HarvestOperation[] if successful
-  } catch (error) {
-    logger.error(error, "Error within createHarvestOperationsTransaction");
+            spawnedResource: {
+              connect: {
+                id: spawnedResourceId,
+              },
+            },
+            endTime: spawnRegion.resetDate,
+          },
+          trx, // pass in the transaction client
+        );
+      }),
+    );
+  });
+};
 
-    // Any transaction query above should be automatically rolled-back
-
-    return null; // Returns null if transaction failed
-  }
+export const prisma_createHarvestOperationsFromModels = async (
+  models: Prisma.HarvestOperationUncheckedCreateInput[],
+  prismaClient: PrismaClientOrTransaction = prisma,
+) => {
+  const safeModels =
+    Prisma.validator<Prisma.HarvestOperationCreateManyInput[]>()(models);
+  return prismaClient.harvestOperation.createMany({ data: safeModels });
 };
 
 /**

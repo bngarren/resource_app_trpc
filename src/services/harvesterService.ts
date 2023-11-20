@@ -1,5 +1,6 @@
 import { HarvestedOp, isFulfilled } from "./../types/index";
 import {
+  prisma_createHarvestOperationsFromModels,
   prisma_getHarvestOperationsWithResetDateForHarvesterId,
   prisma_getHarvestOperationsWithSpawnedResourceForHarvesterId,
 } from "./../queries/queryHarvestOperation";
@@ -99,10 +100,14 @@ export const isHarvesterDeployed = (harvester: Harvester) => {
 
 /**
  * ### Creates new HarvestOperations for a Harvester based on given SpawnedResources
- * @param harvesterId
- * @param spawnedResourceIds
+ *
+ * This function is used when you want to create brand new HarvestOperations, i.e. this
+ * will generated default values for all fields.
+ *
+ * If you need to create HarvestOperations with specific data, use the function `createHarvestOperationsForHarvesterFromModels()`
+ *
  */
-const newHarvestOperationsForHarvester = async (
+const createHarvestOperationsForHarvester = async (
   harvesterId: string,
   spawnedResourceIds: string[],
 ) => {
@@ -114,18 +119,41 @@ const newHarvestOperationsForHarvester = async (
     return [];
   }
 
-  const res = await prisma_createHarvestOperationsTransaction({
-    harvesterId,
-    spawnedResourceIds,
-  });
-
-  if (res === null) {
+  try {
+    return await prisma_createHarvestOperationsTransaction({
+      harvesterId,
+      spawnedResourceIds,
+    });
+  } catch (error) {
+    logger.error(error);
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: `Failed to create new harvest operations for harvesterId=${harvesterId}`,
     });
-  } else {
-    return res;
+  }
+};
+
+/**
+ * ### Creates new HarvestOperations for a Harvester from HarvestOperation models
+ *
+ * This function is used when you want to create HarvestOperations with specific data, i.e.
+ * rolling back to original harvest operation data after some bad mutation.
+ *
+ * If you need to want to simply create new HarvestOperations, i.e., when a harvester is first deployed or
+ * after a collect, use the function `createHarvestOperationsForHarvester()`
+ *
+ */
+const createHarvestOperationsForHarvesterFromModels = async (
+  models: Prisma.HarvestOperationUncheckedCreateInput[],
+) => {
+  try {
+    return await prisma_createHarvestOperationsFromModels(models);
+  } catch (error) {
+    logger.error(error);
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: `Failed to create harvest operations from models`,
+    });
   }
 };
 
@@ -271,7 +299,7 @@ export const handleDeploy = async (
   );
 
   // Create a HarvestOperation for each nearby SpawnedResource
-  const harvestOperations = await newHarvestOperationsForHarvester(
+  const harvestOperations = await createHarvestOperationsForHarvester(
     harvesterId,
     harvestableSpawnedResources.map((i) => i.id),
   );
@@ -870,13 +898,13 @@ export const handleTransferEnergy = async (
 
 /**
  * ### handleCollect
- * ! TODO: In Progress.
+
  * - Find the HarvestOperations associated with this Harvester
  * - Calculate the amount of resources harvested
  * - Saga
  *   - [X] Update the UserInventoryItem table
- *   - [] Create new harvest operations based on same spawned resources
- *   - [] Remove old harvest operations
+ *   - [X] Create new harvest operations based on same spawned resources
+ *   - [X] Remove old harvest operations
  * - Return user inventory items that were added
  *
  * ---
@@ -888,8 +916,6 @@ export const handleTransferEnergy = async (
  *   - **Date**: we use this passed date/time as the time to base our calculations. For example, this is
  * utilized for testing purposes.
  *
- * @param userId
- * @param harvesterId
  */
 export const handleCollect = async (
   userId: string,
@@ -919,6 +945,7 @@ export const handleCollect = async (
    * An array of our HarvestOperation id's along with the SpawnedResource they harvested and the amount
    */
   const harvestedOps: HarvestedOp[] = [];
+  const spawnedResourceIds: string[] = [];
 
   // This is the time we will say is the end of the harvest operation (collect up until this time)
   const asOf = atTime ?? new Date();
@@ -936,6 +963,8 @@ export const handleCollect = async (
       };
 
       const amt = getAmountHarvestedByHarvestOperation(harvestOperation, asOf);
+
+      spawnedResourceIds.push(spawnedResource.id);
 
       harvestedOps.push({
         harvestOperationId: harvestOperation.id,
@@ -998,8 +1027,9 @@ export const handleCollect = async (
       // Remove previously added
       await Promise.all(
         harvestedOps.map((harvestedOp) => {
+          const resource = harvestedOp.spawnedResource.resource;
           return removeUserInventoryItemByItemId(
-            harvestedOp.spawnedResource.id,
+            resource.id,
             "RESOURCE",
             userId,
           );
@@ -1019,10 +1049,33 @@ export const handleCollect = async (
       );
     })
     // handleCollectSaga STEP 2
-    .invoke(() => {
+    .invoke(async () => {
+      // Remove old HarvestOperations (we have just collected these resoures above, so they are finished)
+      await removeHarvestOperationsForHarvester(harvester.id);
+
       // Add new HarvestOperations
+      const res: HarvestOperation[] | null =
+        await createHarvestOperationsForHarvester(
+          harvester.id,
+          spawnedResourceIds,
+        );
+      if (res === null)
+        throw new Error(
+          `null result from createHarvestOperationsForHarvester()`,
+        );
+
+      return res;
+    }, "remove/add HarvestOperations")
+    .withCompensation(async () => {
+      // Remove the newly added HarvestOperations
+      await removeHarvestOperationsForHarvester(harvester.id);
+
+      // Add back the original HarvestOperations
+      // orig_harvestOperations
+      return createHarvestOperationsForHarvesterFromModels(
+        orig_harvestOperations,
+      );
     })
-    .withCompensation(() => {})
     .build();
 
   // - - - - - Execute Saga to make database updates - - - - -
